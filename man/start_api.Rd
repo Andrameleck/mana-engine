@@ -1,6 +1,6 @@
 \name{start_api}
 \alias{start_api}
-\title{Start the MTGCODEX Plumber API}
+\title{Start the mtgcodex.api Plumber API}
 \usage{
 start_api(host = "0.0.0.0", port = 8000L, swagger = TRUE,
   hide_ui_from_swagger = TRUE, ...)

@@ -64,7 +64,7 @@ cover-gen:
   artifacts:
     paths:
       - ci/coverage.RDS
-  coverage: '/mtgcodex_api Coverage: (\d+)\.\d+%/'
+  coverage: '/mtgcodex.api_api Coverage: (\d+)\.\d+%/'
 
 .deploy:
   rules:
@@ -99,7 +99,7 @@ manual:
       artifacts: true
   script:
     - mkdir -p public/user-manual
-    - R CMD Rd2pdf . --output=public/user-manual/mtgcodex_api-manual.pdf
+    - R CMD Rd2pdf . --output=public/user-manual/mtgcodex.api_api-manual.pdf
   artifacts:
     paths:
       - public/

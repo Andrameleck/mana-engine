@@ -1,4 +1,5 @@
-Package: MTGCODEX_API
+Package: mtgcodex.api
+Type: Package
 Title: MTG Codex Toolkit
 Version: 0.0.0.9000
 Authors@R: 
@@ -10,11 +11,18 @@ Description: Toolkit for managing the MTG Codex collection and strategy pool.
     matchup simulators for testing archetypes, all wrapped as a reusable R
     package.
 License: AGPL (>= 3)
+BugReports: https://gitlab.com/mtgcodex.api/mtgcodex.api_api/-/issues
+URL: https://gitlab.com/mtgcodex.api/mtgcodex.api_api
+LazyData: true
+Depends:
+    R (>= 4.1.0)
 Imports:
     DBI,
     RSQLite,
     logger,
-    plumber
+    plumber,
+    knitr
 Encoding: UTF-8
+VignetteBuilder: knitr
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3

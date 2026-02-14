@@ -1,13 +1,13 @@
-# MTGCODEX
+# mtgcodex.api
 
-MTGCODEX is being rewritten as an R package that focuses on a Plumber REST
+mtgcodex.api is being rewritten as an R package that focuses on a Plumber REST
 service for Magic: The Gathering collection analytics. The package now exposes
 `start_api()` to run the API entrypoint.
 
 ## Install the development snapshot
 
 ```r
-devtools::install_github("FlorianRicquier/MTGCODEX")
+devtools::install_github("FlorianRicquier/mtgcodex.api")
 ```
 
 During local development run `devtools::load_all()` so you can iterate while the
@@ -18,7 +18,7 @@ package structure takes shape.
 The API router is under `inst/plumber/plumber.R`. Start it with:
 
 ```r
-MTGCODEX::start_api(host = "0.0.0.0", port = 8000)
+mtgcodex.api::start_api(host = "0.0.0.0", port = 8000)
 ```
 
 You can also run the router directly during development:

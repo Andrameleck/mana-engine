@@ -1,4 +1,4 @@
-url: https://gitlab.com/MTGCODEX/mtgcodex_api/
+url: https://gitlab.com/mtgcodex.api/mtgcodex.api_api/
 # Comfiguration du Template du site ============================================
 template:
   package: pkgdown
@@ -42,14 +42,14 @@ navbar:
       text: "Documentations"
       menu:
         - text: "User Manual"
-          href: user-manual/mtgcodex_api-manual.pdf
+          href: user-manual/mtgcodex.api_api-manual.pdf
     gitlab:
       text: "GitLab"
       icon: fab fa-gitlab fa-lg
-      href: https://gitlab.com/MTGCODEX/mtgcodex_api
+      href: https://gitlab.com/mtgcodex.api/mtgcodex.api_api
 # Configuration des repo =======================================================
 repo:
   url:
-    home: https://gitlab.com/MTGCODEX/mtgcodex_api
-    source: https://gitlab.com/MTGCODEX/mtgcodex_api/-/tree/main/
-    issue: https://gitlab.com/MTGCODEX/mtgcodex_api/-/issues
+    home: https://gitlab.com/mtgcodex.api/mtgcodex.api_api
+    source: https://gitlab.com/mtgcodex.api/mtgcodex.api_api/-/tree/main/
+    issue: https://gitlab.com/mtgcodex.api/mtgcodex.api_api/-/issues

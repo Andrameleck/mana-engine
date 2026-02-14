@@ -14,7 +14,7 @@ query_mdb_table_preview <- function(name, limit = 100L) {
   if (!isTRUE(status$mdb_exists)) {
     return(list(
       ok = FALSE,
-      error = "Database file not found. Set MTGCODEX_DB_PATH."
+      error = "Database file not found. Set mtgcodex.api_DB_PATH."
     ))
   }
 

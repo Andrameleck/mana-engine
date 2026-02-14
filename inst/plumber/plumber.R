@@ -2,8 +2,8 @@
 # or from local R/ files during development.
 query_call <- local({
   ns <- NULL
-  if ("MTGCODEX" %in% loadedNamespaces()) {
-    ns <- asNamespace("MTGCODEX")
+  if ("mtgcodex.api" %in% loadedNamespaces()) {
+    ns <- asNamespace("mtgcodex.api")
   }
 
   if (is.null(ns)) {
@@ -35,7 +35,7 @@ query_call <- local({
   }
 })
 
-#* @apiTitle MTGCODEX API
+#* @apiTitle mtgcodex.api API
 #* @apiDescription API routes delegate to query_* functions in R/
 NULL
 

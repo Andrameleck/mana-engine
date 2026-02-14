@@ -23,9 +23,9 @@ start_api <- function(
     stop("Package 'plumber' is required. Please install it first.")
   }
 
-  .start_api_log("info", "Initializing MTGCODEX API on %s:%s", host, port)
+  .start_api_log("info", "Initializing mtgcodex.api API on %s:%s", host, port)
 
-  api_file <- system.file("plumber", "plumber.R", package = "MTGCODEX")
+  api_file <- system.file("plumber", "plumber.R", package = "mtgcodex.api")
   if (!nzchar(api_file)) {
     api_file <- file.path(getwd(), "inst", "plumber", "plumber.R")
   }
