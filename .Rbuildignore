@@ -1,0 +1,11 @@
+^LICENSE\.md$
+^\.github$
+^\.vscode$
+^gitlab-ci\.yml$
+^mtgcodex.api_api\.Rproj$
+^pkgdown$
+^pkgdown/
+^public$
+^public/
+^inst/\.vscode$
+^inst/\.vscode/

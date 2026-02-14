@@ -1,49 +1,170 @@
-# This file is a template, and might need editing before it works on your project.
-# This is a sample GitLab CI/CD configuration file that should run without any modifications.
-# It demonstrates a basic 3 stage CI/CD pipeline. Instead of real tests or scripts,
-# it uses echo commands to simulate the pipeline execution.
-#
-# A pipeline is composed of independent jobs that run scripts, grouped into stages.
-# Stages run in sequential order, but jobs within stages run in parallel.
-#
-# For more information, see: https://docs.gitlab.com/ee/ci/yaml/#stages
-#
-# You can copy and paste this template into a new `.gitlab-ci.yml` file.
-# You should not add this template to an existing `.gitlab-ci.yml` file by using the `include:` keyword.
-#
-# To contribute improvements to CI/CD templates, please follow the Development guide at:
-# https://docs.gitlab.com/development/cicd/templates/
-# This specific template is located at:
-# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Getting-Started.gitlab-ci.yml
-
-stages:          # List of stages for jobs, and their order of execution
-  - build
-  - test
+stages:
+  - checks
   - deploy
 
-build-job:       # This job runs in the build stage, which runs first.
-  stage: build
-  script:
-    - echo "Compiling the code..."
-    - echo "Compile complete."
+image: rocker/geospatial:latest
 
-unit-test-job:   # This job runs in the test stage.
-  stage: test    # It only starts when the job in the build stage completes successfully.
-  script:
-    - echo "Running unit tests... This will take about 60 seconds."
-    - sleep 60
-    - echo "Code coverage is 90%"
+variables:
+  CI_CACHE_DIR: "$CI_PROJECT_DIR/ci"
+  R_LIBS_USER: "$CI_CACHE_DIR/lib"
+  BRANCH_PAGES: "gitlab-pages"
+  COVERAGE_REPORT: "$CI_CACHE_DIR/coverage.RDS"
 
-lint-test-job:   # This job also runs in the test stage.
-  stage: test    # It can run at the same time as unit-test-job (in parallel).
-  script:
-    - echo "Linting code... This will take about 10 seconds."
-    - sleep 10
-    - echo "No lint issues found."
+cache:
+  key:
+  paths:
+    - $CI_CACHE_DIR
 
-deploy-job:      # This job runs in the deploy stage.
-  stage: deploy  # It only runs when *both* jobs in the test stage complete successfully.
-  environment: production
+.default_build:
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends
+        pandoc
+        texlive-latex-base
+        texlive-latex-recommended
+        texlive-latex-extra
+        texlive-fonts-recommended
+        texlive-fonts-extra
+        texinfo
+        latexmk
+    - rm -rf /var/lib/apt/lists/*
+    - mkdir -p $R_LIBS_USER
+    - echo "R_LIBS='$R_LIBS_USER'" > .Renviron
+    - R -q -e 'if (!require(devtools)) install.packages(c("devtools", "remotes", "testthat"))'
+    - R -q -e 'devtools::install_deps(dependencies = TRUE)'
+
+check:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "gitlab-pages" || $CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+      when: on_success
+    - when: never
+  extends: .default_build
+  variables:
+    NOT_CRAN: "true"
+  stage: checks
   script:
-    - echo "Deploying application..."
-    - echo "Application successfully deployed."
+    - R -q -e 'devtools::check(vignettes = TRUE, error_on = "error")'
+
+cover-gen:
+  stage: checks
+  allow_failure: true
+  extends: .default_build
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "schedule"'
+    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE != "schedule"'
+  script:
+    - Rscript -e 'devtools::install()'
+    - Rscript -e 'remotes::install_cran(c("covr", "DT"))'
+    - Rscript -e 'cov <- covr::package_coverage(type = "all", quiet = FALSE);cov;saveRDS(cov, Sys.getenv("COVERAGE_REPORT"))'
+  artifacts:
+    paths:
+      - ci/coverage.RDS
+  coverage: '/mtgcodex.api_api Coverage: (\d+)\.\d+%/'
+
+.deploy:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "schedule"'
+    - if: '$CI_COMMIT_BRANCH == "dev" && $CI_PIPELINE_SOURCE != "schedule"'
+  artifacts:
+    paths:
+      - public/
+
+pkgdown:
+  extends:
+    - .default_build
+    - .deploy
+  stage: deploy
+  needs:
+   - job: check
+   - job: cover-gen
+  script:
+    - R -q -e 'if (!require(pkgdown)) install.packages("pkgdown")'
+    - R -q -e 'pkgdown::build_site()'
+  artifacts:
+    paths:
+      - public/
+
+manual:
+  extends:
+    - .default_build
+    - .deploy
+  stage: deploy
+  needs:
+    - job: pkgdown
+      artifacts: true
+  script:
+    - mkdir -p public/user-manual
+    - R CMD Rd2pdf . --output=public/user-manual/mtgcodex.api_api-manual.pdf
+  artifacts:
+    paths:
+      - public/
+
+cover-rep:
+  extends:
+    - .default_build
+    - .deploy
+  stage: deploy
+  needs:
+    - job: pkgdown
+      artifacts: true
+    - job: cover-gen
+      artifacts: true
+  script:
+    - R -q -e 'remotes::install_cran(c("covr", "DT"))'
+    - R -q -e 'covr::report(readRDS(Sys.getenv("COVERAGE_REPORT")), "public/coverage.html")'
+  artifacts:
+    paths:
+      - public/
+
+pages:
+  extends: .deploy
+  stage: deploy
+  pages: true
+  needs:
+    - job: pkgdown
+      artifacts: true
+    - job: manual
+      artifacts: true
+    - job: cover-rep
+      artifacts: true
+  script:
+    - git add -f public
+    - git config --global user.email "gitlab-ci@inrae.fr"
+    - git config --global user.name "GitLab CI"
+    - git commit -m "Update GitLab pages"
+
+    # Capture the current commit hash for cherry-picking
+    - HASH_COMMIT_PAGES="$(git rev-parse HEAD)"
+
+    # Set remote URL for pushing changes
+    - git remote set-url origin https://whatever:${PAGES_TOKEN}@forge.inrae.fr/${CI_PROJECT_NAMESPACE}/${CI_PROJECT_NAME}.git
+
+    # Checkout or create the branch
+    - |
+      if git ls-remote --exit-code --heads origin "$BRANCH_PAGES" > /dev/null; then
+        echo "Remote branch '$BRANCH_PAGES' exists. Checking out and resetting."
+        git fetch origin "$BRANCH_PAGES"
+        git checkout -B "$BRANCH_PAGES" origin/"$BRANCH_PAGES"
+      else
+        echo "Remote branch '$BRANCH_PAGES' does not exist. Creating new local branch."
+        git checkout -b "$BRANCH_PAGES"
+        find . -maxdepth 1 -mindepth 1 ! -name public ! -name .git ! -name ci -exec rm -rf {} +
+        git add .
+        git commit -m "gitlab-pages initialization"
+      fi
+
+    # Cherry-pick the latest commit to the new branch
+    - |
+      git cherry-pick "$HASH_COMMIT_PAGES" --strategy-option theirs || \
+        (if git status | grep -q 'You are currently cherry-picking'; then
+          echo "Cherry-pick resulted in empty commit. Skipping."
+          git cherry-pick --skip
+        else
+          echo "Cherry-pick failed unexpectedly." >&2
+          exit 1
+        fi)
+
+    # Push the changes to the remote
+    - git push --set-upstream origin "$BRANCH_PAGES"
