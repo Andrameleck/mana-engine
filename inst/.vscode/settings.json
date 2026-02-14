@@ -1,0 +1,21 @@
+{
+	"r.rterm.linux": "/home/fricquier/.local/bin/radian",
+	"r.bracketedPaste": true,
+	"r.alwaysUseActiveTerminal": true,
+	"r.sessionWatcher": true,
+	"r.rpath.linux": "/usr/bin/R",
+	"r.plot.useHttpgd": true,
+	"workbench.editor.enablePreview": false,
+	"workbench.editor.openSideBySideDirection": "right",
+	// --- TERMINAL ---
+	"terminal.integrated.defaultProfile.linux": "R Terminal",
+	"task.allowAutomaticTasks": "on",
+	"terminal.integrated.splitCwd": "workspaceRoot",
+	// --- INDENTATION ---
+	"editor.tabSize": 2,
+	"editor.insertSpaces": false,
+	"editor.detectIndentation": false,
+	"editor.rulers": [
+		80
+	]
+}

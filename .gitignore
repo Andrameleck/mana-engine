@@ -1,2 +1,51 @@
-.Rproj.user
-.vscode/
+# History files
+.Rhistory
+.Rapp.history
+
+# Session Data files
+.RData
+.RDataTmp
+
+# User-specific files
+.Ruserdata
+
+# Output files from R CMD build
+/*.tar.gz
+
+# Output files from R CMD check
+/*.Rcheck/
+
+# RStudio files
+.Rproj.user/
+
+# produced vignettes
+vignettes/*.html
+vignettes/*.pdf
+vignettes/*.png
+vignettes/*.yml
+
+# Temporary files created by R markdown
+*.utf8.md
+*.knit.md
+
+# R Environment Variables
+.Renviron
+
+# RStudio Connect folder
+rsconnect/
+
+# Vscode user settings folder
+/.vscode
+
+# Public/docs folder generated durign build_site() test
+public/
+.documents/
+inst/.documents/paper
+
+inst/extdata/MyAwesomeProject/
+inst/extdata/PRESTIE_MAIZE_2021/
+inst/extdata/*/*.rds
+
+/.quarto/
+.lintr
+*.rds
