@@ -2,9 +2,6 @@ stages:
   - checks
   - deploy
 
-default:
-  tags: [stable]
-
 image: rocker/geospatial:latest
 
 variables:
