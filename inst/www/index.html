@@ -9,6 +9,12 @@
 <body>
   <main class="page">
     <header class="hero">
+      <div class="hero-tools">
+        <div class="lang-switch" role="group" aria-label="Langue d'affichage">
+          <button type="button" id="lang-en" class="lang-btn is-active">EN</button>
+          <button type="button" id="lang-fr" class="lang-btn">FR</button>
+        </div>
+      </div>
       <div>
         <p class="eyebrow">MTG Collection</p>
         <h1>Charger et afficher</h1>
@@ -51,8 +57,23 @@
         <div id="load-summary" class="summary muted">Aucune collection chargee.</div>
       </div>
       <div id="table-wrap" class="table-wrap"></div>
+      <div id="table-scrollbar" class="table-scrollbar" aria-hidden="true">
+        <div id="table-scrollbar-inner"></div>
+      </div>
     </section>
   </main>
+
+  <aside id="card-preview" class="card-preview hidden" aria-live="polite">
+    <div class="card-preview-head">
+      <strong id="card-preview-title">Carte</strong>
+      <button type="button" id="card-preview-close" class="card-preview-close" aria-label="Fermer le panneau">x</button>
+    </div>
+    <div class="card-preview-body">
+      <img id="card-preview-image" alt="Apercu de la carte" loading="lazy">
+      <p id="card-preview-text" class="muted"></p>
+      <dl id="card-preview-meta" class="card-preview-meta"></dl>
+    </div>
+  </aside>
 
   <script src="/ui/static/api.js"></script>
   <script src="/ui/static/ui.js"></script>

@@ -5,6 +5,8 @@
   const tableInput = document.getElementById("source-table");
   const form = document.getElementById("load-form");
   const pickFileButton = document.getElementById("pick-file");
+  const langEnButton = document.getElementById("lang-en");
+  const langFrButton = document.getElementById("lang-fr");
 
   function syncSelectedFile() {
     const selected = fileInput.files && fileInput.files[0];
@@ -41,8 +43,28 @@
   }
 
   async function init() {
+    const initialLanguage = typeof window.getCollectionLanguage === "function"
+      ? window.getCollectionLanguage()
+      : "en";
+
+    function applyLanguageButtonState(language) {
+      if (!langEnButton || !langFrButton) {
+        return;
+      }
+      langEnButton.classList.toggle("is-active", language === "en");
+      langFrButton.classList.toggle("is-active", language === "fr");
+    }
+
+    function onLanguageSelect(language) {
+      if (typeof window.setCollectionLanguage === "function") {
+        window.setCollectionLanguage(language);
+      }
+      applyLanguageButtonState(language);
+    }
+
     syncFormState();
     syncSelectedFile();
+    applyLanguageButtonState(initialLanguage);
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       await runLoad();
@@ -52,6 +74,10 @@
     });
     fileInput.addEventListener("change", syncSelectedFile);
     typeInput.addEventListener("change", syncFormState);
+    if (langEnButton && langFrButton) {
+      langEnButton.addEventListener("click", () => onLanguageSelect("en"));
+      langFrButton.addEventListener("click", () => onLanguageSelect("fr"));
+    }
   }
 
   init().catch((error) => {
