@@ -4,12 +4,10 @@ Title: MTG Codex Toolkit
 Version: 0.0.0.9000
 Authors@R: 
     person("Florian", "Ricquier", email = "florian.ricquier@example.com", role = c("aut", "cre"))
-Description: Toolkit for managing the MTG Codex collection and strategy pool.
-    Provides data import helpers that append CSV purchases into the SQLite
-    collection, fetches missing card records from Scryfall, exposes a Plumber
-    service with rule-based synergy scoring plus deck suggestions, and ships
-    matchup simulators for testing archetypes, all wrapped as a reusable R
-    package.
+Description: Lightweight API and web interface to load and display MTG
+    collections from SQLite, CSV, or text files. The package exposes a
+    Plumber service plus a simple browser UI focused on ingestion and
+    tabular preview.
 License: AGPL (>= 3)
 BugReports: https://gitlab.com/mtgcodex.api/mtgcodex.api_api/-/issues
 URL: https://gitlab.com/mtgcodex.api/mtgcodex.api_api

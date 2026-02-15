@@ -1,39 +1,23 @@
 # mtgcodex.api
 
-mtgcodex.api is being rewritten as an R package that focuses on a Plumber REST
-service for Magic: The Gathering collection analytics. The package now exposes
-`start_api()` to run the API entrypoint.
+Minimal Plumber API + UI for loading and displaying a collection from:
+- SQLite database (`db`)
+- CSV (`csv`)
+- text file (`text`)
 
-## Install the development snapshot
-
-```r
-devtools::install_github("FlorianRicquier/mtgcodex.api")
-```
-
-During local development run `devtools::load_all()` so you can iterate while the
-package structure takes shape.
-
-## Launch the (future) Plumber service
-
-The API router is under `inst/plumber/plumber.R`. Start it with:
+## Run
 
 ```r
 mtgcodex.api::start_api(host = "0.0.0.0", port = 8000)
 ```
 
-You can also run the router directly during development:
+Then open `http://localhost:8000/ui`.
 
-```r
-plumber::plumb("inst/plumber/plumber.R")$run(port = 8000)
-```
+## Endpoints
 
-## Current roadmap
-
-1. Port the standalone scripts (`import_*`, `simulate_matchup.R`, `plumber.R`)
-	 into namespaced R modules.
-2. Stage the Plumber router under `inst/plumber/` and provide a helper such as
-	 `launch_service()`.
-3. Add documentation, tests, and example data once public APIs are stable.
-
-Status: schema and scripts exist externally; package wiring and service exports
-are in progress.
+- `GET /health`
+- `GET /collection/load?type=db|csv|text&path=<file>&table=<optional>`
+- `POST /collection/upload?type=db|csv|text&table=<optional>` (multipart with `file`)
+- `POST /collection/upload?type=db|csv|text&table=<optional>&filename=<name>` (application/octet-stream)
+- `GET /ui`
+- `GET /ui/static/<file>`

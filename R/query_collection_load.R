@@ -1,0 +1,282 @@
+query_collection_load <- function(type, path, table = "") {
+  source_type <- tolower(trimws(as.character(type)))
+  source_path <- trimws(as.character(path))
+  table_name <- trimws(as.character(table))
+
+  if (!source_type %in% c("db", "csv", "text")) {
+    return(list(
+      ok = FALSE,
+      error = "type must be one of: db, csv, text"
+    ))
+  }
+
+  if (!nzchar(source_path) && identical(source_type, "db")) {
+    source_path <- query_collection_default_db_path()
+  }
+
+  if (!nzchar(source_path)) {
+    return(list(
+      ok = FALSE,
+      error = "path is required"
+    ))
+  }
+
+  normalized_path <- normalizePath(source_path, winslash = "/", mustWork = FALSE)
+  if (!file.exists(normalized_path)) {
+    return(list(
+      ok = FALSE,
+      error = "file not found",
+      path = normalized_path
+    ))
+  }
+
+  payload <- switch(
+    source_type,
+    db = query_collection_load_db(
+      db_path = normalized_path,
+      table_name = table_name
+    ),
+    csv = query_collection_load_csv(
+      csv_path = normalized_path
+    ),
+    text = query_collection_load_text(
+      text_path = normalized_path
+    )
+  )
+
+  if (!isTRUE(payload$ok)) {
+    return(payload)
+  }
+
+  payload$source_type <- source_type
+  payload$path <- normalized_path
+  payload
+}
+
+query_collection_default_db_path <- function() {
+  installed_path <- system.file("collection", "mtg.db", package = "mtgcodex.api")
+  if (nzchar(installed_path) && file.exists(installed_path)) {
+    return(installed_path)
+  }
+
+  candidates <- c(
+    file.path(getwd(), "inst", "collection", "mtg.db"),
+    file.path(getwd(), "..", "inst", "collection", "mtg.db")
+  )
+  existing <- candidates[file.exists(candidates)]
+  if (length(existing) > 0L) {
+    return(existing[[1]])
+  }
+
+  ""
+}
+
+query_collection_load_db <- function(db_path, table_name) {
+  has_db_deps <- requireNamespace("DBI", quietly = TRUE) &&
+    requireNamespace("RSQLite", quietly = TRUE)
+  if (!isTRUE(has_db_deps)) {
+    return(list(
+      ok = FALSE,
+      error = "database dependencies missing (DBI/RSQLite)"
+    ))
+  }
+
+  con <- NULL
+  db_payload <- tryCatch(
+    {
+      con <- query_db_connect(db_path)
+      tables <- DBI::dbListTables(con)
+      if (length(tables) == 0L) {
+        return(list(
+          ok = FALSE,
+          error = "database has no tables"
+        ))
+      }
+
+      selected_table <- query_collection_resolve_table_name(tables, table_name)
+      if (!nzchar(selected_table)) {
+        return(list(
+          ok = FALSE,
+          error = "table not found",
+          available_tables = sort(as.character(tables))
+        ))
+      }
+
+      quoted_table <- DBI::dbQuoteIdentifier(con, selected_table)
+      sql <- sprintf("SELECT * FROM %s", as.character(quoted_table))
+      rows <- DBI::dbGetQuery(con, sql)
+
+      list(
+        ok = TRUE,
+        table = selected_table,
+        available_tables = sort(as.character(tables)),
+        columns = colnames(rows),
+        rows = query_db_rows_to_records(rows),
+        row_count = nrow(rows)
+      )
+    },
+    error = function(e) {
+      list(ok = FALSE, error = e$message)
+    },
+    finally = {
+      query_db_disconnect(con)
+    }
+  )
+
+  db_payload
+}
+
+query_collection_resolve_table_name <- function(tables, table_name) {
+  table_values <- as.character(tables)
+  if (nzchar(table_name)) {
+    exact <- table_values[table_values == table_name]
+    if (length(exact) > 0L) {
+      return(exact[[1]])
+    }
+
+    lower_target <- tolower(table_name)
+    lower_tables <- tolower(table_values)
+    match_index <- match(lower_target, lower_tables)
+    if (!is.na(match_index)) {
+      return(table_values[[match_index]])
+    }
+
+    return("")
+  }
+
+  lower_tables <- tolower(table_values)
+  cards_index <- match("cards", lower_tables)
+  if (!is.na(cards_index)) {
+    return(table_values[[cards_index]])
+  }
+
+  table_values[[1]]
+}
+
+query_collection_load_csv <- function(csv_path) {
+  rows <- tryCatch(
+    utils::read.csv(
+      file = csv_path,
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    ),
+    error = function(e) {
+      return(list(.error = e$message))
+    }
+  )
+
+  if (!is.data.frame(rows) && is.list(rows) && !is.null(rows$.error)) {
+    return(list(ok = FALSE, error = rows$.error))
+  }
+
+  list(
+    ok = TRUE,
+    table = basename(csv_path),
+    columns = colnames(rows),
+    rows = query_db_rows_to_records(rows),
+    row_count = nrow(rows)
+  )
+}
+
+query_collection_load_text <- function(text_path) {
+  lines <- tryCatch(
+    readLines(text_path, warn = FALSE, encoding = "UTF-8"),
+    error = function(e) {
+      return(list(.error = e$message))
+    }
+  )
+
+  if (is.list(lines) && !is.null(lines$.error)) {
+    return(list(ok = FALSE, error = lines$.error))
+  }
+
+  clean_lines <- gsub("\r$", "", lines)
+  non_empty <- clean_lines[nzchar(trimws(clean_lines))]
+
+  if (length(non_empty) == 0L) {
+    rows <- data.frame(line = character(0), stringsAsFactors = FALSE)
+    return(list(
+      ok = TRUE,
+      table = basename(text_path),
+      columns = colnames(rows),
+      rows = list(),
+      row_count = 0L
+    ))
+  }
+
+  separator <- query_collection_guess_separator(non_empty[[1]])
+  if (!is.na(separator)) {
+    table_payload <- query_collection_read_delimited_text(
+      text_lines = non_empty,
+      separator = separator
+    )
+
+    if (isTRUE(table_payload$ok)) {
+      table_payload$table <- basename(text_path)
+      return(table_payload)
+    }
+  }
+
+  rows <- data.frame(
+    line = non_empty,
+    stringsAsFactors = FALSE
+  )
+
+  list(
+    ok = TRUE,
+    table = basename(text_path),
+    columns = colnames(rows),
+    rows = query_db_rows_to_records(rows),
+    row_count = nrow(rows)
+  )
+}
+
+query_collection_guess_separator <- function(line) {
+  separators <- c("\t", ";", "|", ",")
+  counts <- vapply(
+    separators,
+    function(sep) {
+      pieces <- strsplit(line, sep, fixed = TRUE)[[1]]
+      length(pieces) - 1L
+    },
+    integer(1)
+  )
+
+  if (all(counts == 0L)) {
+    return(NA_character_)
+  }
+
+  separators[[which.max(counts)]]
+}
+
+query_collection_read_delimited_text <- function(text_lines, separator) {
+  con <- textConnection(text_lines)
+  on.exit(close(con), add = TRUE)
+
+  rows <- tryCatch(
+    utils::read.table(
+      file = con,
+      sep = separator,
+      header = TRUE,
+      quote = "\"",
+      stringsAsFactors = FALSE,
+      check.names = FALSE,
+      fill = TRUE,
+      comment.char = ""
+    ),
+    error = function(e) {
+      return(list(.error = e$message))
+    }
+  )
+
+  if (!is.data.frame(rows) && is.list(rows) && !is.null(rows$.error)) {
+    return(list(ok = FALSE, error = rows$.error))
+  }
+
+  list(
+    ok = TRUE,
+    columns = colnames(rows),
+    rows = query_db_rows_to_records(rows),
+    row_count = nrow(rows)
+  )
+}

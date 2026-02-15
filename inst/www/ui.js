@@ -1,48 +1,31 @@
-function renderStatus(status) {
-  const box = document.getElementById("status-box");
-  box.textContent = JSON.stringify(status, null, 2);
-}
-
-function renderTables(tables, onSelect) {
-  const list = document.getElementById("tables-list");
-  list.innerHTML = "";
-
-  if (!Array.isArray(tables) || tables.length === 0) {
-    list.innerHTML = '<li class="muted">No table found</li>';
-    return;
-  }
-
-  tables.forEach((tableName) => {
-    const item = document.createElement("li");
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = tableName;
-    button.addEventListener("click", () => onSelect(tableName));
-    item.appendChild(button);
-    list.appendChild(item);
-  });
-}
-
-function renderTablePreview(payload) {
+function renderCollection(payload) {
   const title = document.getElementById("table-title");
   const wrap = document.getElementById("table-wrap");
+  const summary = document.getElementById("load-summary");
+
   wrap.innerHTML = "";
   wrap.removeAttribute("data-table");
 
   if (!payload || payload.ok !== true) {
-    title.textContent = "Cartes";
-    wrap.innerHTML = `<p class="muted">${payload?.error || "No data"}</p>`;
+    const dbHints = Array.isArray(payload?.available_tables) && payload.available_tables.length > 0
+      ? ` Tables disponibles: ${payload.available_tables.join(", ")}`
+      : "";
+    title.textContent = "Collection";
+    wrap.innerHTML = `<p class="muted">${payload?.error || "No data"}${dbHints}</p>`;
+    summary.textContent = payload?.path || "";
     return;
   }
 
-  title.textContent = `Cartes: ${payload.table} (${payload.row_count} lignes)`;
-  wrap.dataset.table = String(payload.table || "").toLowerCase();
+  const source = `${payload.source_type || "source"}: ${payload.path || ""}`;
+  title.textContent = `${payload.table || "Collection"} (${payload.row_count} lignes)`;
+  summary.textContent = source;
+  wrap.dataset.table = String(payload.source_type || "").toLowerCase();
 
   const columns = reorderColumns(payload.columns || []);
   const rows = payload.rows || [];
 
   if (columns.length === 0) {
-    wrap.innerHTML = '<p class="muted">Table is empty.</p>';
+    wrap.innerHTML = '<p class="muted">Aucune colonne a afficher.</p>';
     return;
   }
 
@@ -82,27 +65,26 @@ function renderTablePreview(payload) {
   wrap.appendChild(table);
 }
 
-function reorderColumns(columns) {
-  if (!Array.isArray(columns)) {
-    return [];
-  }
-
-  const ordered = [...columns];
-  const scryfallIndex = ordered.findIndex((col) => String(col).toLowerCase() === "scryfall_id");
-  if (scryfallIndex === -1) {
-    return ordered;
-  }
-
-  const [scryfallCol] = ordered.splice(scryfallIndex, 1);
-  ordered.push(scryfallCol);
-  return ordered;
-}
-
 function columnClassName(col) {
   return `col-${String(col || "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")}`;
+}
+
+function reorderColumns(columns) {
+  const ordered = Array.isArray(columns) ? [...columns] : [];
+  const scryfallIdIndex = ordered.findIndex(
+    (col) => String(col).toLowerCase() === "scryfall_id"
+  );
+
+  if (scryfallIdIndex < 0) {
+    return ordered;
+  }
+
+  const [scryfallIdColumn] = ordered.splice(scryfallIdIndex, 1);
+  ordered.push(scryfallIdColumn);
+  return ordered;
 }
 
 function readCellValue(row, col) {

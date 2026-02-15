@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>mtgcodex.api MDB Viewer</title>
+  <title>mtgcodex.api Collection Loader</title>
   <link rel="stylesheet" href="/ui/static/styles.css">
 </head>
 <body>
@@ -11,15 +11,44 @@
     <header class="hero">
       <div>
         <p class="eyebrow">MTG Collection</p>
-        <h1>Toutes les cartes</h1>
-        <p class="sub">Vue simplifiee: uniquement le tableau de cartes.</p>
+        <h1>Charger et afficher</h1>
+        <p class="sub">Charge un fichier db, csv ou text et affiche son contenu.</p>
       </div>
     </header>
 
     <section class="panel">
       <div class="panel-head">
-        <h2 id="table-title">Cartes</h2>
-        <div class="summary">Affichage automatique de la table de cartes</div>
+        <h2>Source</h2>
+      </div>
+      <form id="load-form" class="grid">
+        <label for="source-type">
+          Type
+          <select id="source-type">
+            <option value="db">db</option>
+            <option value="csv">csv</option>
+            <option value="text">text</option>
+          </select>
+        </label>
+        <label for="source-file-name">
+          Fichier selectionne
+          <input id="source-file-name" type="text" placeholder="Aucun fichier selectionne" readonly>
+          <input id="source-file" type="file" class="hidden-file-input">
+        </label>
+        <label for="source-table">
+          Table (db uniquement)
+          <input id="source-table" type="text" placeholder="cards (optionnel)">
+        </label>
+        <div class="actions">
+          <button type="button" id="pick-file">Choisir un fichier</button>
+          <button type="submit">Charger le fichier</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2 id="table-title">Collection</h2>
+        <div id="load-summary" class="summary muted">Aucune collection chargee.</div>
       </div>
       <div id="table-wrap" class="table-wrap"></div>
     </section>

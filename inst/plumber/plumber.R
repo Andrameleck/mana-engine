@@ -46,36 +46,37 @@ function() {
   query_call("query_health")
 }
 
-#* Check card/deck request
-#* @param card_name Card name to check.
-#* @param deck_name Deck name to check.
+#* Load collection from a source file
+#* @param type Source type: db, csv, or text.
+#* @param path Source file path.
+#* @param table Table name when `type=db`.
 #* @serializer unboxedJSON
-#* @get /collection/check
-function(card_name = "", deck_name = "") {
-  query_call("query_check_collection", card_name = card_name, deck_name = deck_name)
+#* @get /collection/load
+function(type = "", path = "", table = "") {
+  query_call(
+    "query_collection_load",
+    type = type,
+    path = path,
+    table = table
+  )
 }
 
-#* MDB connection status and tooling check
+#* Upload and load a collection file
+#* @param type Source type: db, csv, or text.
+#* @param table Table name when `type=db`.
+#* @param filename Optional file name when sending application/octet-stream.
+#* @parser multi
+#* @parser octet
 #* @serializer unboxedJSON
-#* @get /mdb/status
-function() {
-  query_call("query_mdb_status")
-}
-
-#* List tables from MDB
-#* @serializer unboxedJSON
-#* @get /mdb/tables
-function() {
-  query_call("query_mdb_list_tables")
-}
-
-#* Preview rows from an MDB table
-#* @param name Table name.
-#* @param limit Maximum row count.
-#* @serializer unboxedJSON
-#* @get /mdb/table
-function(name = "", limit = 100L) {
-  query_call("query_mdb_table_preview", name = name, limit = limit)
+#* @post /collection/upload
+function(req, res, type = "", table = "", filename = "") {
+  query_call(
+    "query_collection_upload",
+    req = req,
+    type = type,
+    table = table,
+    filename = filename
+  )
 }
 
 #* UI entrypoint

@@ -1,18 +1,23 @@
-async function apiGetJson(path) {
-  const response = await fetch(path);
-  const data = await response.json();
+async function uploadCollection(file, sourceType, tableName) {
+  const params = new URLSearchParams({
+    type: sourceType,
+    table: tableName || ""
+  });
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`/collection/upload?${params.toString()}`, {
+    method: "POST",
+    body: formData
+  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok && data.ok !== false) {
+    return {
+      ok: false,
+      error: `HTTP ${response.status}`
+    };
+  }
+
   return data;
-}
-
-async function fetchMdbStatus() {
-  return apiGetJson("/mdb/status");
-}
-
-async function fetchMdbTables() {
-  return apiGetJson("/mdb/tables");
-}
-
-async function fetchTablePreview(name, limit) {
-  const params = new URLSearchParams({ name, limit: String(limit) });
-  return apiGetJson(`/mdb/table?${params.toString()}`);
 }
