@@ -1,22 +1,52 @@
 const COMPACT_COLUMN_ORDER = [
+  "quantity",
   "name",
   "oracle_text",
+  "abilities",
   "type_line",
   "mana_cost",
   "cmc",
   "colors",
   "color_identity",
   "set",
+  "set_code",
   "collector_number",
   "rarity",
+  "language",
+  "lang",
+  "finish",
+  "card_condition",
+  "notes",
   "scry_fall_id",
   "scryfall_id"
 ];
 
+const HIDDEN_COLUMN_KEYS = new Set([
+  "keywords",
+  "keyword"
+]);
+
+const DESCRIPTION_COLUMN_KEYS = new Set([
+  "oracle_text",
+  "printed_text",
+  "card_text",
+  "rules_text",
+  "description",
+  "desc"
+]);
+
+const MANA_COST_COLUMN_KEYS = new Set([
+  "mana_cost",
+  "manacost"
+]);
+
 const UI_STATE = {
   language: loadSavedLanguage(),
   rows: [],
-  rawColumns: []
+  rawColumns: [],
+  columns: [],
+  pageSize: 200,
+  currentPage: 1
 };
 
 const PREVIEW_STATE = {
@@ -45,11 +75,12 @@ function renderCollection(payload) {
     const dbHints = Array.isArray(payload?.available_tables) && payload.available_tables.length > 0
       ? ` Tables disponibles: ${payload.available_tables.join(", ")}`
       : "";
-    title.textContent = "Collection";
+    title.textContent = payload?.table || "Table";
     wrap.innerHTML = `<p class="muted">${payload?.error || "No data"}${dbHints}</p>`;
     summary.textContent = payload?.path || "";
     clearCardPreview(true);
     hideBottomScrollbar();
+    hideTablePager();
     return;
   }
 
@@ -60,45 +91,87 @@ function renderCollection(payload) {
 
   UI_STATE.rawColumns = Array.isArray(payload.columns) ? payload.columns : [];
   UI_STATE.rows = Array.isArray(payload.rows) ? payload.rows.map(normalizeRowObject) : [];
+  UI_STATE.columns = selectVisibleColumns(UI_STATE.rawColumns);
 
-  const columns = selectVisibleColumns(UI_STATE.rawColumns);
+  const payloadPageSize = Number(payload.page_size);
+  if (Number.isFinite(payloadPageSize) && payloadPageSize > 0) {
+    UI_STATE.pageSize = Math.floor(payloadPageSize);
+  }
+  UI_STATE.currentPage = 1;
 
-  if (columns.length === 0) {
+  if (UI_STATE.columns.length === 0) {
     wrap.innerHTML = '<p class="muted">Aucune colonne a afficher.</p>';
     clearCardPreview(true);
     hideBottomScrollbar();
+    hideTablePager();
     return;
   }
+
+  renderTablePage(UI_STATE.currentPage);
+}
+
+function renderTablePage(pageNumber) {
+  const wrap = document.getElementById("table-wrap");
+  if (!wrap) {
+    return;
+  }
+
+  wrap.innerHTML = "";
+  releaseTableScrollbarSync();
+  clearCardPreview(true);
+
+  const totalRows = UI_STATE.rows.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / UI_STATE.pageSize));
+  const nextPage = Number.isFinite(pageNumber) ? Math.floor(pageNumber) : 1;
+  UI_STATE.currentPage = Math.min(Math.max(nextPage, 1), totalPages);
+
+  const startIndex = (UI_STATE.currentPage - 1) * UI_STATE.pageSize;
+  const endIndex = startIndex + UI_STATE.pageSize;
+  const pageRows = UI_STATE.rows.slice(startIndex, endIndex);
 
   const table = document.createElement("table");
   const thead = document.createElement("thead");
   const headRow = document.createElement("tr");
 
-  columns.forEach((col) => {
+  UI_STATE.columns.forEach((col) => {
     const th = document.createElement("th");
     th.textContent = col;
     th.dataset.col = col;
     th.classList.add(columnClassName(col));
+    if (isDescriptionColumn(col)) {
+      th.classList.add("col-description");
+    }
+    if (isManaCostColumn(col)) {
+      th.classList.add("col-mana-icons");
+    }
     headRow.appendChild(th);
   });
   thead.appendChild(headRow);
   table.appendChild(thead);
 
   const tbody = document.createElement("tbody");
-  UI_STATE.rows.forEach((rowData) => {
+  pageRows.forEach((rowData) => {
     const tr = document.createElement("tr");
     tr.classList.add("data-row");
     bindRowPreviewEvents(tr, rowData);
 
-    columns.forEach((col) => {
+    UI_STATE.columns.forEach((col) => {
       const td = document.createElement("td");
       const value = readCellValue(rowData, col);
       const text = formatCellValue(value);
-      td.textContent = text;
       td.dataset.col = col;
       td.classList.add(columnClassName(col));
-      if (text.length > 70) {
-        td.title = text;
+      if (isDescriptionColumn(col)) {
+        td.classList.add("col-description");
+        renderDescriptionIconCell(td, text);
+      } else if (isManaCostColumn(col)) {
+        td.classList.add("col-mana-icons");
+        renderManaCostCell(td, text);
+      } else {
+        td.textContent = text;
+        if (text.length > 70) {
+          td.title = text;
+        }
       }
       tr.appendChild(td);
     });
@@ -108,6 +181,56 @@ function renderCollection(payload) {
   table.appendChild(tbody);
   wrap.appendChild(table);
   syncBottomScrollbar(wrap, table);
+  renderTablePager(totalRows, startIndex, pageRows.length);
+}
+
+function renderTablePager(totalRows, startIndex, pageLength) {
+  const pager = document.getElementById("table-pager");
+  if (!pager) {
+    return;
+  }
+
+  if (totalRows <= UI_STATE.pageSize) {
+    hideTablePager();
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(totalRows / UI_STATE.pageSize));
+  const start = startIndex + 1;
+  const end = startIndex + pageLength;
+
+  pager.classList.add("is-visible");
+  pager.innerHTML = `
+    <div class="table-pager-info">Lignes ${start}-${end} / ${totalRows} (page ${UI_STATE.currentPage}/${totalPages})</div>
+    <div class="table-pager-actions">
+      <button type="button" data-page="prev">Prev</button>
+      <button type="button" data-page="next">Next</button>
+    </div>
+  `;
+
+  const prevButton = pager.querySelector('button[data-page="prev"]');
+  const nextButton = pager.querySelector('button[data-page="next"]');
+  if (prevButton) {
+    prevButton.disabled = UI_STATE.currentPage <= 1;
+    prevButton.addEventListener("click", () => {
+      renderTablePage(UI_STATE.currentPage - 1);
+    });
+  }
+  if (nextButton) {
+    nextButton.disabled = UI_STATE.currentPage >= totalPages;
+    nextButton.addEventListener("click", () => {
+      renderTablePage(UI_STATE.currentPage + 1);
+    });
+  }
+}
+
+function hideTablePager() {
+  const pager = document.getElementById("table-pager");
+  if (!pager) {
+    return;
+  }
+  pager.classList.remove("is-visible");
+  pager.innerHTML = "";
 }
 
 function bindRowPreviewEvents(rowElement, rowData) {
@@ -269,8 +392,10 @@ function initPreviewEvents() {
 }
 
 function selectVisibleColumns(columns) {
+  const visibleColumns = columns.filter((column) => !isHiddenColumn(column));
+
   const availableByLowercase = new Map();
-  columns.forEach((column) => {
+  visibleColumns.forEach((column) => {
     availableByLowercase.set(String(column).toLowerCase(), column);
   });
 
@@ -278,11 +403,17 @@ function selectVisibleColumns(columns) {
     .map((columnName) => availableByLowercase.get(columnName))
     .filter(Boolean);
 
-  if (ordered.length === 0) {
-    return reorderColumns(columns.slice(0, 10));
+  if (ordered.length < Math.min(4, visibleColumns.length)) {
+    const used = new Set(ordered.map((column) => String(column).toLowerCase()));
+    const extra = visibleColumns.filter((column) => !used.has(String(column).toLowerCase()));
+    return reorderColumns([...ordered, ...extra].slice(0, 12));
   }
 
   return reorderColumns(ordered);
+}
+
+function isHiddenColumn(col) {
+  return HIDDEN_COLUMN_KEYS.has(String(col || "").toLowerCase());
 }
 
 function reorderColumns(columns) {
@@ -355,6 +486,108 @@ function formatCellValue(value) {
   return String(value);
 }
 
+function isDescriptionColumn(col) {
+  return DESCRIPTION_COLUMN_KEYS.has(String(col || "").toLowerCase());
+}
+
+function isManaCostColumn(col) {
+  return MANA_COST_COLUMN_KEYS.has(String(col || "").toLowerCase());
+}
+
+function renderDescriptionIconCell(cell, text) {
+  const fullText = String(text || "").trim();
+  if (!fullText) {
+    cell.textContent = "";
+    return;
+  }
+
+  const icon = document.createElement("span");
+  icon.classList.add("description-icon");
+  icon.textContent = "i";
+  icon.setAttribute("aria-label", "Description");
+  cell.appendChild(icon);
+  cell.title = fullText;
+}
+
+function renderManaCostCell(cell, text) {
+  const rawText = String(text || "").trim();
+  if (!rawText) {
+    cell.textContent = "";
+    return;
+  }
+
+  const symbols = extractManaSymbols(rawText);
+  if (symbols.length === 0) {
+    cell.textContent = rawText;
+    return;
+  }
+
+  const wrap = document.createElement("span");
+  wrap.classList.add("mana-cost-icons");
+  symbols.forEach((symbol) => {
+    const icon = createManaSymbol(symbol);
+    wrap.appendChild(icon);
+  });
+
+  cell.appendChild(wrap);
+  cell.title = rawText;
+}
+
+function extractManaSymbols(text) {
+  const raw = String(text || "");
+  const matches = raw.match(/\{([^}]+)\}/g);
+  if (!matches || matches.length === 0) {
+    return [];
+  }
+  return matches
+    .map((chunk) => chunk.slice(1, -1).trim())
+    .filter(Boolean);
+}
+
+function createManaSymbol(symbol) {
+  const normalized = String(symbol || "").trim().toUpperCase();
+  const iconWrap = document.createElement("span");
+  iconWrap.classList.add("mana-symbol");
+  iconWrap.setAttribute("aria-label", `Mana ${normalized}`);
+
+  const iconUrl = manaSymbolIconUrl(normalized);
+  if (!iconUrl) {
+    iconWrap.textContent = normalized;
+    return iconWrap;
+  }
+
+  const img = document.createElement("img");
+  img.classList.add("mana-symbol-icon");
+  img.src = iconUrl;
+  img.alt = normalized;
+  img.loading = "lazy";
+  img.decoding = "async";
+  img.addEventListener("error", () => {
+    iconWrap.textContent = normalized;
+  }, { once: true });
+
+  iconWrap.appendChild(img);
+  return iconWrap;
+}
+
+function manaSymbolIconUrl(symbol) {
+  if (!symbol) {
+    return "";
+  }
+
+  let code = String(symbol).toUpperCase().trim();
+  code = code.replace(/\s+/g, "");
+  code = code.replace(/\//g, "");
+  code = code.replace(/∞/g, "INFINITY");
+  code = code.replace(/½/g, "HALF");
+
+  if (!/^[A-Z0-9]+$/.test(code)) {
+    return "";
+  }
+
+  return `https://svgs.scryfall.io/card-symbols/${code}.svg`;
+}
+
 function columnClassName(col) {
   return `col-${String(col || "")
     .toLowerCase()
@@ -373,9 +606,12 @@ function formatPrimaryText(rowData) {
 
 function renderPreviewMetaFromRow(rowData) {
   const entries = [
-    ["lang", formatCellValue(readCellValue(rowData, "lang")) || getCollectionLanguage()],
+    [
+      "lang",
+      formatCellValue(readFirstCellValue(rowData, ["language", "lang"])) || getCollectionLanguage()
+    ],
     ["rarete", formatCellValue(readCellValue(rowData, "rarity"))],
-    ["set", formatCellValue(readCellValue(rowData, "set"))],
+    ["set", formatCellValue(readFirstCellValue(rowData, ["set", "set_code"]))],
     ["collector", formatCellValue(readCellValue(rowData, "collector_number"))],
     ["scryfall_id", formatCellValue(readFirstCellValue(rowData, ["scryfall_id", "scry_fall_id"]))]
   ];
@@ -434,7 +670,7 @@ async function resolveCardForLanguage(scryfallId, cardName, rowData, language) {
     return baseCard;
   }
 
-  const preferredSet = String(readCellValue(rowData, "set") || "").toLowerCase();
+  const preferredSet = String(readFirstCellValue(rowData, ["set", "set_code"]) || "").toLowerCase();
   const preferredCollector = String(readCellValue(rowData, "collector_number") || "").toLowerCase();
 
   if (baseCard.oracle_id) {

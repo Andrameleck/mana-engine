@@ -79,6 +79,53 @@ function(req, res, type = "", table = "", filename = "") {
   )
 }
 
+#* Import a public CSV collection into internal DB store
+#* @param name Collection display name.
+#* @param platform Optional source platform name.
+#* @param filename Optional file name when sending application/octet-stream.
+#* @parser multi
+#* @parser octet
+#* @serializer unboxedJSON
+#* @post /collections/import_csv
+function(req, res, name = "", platform = "auto", filename = "") {
+  query_call(
+    "query_collections_import_csv",
+    req = req,
+    name = name,
+    platform = platform,
+    filename = filename
+  )
+}
+
+#* List stored collections
+#* @serializer unboxedJSON
+#* @get /collections
+function() {
+  query_call("query_collections_list")
+}
+
+#* Get one stored collection content
+#* @param collection_id Collection identifier.
+#* @serializer unboxedJSON
+#* @get /collections/<collection_id>
+function(collection_id = "") {
+  query_call(
+    "query_collections_get",
+    collection_id = collection_id
+  )
+}
+
+#* Delete one stored collection
+#* @param collection_id Collection identifier.
+#* @serializer unboxedJSON
+#* @delete /collections/<collection_id>
+function(collection_id = "") {
+  query_call(
+    "query_collections_delete",
+    collection_id = collection_id
+  )
+}
+
 #* UI entrypoint
 #* @serializer contentType list(type="text/html; charset=utf-8")
 #* @get /ui

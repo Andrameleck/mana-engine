@@ -1,75 +1,157 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>mtgcodex.api Collection Loader</title>
+  <title>mtgcodex.api Workspace</title>
   <link rel="stylesheet" href="/ui/static/styles.css">
 </head>
 <body>
-  <main class="page">
-    <header class="hero">
-      <div class="hero-tools">
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <p class="eyebrow">MTG Codex</p>
+        <h1>Workspace</h1>
+      </div>
+
+      <nav class="side-nav" aria-label="Navigation principale">
+        <button type="button" class="side-tab is-active" data-tab="collections">Collections</button>
+        <button type="button" class="side-tab" data-tab="decks">Decks</button>
+        <button type="button" class="side-tab" data-tab="strategy">Strategy</button>
+      </nav>
+    </aside>
+
+    <main class="workspace">
+      <header class="workspace-head">
+        <div>
+          <h2 id="workspace-title">Collections</h2>
+          <p id="workspace-subtitle" class="muted">Creer et gerer plusieurs collections.</p>
+        </div>
         <div class="lang-switch" role="group" aria-label="Langue d'affichage">
           <button type="button" id="lang-en" class="lang-btn is-active">EN</button>
           <button type="button" id="lang-fr" class="lang-btn">FR</button>
         </div>
-      </div>
-      <div>
-        <p class="eyebrow">MTG Collection</p>
-        <h1>Charger et afficher</h1>
-        <p class="sub">Charge un fichier db, csv ou text et affiche son contenu.</p>
-      </div>
-    </header>
+      </header>
 
-    <section class="panel">
-      <div class="panel-head">
-        <h2>Source</h2>
-      </div>
-      <form id="load-form" class="grid">
-        <label for="source-type">
-          Type
-          <select id="source-type">
-            <option value="db">db</option>
-            <option value="csv">csv</option>
-            <option value="text">text</option>
-          </select>
-        </label>
-        <label for="source-file-name">
-          Fichier selectionne
-          <input id="source-file-name" type="text" placeholder="Aucun fichier selectionne" readonly>
-          <input id="source-file" type="file" class="hidden-file-input">
-        </label>
-        <label for="source-table">
-          Table (db uniquement)
-          <input id="source-table" type="text" placeholder="cards (optionnel)">
-        </label>
-        <div class="actions">
-          <button type="button" id="pick-file">Choisir un fichier</button>
-          <button type="submit">Charger le fichier</button>
+      <section id="tab-collections" class="tab-view is-active" aria-labelledby="workspace-title">
+        <section class="panel">
+          <div class="panel-head">
+            <h3>Nouveau dossier collection</h3>
+          </div>
+          <form id="collection-load-form" class="grid">
+            <label for="collection-name">
+              Nom du dossier
+              <input id="collection-name" type="text" placeholder="Modern Staples">
+            </label>
+            <label for="collection-platform">
+              Plateforme source
+              <select id="collection-platform">
+                <option value="auto">Auto-detect</option>
+                <option value="moxfield">Moxfield</option>
+                <option value="archidekt">Archidekt</option>
+                <option value="manabox">ManaBox</option>
+                <option value="mtggoldfish">MTGGoldfish</option>
+                <option value="other">Autre</option>
+              </select>
+            </label>
+            <label for="collection-source-file-name">
+              Fichier CSV
+              <input id="collection-source-file-name" type="text" placeholder="Aucun fichier selectionne" readonly>
+              <input id="collection-source-file" type="file" class="hidden-file-input">
+            </label>
+            <label for="collection-import-hint">
+              Import public
+              <input id="collection-import-hint" type="text" value="Import CSV -> DB interne automatiquement" readonly>
+            </label>
+            <div class="actions">
+              <button type="button" id="collection-pick-file">Choisir CSV</button>
+              <button type="submit">Creer le dossier</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h3>Dossiers collections</h3>
+          </div>
+          <div id="collections-list" class="entity-list folder-grid"></div>
+        </section>
+      </section>
+
+      <section id="tab-decks" class="tab-view" aria-labelledby="workspace-title">
+        <section class="panel">
+          <div class="panel-head">
+            <h3>Import deck</h3>
+          </div>
+          <form id="deck-load-form" class="grid">
+            <label for="deck-name">
+              Deck name
+              <input id="deck-name" type="text" placeholder="UW Control">
+            </label>
+            <label for="deck-source-type">
+              Type
+              <select id="deck-source-type">
+                <option value="text">text</option>
+                <option value="csv">csv</option>
+                <option value="db">db</option>
+              </select>
+            </label>
+            <label for="deck-source-file-name">
+              Selected file
+              <input id="deck-source-file-name" type="text" placeholder="No file selected" readonly>
+              <input id="deck-source-file" type="file" class="hidden-file-input">
+            </label>
+            <label for="deck-source-table">
+              Table (db only)
+              <input id="deck-source-table" type="text" placeholder="cards (optional)">
+            </label>
+            <div class="actions">
+              <button type="button" id="deck-pick-file">Choose file</button>
+              <button type="submit">Add deck</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h3>Decks list</h3>
+          </div>
+          <div id="decks-list" class="entity-list"></div>
+        </section>
+      </section>
+
+      <section id="tab-strategy" class="tab-view" aria-labelledby="workspace-title">
+        <section class="panel">
+          <div class="panel-head">
+            <h3>Strategy module</h3>
+          </div>
+          <p class="muted">
+            Placeholder ready for future strategy workflows (archetypes, plan templates, matchup notes).
+          </p>
+        </section>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h3 id="table-title">Table</h3>
+          <div id="load-summary" class="summary muted">No data loaded.</div>
         </div>
-      </form>
-    </section>
-
-    <section class="panel">
-      <div class="panel-head">
-        <h2 id="table-title">Collection</h2>
-        <div id="load-summary" class="summary muted">Aucune collection chargee.</div>
-      </div>
-      <div id="table-wrap" class="table-wrap"></div>
-      <div id="table-scrollbar" class="table-scrollbar" aria-hidden="true">
-        <div id="table-scrollbar-inner"></div>
-      </div>
-    </section>
-  </main>
+        <div id="table-wrap" class="table-wrap"></div>
+        <div id="table-scrollbar" class="table-scrollbar" aria-hidden="true">
+          <div id="table-scrollbar-inner"></div>
+        </div>
+        <div id="table-pager" class="table-pager"></div>
+      </section>
+    </main>
+  </div>
 
   <aside id="card-preview" class="card-preview hidden" aria-live="polite">
     <div class="card-preview-head">
-      <strong id="card-preview-title">Carte</strong>
-      <button type="button" id="card-preview-close" class="card-preview-close" aria-label="Fermer le panneau">x</button>
+      <strong id="card-preview-title">Card</strong>
+      <button type="button" id="card-preview-close" class="card-preview-close" aria-label="Close panel">x</button>
     </div>
     <div class="card-preview-body">
-      <img id="card-preview-image" alt="Apercu de la carte" loading="lazy">
+      <img id="card-preview-image" alt="Card preview" loading="lazy">
       <p id="card-preview-text" class="muted"></p>
       <dl id="card-preview-meta" class="card-preview-meta"></dl>
     </div>
