@@ -33,19 +33,14 @@
     collections: {
       form: document.getElementById("collection-load-form"),
       nameInput: document.getElementById("collection-name"),
-      platformInput: document.getElementById("collection-platform"),
       fileInput: document.getElementById("collection-source-file"),
-      fileNameInput: document.getElementById("collection-source-file-name"),
       pickFileButton: document.getElementById("collection-pick-file"),
       list: document.getElementById("collections-list")
     },
     decks: {
       form: document.getElementById("deck-load-form"),
       nameInput: document.getElementById("deck-name"),
-      typeInput: document.getElementById("deck-source-type"),
       fileInput: document.getElementById("deck-source-file"),
-      fileNameInput: document.getElementById("deck-source-file-name"),
-      tableInput: document.getElementById("deck-source-table"),
       pickFileButton: document.getElementById("deck-pick-file"),
       list: document.getElementById("decks-list")
     }
@@ -71,13 +66,34 @@
 
   function bindCollectionPicker() {
     nodes.collections.fileInput.accept = ".csv,.txt";
+    const defaultPickLabel = "Choisir CSV";
+    setCollectionPickButtonLabel(defaultPickLabel);
+    nodes.collections.pickFileButton.classList.remove("has-file");
     nodes.collections.pickFileButton.addEventListener("click", () => {
       nodes.collections.fileInput.click();
     });
     nodes.collections.fileInput.addEventListener("change", () => {
       const selected = nodes.collections.fileInput.files && nodes.collections.fileInput.files[0];
-      nodes.collections.fileNameInput.value = selected ? selected.name : "";
+      setCollectionPickButtonLabel(selected ? `CSV: ${selected.name}` : defaultPickLabel);
+      nodes.collections.pickFileButton.classList.toggle("has-file", Boolean(selected));
     });
+  }
+
+  function setCollectionPickButtonLabel(label) {
+    const button = nodes.collections.pickFileButton;
+    if (!button) {
+      return;
+    }
+    const text = String(label || "Choisir CSV");
+    const labelNode = button.querySelector(".btn-label");
+    if (labelNode) {
+      labelNode.textContent = text;
+      button.title = text;
+      button.setAttribute("aria-label", text);
+      return;
+    }
+    button.title = text;
+    button.setAttribute("aria-label", text);
   }
 
   function syncDeckInputs() {
@@ -118,7 +134,7 @@
     renderActiveTabTable();
   }
 
-  function payloadForNamedView(payload, name, fallbackSummary) {
+  function payloadForNamedView(payload, name, fallbackSummary, viewMode = "table") {
     if (!payload) {
       return {
         ok: false,
@@ -129,7 +145,8 @@
     return {
       ...payload,
       table: payload.table || name,
-      path: payload.path || fallbackSummary
+      path: payload.path || fallbackSummary,
+      view_mode: viewMode
     };
   }
 
@@ -248,7 +265,7 @@
         return;
       }
 
-      renderCollection(payloadForNamedView(payload, meta?.name || "Collection", "collection/store"));
+      renderCollection(payloadForNamedView(payload, meta?.name || "Collection", "collection/store", "cards"));
       return;
     }
 
@@ -262,7 +279,7 @@
         });
         return;
       }
-      renderCollection(payloadForNamedView(selected.payload, selected.name, "deck/local"));
+      renderCollection(payloadForNamedView(selected.payload, selected.name, "deck/local", "table"));
       return;
     }
 
@@ -408,7 +425,7 @@
       const payload = await importCollectionCsv(
         selected,
         nodes.collections.nameInput.value.trim(),
-        nodes.collections.platformInput.value
+        "auto"
       );
 
       if (!payload || payload.ok !== true) {
@@ -427,7 +444,8 @@
       }
       nodes.collections.nameInput.value = "";
       nodes.collections.fileInput.value = "";
-      nodes.collections.fileNameInput.value = "";
+      setCollectionPickButtonLabel("Choisir CSV");
+      nodes.collections.pickFileButton.classList.remove("has-file");
       renderCollectionsList("");
       renderActiveTabTable();
       if (state.selectedCollectionId) {

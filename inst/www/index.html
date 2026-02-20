@@ -10,14 +10,35 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <p class="eyebrow">MTG Codex</p>
-        <h1>Workspace</h1>
+        <div class="brand-mark" aria-hidden="true">M</div>
+        <p class="eyebrow">MTG</p>
       </div>
 
       <nav class="side-nav" aria-label="Navigation principale">
-        <button type="button" class="side-tab is-active" data-tab="collections">Collections</button>
-        <button type="button" class="side-tab" data-tab="decks">Decks</button>
-        <button type="button" class="side-tab" data-tab="strategy">Strategy</button>
+        <button type="button" class="side-tab is-active" data-tab="collections" data-label="Collections" aria-label="Collections" title="Collections">
+          <svg viewBox="0 0 24 24" class="side-tab-icon" aria-hidden="true">
+            <rect x="4" y="4" width="7" height="7" rx="1.5"></rect>
+            <rect x="13" y="4" width="7" height="7" rx="1.5"></rect>
+            <rect x="4" y="13" width="7" height="7" rx="1.5"></rect>
+            <rect x="13" y="13" width="7" height="7" rx="1.5"></rect>
+          </svg>
+          <span class="visually-hidden">Collections</span>
+        </button>
+        <button type="button" class="side-tab" data-tab="decks" data-label="Decks" aria-label="Decks" title="Decks">
+          <svg viewBox="0 0 24 24" class="side-tab-icon" aria-hidden="true">
+            <path d="M6 4h9a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"></path>
+            <path d="M9 2h9a2 2 0 0 1 2 2v12"></path>
+          </svg>
+          <span class="visually-hidden">Decks</span>
+        </button>
+        <button type="button" class="side-tab" data-tab="strategy" data-label="Strategy" aria-label="Strategy" title="Strategy">
+          <svg viewBox="0 0 24 24" class="side-tab-icon" aria-hidden="true">
+            <path d="M12 3v18"></path>
+            <path d="M4 8l8 4 8-4"></path>
+            <path d="M4 16l8 4 8-4"></path>
+          </svg>
+          <span class="visually-hidden">Strategy</span>
+        </button>
       </nav>
     </aside>
 
@@ -34,48 +55,45 @@
       </header>
 
       <section id="tab-collections" class="tab-view is-active" aria-labelledby="workspace-title">
-        <section class="panel">
-          <div class="panel-head">
-            <h3>Nouveau dossier collection</h3>
-          </div>
-          <form id="collection-load-form" class="grid">
-            <label for="collection-name">
-              Nom du dossier
-              <input id="collection-name" type="text" placeholder="Modern Staples">
-            </label>
-            <label for="collection-platform">
-              Plateforme source
-              <select id="collection-platform">
-                <option value="auto">Auto-detect</option>
-                <option value="moxfield">Moxfield</option>
-                <option value="archidekt">Archidekt</option>
-                <option value="manabox">ManaBox</option>
-                <option value="mtggoldfish">MTGGoldfish</option>
-                <option value="other">Autre</option>
-              </select>
-            </label>
-            <label for="collection-source-file-name">
-              Fichier CSV
-              <input id="collection-source-file-name" type="text" placeholder="Aucun fichier selectionne" readonly>
-              <input id="collection-source-file" type="file" class="hidden-file-input">
-            </label>
-            <label for="collection-import-hint">
-              Import public
-              <input id="collection-import-hint" type="text" value="Import CSV -> DB interne automatiquement" readonly>
-            </label>
-            <div class="actions">
-              <button type="button" id="collection-pick-file">Choisir CSV</button>
-              <button type="submit">Creer le dossier</button>
+        <div class="collection-admin">
+          <section class="panel panel-compact">
+            <div class="panel-head">
+              <h3>Nouveau dossier collection</h3>
             </div>
-          </form>
-        </section>
+            <form id="collection-load-form" class="collection-load-inline">
+              <label for="collection-name">
+                Nom du dossier
+                <input id="collection-name" type="text" placeholder="Modern Staples">
+              </label>
+              <div class="actions collection-actions-inline">
+                <input id="collection-source-file" type="file" class="hidden-file-input">
+                <button type="button" id="collection-pick-file" class="btn-icon-only" aria-label="Choisir CSV" title="Choisir CSV">
+                  <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
+                    <path d="M12 4v11"></path>
+                    <path d="M8.5 8.5L12 5l3.5 3.5"></path>
+                    <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"></path>
+                  </svg>
+                  <span class="visually-hidden">Choisir CSV</span>
+                </button>
+                <button type="submit" class="btn-icon-only" aria-label="Creer le dossier" title="Creer le dossier">
+                  <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
+                    <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h4l1.6 2H18.5A1.5 1.5 0 0 1 20 9.5v8A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z"></path>
+                    <path d="M12 10.5v5"></path>
+                    <path d="M9.5 13h5"></path>
+                  </svg>
+                  <span class="visually-hidden">Creer le dossier</span>
+                </button>
+              </div>
+            </form>
+          </section>
 
-        <section class="panel">
-          <div class="panel-head">
-            <h3>Dossiers collections</h3>
-          </div>
-          <div id="collections-list" class="entity-list folder-grid"></div>
-        </section>
+          <section class="panel panel-compact">
+            <div class="panel-head">
+              <h3>Dossiers collections</h3>
+            </div>
+            <div id="collections-list" class="entity-list folder-grid"></div>
+          </section>
+        </div>
       </section>
 
       <section id="tab-decks" class="tab-view" aria-labelledby="workspace-title">
@@ -83,31 +101,29 @@
           <div class="panel-head">
             <h3>Import deck</h3>
           </div>
-          <form id="deck-load-form" class="grid">
+          <form id="deck-load-form" class="collection-load-inline">
             <label for="deck-name">
-              Deck name
+              Nom du deck
               <input id="deck-name" type="text" placeholder="UW Control">
             </label>
-            <label for="deck-source-type">
-              Type
-              <select id="deck-source-type">
-                <option value="text">text</option>
-                <option value="csv">csv</option>
-                <option value="db">db</option>
-              </select>
-            </label>
-            <label for="deck-source-file-name">
-              Selected file
-              <input id="deck-source-file-name" type="text" placeholder="No file selected" readonly>
+            <div class="actions collection-actions-inline">
               <input id="deck-source-file" type="file" class="hidden-file-input">
-            </label>
-            <label for="deck-source-table">
-              Table (db only)
-              <input id="deck-source-table" type="text" placeholder="cards (optional)">
-            </label>
-            <div class="actions">
-              <button type="button" id="deck-pick-file">Choose file</button>
-              <button type="submit">Add deck</button>
+              <button type="button" id="deck-pick-file" class="btn-icon-only" aria-label="Choisir un fichier deck" title="Choisir un fichier deck">
+                <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
+                  <path d="M12 4v11"></path>
+                  <path d="M8.5 8.5L12 5l3.5 3.5"></path>
+                  <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"></path>
+                </svg>
+                <span class="visually-hidden">Choisir un fichier deck</span>
+              </button>
+              <button type="submit" class="btn-icon-only" aria-label="Ajouter le deck" title="Ajouter le deck">
+                <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
+                  <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h4l1.6 2H18.5A1.5 1.5 0 0 1 20 9.5v8A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z"></path>
+                  <path d="M12 10.5v5"></path>
+                  <path d="M9.5 13h5"></path>
+                </svg>
+                <span class="visually-hidden">Ajouter le deck</span>
+              </button>
             </div>
           </form>
         </section>
