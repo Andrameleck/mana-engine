@@ -135,8 +135,8 @@ function() {
 
 #* Static assets for Web UI
 #* @param file Asset file name.
-#* @serializer text
 #* @get /ui/static/<file>
 function(file, res) {
   query_call("query_ui_static_asset", file = file, res = res)
+  res
 }
