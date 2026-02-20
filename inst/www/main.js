@@ -23,6 +23,9 @@
     selectedDeckId: null
   };
 
+  const DECK_STORAGE_KEY = "mtgcodex_ui_decks_v1";
+  const MAX_STORED_DECKS = 24;
+
   const nodes = {
     tabButtons: Array.from(document.querySelectorAll(".side-tab")),
     tabViews: Array.from(document.querySelectorAll(".tab-view")),
@@ -276,6 +279,71 @@
     return cleaned.slice(0, 2).toUpperCase();
   }
 
+  function loadDeckStateFromStorage() {
+    try {
+      const raw = window.localStorage.getItem(DECK_STORAGE_KEY);
+      if (!raw) {
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") {
+        return;
+      }
+
+      const savedDecks = Array.isArray(parsed.decks) ? parsed.decks : [];
+      const normalizedDecks = savedDecks
+        .map((entry, index) => normalizeStoredDeck(entry, index))
+        .filter(Boolean);
+
+      state.decks = normalizedDecks.slice(0, MAX_STORED_DECKS);
+      const savedSelectedId = String(parsed.selectedDeckId || "");
+      if (savedSelectedId && state.decks.some((entry) => entry.id === savedSelectedId)) {
+        state.selectedDeckId = savedSelectedId;
+      } else {
+        state.selectedDeckId = state.decks[0]?.id || null;
+      }
+    } catch (_) {
+      state.decks = [];
+      state.selectedDeckId = null;
+    }
+  }
+
+  function normalizeStoredDeck(entry, index) {
+    if (!entry || typeof entry !== "object") {
+      return null;
+    }
+
+    const payload = entry.payload;
+    if (!payload || typeof payload !== "object" || payload.ok !== true) {
+      return null;
+    }
+
+    const idRaw = String(entry.id || "").trim();
+    const nameRaw = String(entry.name || "").trim();
+
+    return {
+      id: idRaw || uniqueId(`deck-stored-${index + 1}`),
+      name: nameRaw || `Deck ${index + 1}`,
+      payload
+    };
+  }
+
+  function saveDeckStateToStorage() {
+    try {
+      const snapshot = {
+        selectedDeckId: state.selectedDeckId || null,
+        decks: state.decks.slice(0, MAX_STORED_DECKS).map((entry) => ({
+          id: entry.id,
+          name: entry.name,
+          payload: entry.payload
+        }))
+      };
+      window.localStorage.setItem(DECK_STORAGE_KEY, JSON.stringify(snapshot));
+    } catch (_) {
+      // ignore storage quota/permission issues without blocking UI flow
+    }
+  }
+
   function renderActiveTabTable() {
     if (state.activeTab === "collections") {
       if (!state.selectedCollectionId) {
@@ -395,6 +463,7 @@
 
       if (action === "select") {
         state.selectedDeckId = id;
+        saveDeckStateToStorage();
         renderDecksList();
         renderActiveTabTable();
         return;
@@ -405,6 +474,7 @@
         if (state.selectedDeckId === id) {
           state.selectedDeckId = state.decks[0]?.id || null;
         }
+        saveDeckStateToStorage();
         renderDecksList();
         renderActiveTabTable();
       }
@@ -441,6 +511,7 @@
 
     bindCollectionPicker();
     bindDeckPicker();
+    loadDeckStateFromStorage();
 
     nodes.collections.form.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -517,7 +588,11 @@
         payload
       };
       state.decks.unshift(entry);
+      if (state.decks.length > MAX_STORED_DECKS) {
+        state.decks = state.decks.slice(0, MAX_STORED_DECKS);
+      }
       state.selectedDeckId = entry.id;
+      saveDeckStateToStorage();
       renderDecksList();
       nodes.decks.nameInput.value = "";
       nodes.decks.fileInput.value = "";

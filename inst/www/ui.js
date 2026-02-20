@@ -874,14 +874,68 @@ function renderManaCostCell(cell, text) {
 }
 
 function extractManaSymbols(text) {
-  const raw = String(text || "");
-  const matches = raw.match(/\{([^}]+)\}/g);
-  if (!matches || matches.length === 0) {
+  const raw = String(text || "").trim();
+  if (!raw) {
     return [];
   }
-  return matches
-    .map((chunk) => chunk.slice(1, -1).trim())
-    .filter(Boolean);
+
+  const matches = raw.match(/\{([^}]+)\}/g);
+  if (matches && matches.length > 0) {
+    return matches
+      .map((chunk) => chunk.slice(1, -1).trim())
+      .filter(Boolean);
+  }
+
+  return extractCompactManaSymbols(raw);
+}
+
+function extractCompactManaSymbols(text) {
+  const source = String(text || "")
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .replace(/[()]/g, "");
+  if (!source) {
+    return [];
+  }
+  if (!/^[A-Z0-9/]+$/.test(source)) {
+    return [];
+  }
+
+  const tokens = [];
+  let index = 0;
+  while (index < source.length) {
+    const current = source[index];
+
+    if (/[0-9]/.test(current)) {
+      let end = index + 1;
+      while (end < source.length && /[0-9]/.test(source[end])) {
+        end += 1;
+      }
+      const numberToken = source.slice(index, end);
+      if (end + 1 < source.length && source[end] === "/" && /[A-Z0-9]/.test(source[end + 1])) {
+        tokens.push(`${numberToken}/${source[end + 1]}`);
+        index = end + 2;
+        continue;
+      }
+      tokens.push(numberToken);
+      index = end;
+      continue;
+    }
+
+    if (!/[A-Z]/.test(current)) {
+      return [];
+    }
+    if (index + 2 < source.length && source[index + 1] === "/" && /[A-Z0-9]/.test(source[index + 2])) {
+      tokens.push(`${current}/${source[index + 2]}`);
+      index += 3;
+      continue;
+    }
+
+    tokens.push(current);
+    index += 1;
+  }
+
+  return tokens;
 }
 
 function createManaSymbol(symbol) {
@@ -892,6 +946,7 @@ function createManaSymbol(symbol) {
 
   const iconUrl = manaSymbolIconUrl(normalized);
   if (!iconUrl) {
+    iconWrap.classList.add("mana-symbol-fallback");
     iconWrap.textContent = normalized;
     return iconWrap;
   }
@@ -903,6 +958,7 @@ function createManaSymbol(symbol) {
   img.loading = "lazy";
   img.decoding = "async";
   img.addEventListener("error", () => {
+    iconWrap.classList.add("mana-symbol-fallback");
     iconWrap.textContent = normalized;
   }, { once: true });
 
