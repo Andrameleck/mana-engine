@@ -96,26 +96,40 @@
     button.setAttribute("aria-label", text);
   }
 
-  function syncDeckInputs() {
-    const isDb = nodes.decks.typeInput.value === "db";
-    nodes.decks.tableInput.disabled = !isDb;
-    nodes.decks.tableInput.placeholder = isDb ? "cards (optional)" : "Unused for this source";
-    nodes.decks.fileInput.accept = isDb ? ".db,.sqlite,.sqlite3" : (nodes.decks.typeInput.value === "csv" ? ".csv" : ".txt,.text,.tsv");
-    if (!isDb) {
-      nodes.decks.tableInput.value = "";
-    }
-  }
-
   function bindDeckPicker() {
+    nodes.decks.fileInput.accept = ".txt,.text,.tsv,.csv,.db,.sqlite,.sqlite3";
+    const defaultPickLabel = "Choisir un fichier deck";
+    setDeckPickButtonLabel(defaultPickLabel);
+    nodes.decks.pickFileButton.classList.remove("has-file");
     nodes.decks.pickFileButton.addEventListener("click", () => {
       nodes.decks.fileInput.click();
     });
     nodes.decks.fileInput.addEventListener("change", () => {
       const selected = nodes.decks.fileInput.files && nodes.decks.fileInput.files[0];
-      nodes.decks.fileNameInput.value = selected ? selected.name : "";
+      setDeckPickButtonLabel(selected ? `Deck: ${selected.name}` : defaultPickLabel);
+      nodes.decks.pickFileButton.classList.toggle("has-file", Boolean(selected));
     });
-    nodes.decks.typeInput.addEventListener("change", syncDeckInputs);
-    syncDeckInputs();
+  }
+
+  function setDeckPickButtonLabel(label) {
+    const button = nodes.decks.pickFileButton;
+    if (!button) {
+      return;
+    }
+    const text = String(label || "Choisir un fichier deck");
+    button.title = text;
+    button.setAttribute("aria-label", text);
+  }
+
+  function inferDeckSourceType(fileName) {
+    const lowerName = String(fileName || "").toLowerCase();
+    if (lowerName.endsWith(".db") || lowerName.endsWith(".sqlite") || lowerName.endsWith(".sqlite3")) {
+      return "db";
+    }
+    if (lowerName.endsWith(".csv")) {
+      return "csv";
+    }
+    return "text";
   }
 
   function selectTab(tabId) {
@@ -221,26 +235,45 @@
       return;
     }
     if (state.decks.length === 0) {
-      list.innerHTML = '<p class="muted">No deck yet.</p>';
+      list.innerHTML = '<p class="muted">Aucun deck pour le moment.</p>';
       return;
     }
 
-    list.innerHTML = state.decks.map((entry) => {
+    list.innerHTML = state.decks.map((entry, index) => {
       const activeClass = entry.id === state.selectedDeckId ? "is-active" : "";
       const rowCount = entry.payload?.row_count ?? "-";
+      const deckName = escapeHtml(entry.name);
+      const deckId = escapeHtml(entry.id);
+      const glyph = escapeHtml(deckGlyph(entry.name, index + 1));
       return `
-        <article class="entity-item ${activeClass}" data-entity-id="${entry.id}">
-          <div>
-            <p class="entity-item-name">${escapeHtml(entry.name)}</p>
-            <p class="entity-item-meta">${rowCount} rows</p>
-          </div>
-          <div class="entity-actions">
-            <button type="button" class="entity-select" data-action="select">Open</button>
-            <button type="button" class="entity-delete" data-action="delete">Delete</button>
-          </div>
+        <article class="deck-icon-item ${activeClass}" data-entity-id="${deckId}">
+          <button type="button" class="deck-icon-open" data-action="select" aria-label="Ouvrir ${deckName}" title="Ouvrir ${deckName}">
+            <span class="deck-icon-glyph">${glyph}</span>
+          </button>
+          <button type="button" class="deck-icon-delete" data-action="delete" aria-label="Supprimer ${deckName}" title="Supprimer ${deckName}">
+            <svg viewBox="0 0 24 24" class="deck-icon-delete-svg" aria-hidden="true">
+              <path d="M6 7h12"></path>
+              <path d="M9 7V5h6v2"></path>
+              <path d="M8 7l1 12h6l1-12"></path>
+            </svg>
+          </button>
+          <p class="deck-icon-name">${deckName}</p>
+          <p class="deck-icon-meta">${escapeHtml(String(rowCount))} lignes</p>
         </article>
       `;
     }).join("");
+  }
+
+  function deckGlyph(name, fallbackIndex) {
+    const raw = String(name || "").trim();
+    if (!raw) {
+      return String(fallbackIndex || "?");
+    }
+    const cleaned = raw.replace(/[^A-Za-z0-9]+/g, "");
+    if (!cleaned) {
+      return String(fallbackIndex || "?");
+    }
+    return cleaned.slice(0, 2).toUpperCase();
   }
 
   function renderActiveTabTable() {
@@ -279,7 +312,7 @@
         });
         return;
       }
-      renderCollection(payloadForNamedView(selected.payload, selected.name, "deck/local", "table"));
+      renderCollection(payloadForNamedView(selected.payload, selected.name, "deck/local", "cards"));
       return;
     }
 
@@ -348,7 +381,7 @@
   function attachDeckListEvents() {
     nodes.decks.list.addEventListener("click", (event) => {
       const button = event.target.closest("button[data-action]");
-      const item = event.target.closest(".entity-item");
+      const item = event.target.closest("[data-entity-id]");
       if (!item) {
         return;
       }
@@ -465,7 +498,8 @@
         return;
       }
 
-      const payload = await uploadCollection(selected, nodes.decks.typeInput.value, nodes.decks.tableInput.value.trim());
+      const sourceType = inferDeckSourceType(selected.name);
+      const payload = await uploadCollection(selected, sourceType, "");
       if (!payload || payload.ok !== true) {
         if (state.activeTab === "decks") {
           renderCollection(payload || {
@@ -486,6 +520,9 @@
       state.selectedDeckId = entry.id;
       renderDecksList();
       nodes.decks.nameInput.value = "";
+      nodes.decks.fileInput.value = "";
+      setDeckPickButtonLabel("Choisir un fichier deck");
+      nodes.decks.pickFileButton.classList.remove("has-file");
       if (state.activeTab === "decks") {
         renderActiveTabTable();
       }

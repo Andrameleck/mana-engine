@@ -97,43 +97,45 @@
       </section>
 
       <section id="tab-decks" class="tab-view" aria-labelledby="workspace-title">
-        <section class="panel">
-          <div class="panel-head">
-            <h3>Import deck</h3>
-          </div>
-          <form id="deck-load-form" class="collection-load-inline">
-            <label for="deck-name">
-              Nom du deck
-              <input id="deck-name" type="text" placeholder="UW Control">
-            </label>
-            <div class="actions collection-actions-inline">
-              <input id="deck-source-file" type="file" class="hidden-file-input">
-              <button type="button" id="deck-pick-file" class="btn-icon-only" aria-label="Choisir un fichier deck" title="Choisir un fichier deck">
-                <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
-                  <path d="M12 4v11"></path>
-                  <path d="M8.5 8.5L12 5l3.5 3.5"></path>
-                  <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"></path>
-                </svg>
-                <span class="visually-hidden">Choisir un fichier deck</span>
-              </button>
-              <button type="submit" class="btn-icon-only" aria-label="Ajouter le deck" title="Ajouter le deck">
-                <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
-                  <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h4l1.6 2H18.5A1.5 1.5 0 0 1 20 9.5v8A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z"></path>
-                  <path d="M12 10.5v5"></path>
-                  <path d="M9.5 13h5"></path>
-                </svg>
-                <span class="visually-hidden">Ajouter le deck</span>
-              </button>
+        <div class="collection-admin">
+          <section class="panel panel-compact">
+            <div class="panel-head">
+              <h3>Import deck</h3>
             </div>
-          </form>
-        </section>
+            <form id="deck-load-form" class="collection-load-inline">
+              <label for="deck-name">
+                Nom du deck
+                <input id="deck-name" type="text" placeholder="UW Control">
+              </label>
+              <div class="actions collection-actions-inline">
+                <input id="deck-source-file" type="file" class="hidden-file-input">
+                <button type="button" id="deck-pick-file" class="btn-icon-only" aria-label="Choisir un fichier deck" title="Choisir un fichier deck">
+                  <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
+                    <path d="M12 4v11"></path>
+                    <path d="M8.5 8.5L12 5l3.5 3.5"></path>
+                    <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"></path>
+                  </svg>
+                  <span class="visually-hidden">Choisir un fichier deck</span>
+                </button>
+                <button type="submit" class="btn-icon-only" aria-label="Ajouter le deck" title="Ajouter le deck">
+                  <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
+                    <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h4l1.6 2H18.5A1.5 1.5 0 0 1 20 9.5v8A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z"></path>
+                    <path d="M12 10.5v5"></path>
+                    <path d="M9.5 13h5"></path>
+                  </svg>
+                  <span class="visually-hidden">Ajouter le deck</span>
+                </button>
+              </div>
+            </form>
+          </section>
 
-        <section class="panel">
-          <div class="panel-head">
-            <h3>Decks list</h3>
-          </div>
-          <div id="decks-list" class="entity-list"></div>
-        </section>
+          <section class="panel panel-compact deck-list-panel">
+            <div class="panel-head">
+              <h3>Decks list</h3>
+            </div>
+            <div id="decks-list" class="entity-list deck-icon-grid"></div>
+          </section>
+        </div>
       </section>
 
       <section id="tab-strategy" class="tab-view" aria-labelledby="workspace-title">

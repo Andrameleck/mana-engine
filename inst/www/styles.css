@@ -258,7 +258,8 @@ body {
   margin: 0;
 }
 
-.collection-load-inline #collection-name {
+.collection-load-inline #collection-name,
+.collection-load-inline #deck-name {
   min-width: 260px;
 }
 
@@ -351,7 +352,7 @@ button {
   height: 18px;
 }
 
-#collection-pick-file.has-file {
+.btn-icon-only.has-file {
   box-shadow: 0 0 0 2px rgba(71, 229, 194, 0.35);
 }
 
@@ -363,6 +364,91 @@ button {
 .folder-grid {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 10px;
+}
+
+.deck-icon-grid {
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 8px;
+}
+
+.deck-icon-item {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 2px;
+}
+
+.deck-icon-open {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(20, 25, 35, 0.72);
+  color: var(--text);
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.deck-icon-item.is-active .deck-icon-open {
+  border-color: rgba(71, 229, 194, 0.65);
+  background: linear-gradient(135deg, rgba(255, 107, 107, 0.28), rgba(71, 229, 194, 0.2));
+}
+
+.deck-icon-glyph {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.deck-icon-delete {
+  position: absolute;
+  top: -1px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 107, 107, 0.55);
+  background: rgba(12, 16, 24, 0.95);
+  color: #ff8e8e;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  z-index: 1;
+}
+
+.deck-icon-delete-svg {
+  width: 10px;
+  height: 10px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.deck-icon-name {
+  margin: 0;
+  max-width: 72px;
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deck-icon-meta {
+  margin: 0;
+  font-size: 9px;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+.deck-list-panel {
+  padding-bottom: 10px;
 }
 
 .entity-item {
@@ -1002,7 +1088,8 @@ td.col-scry-fall-id {
     align-items: stretch;
   }
 
-  .collection-load-inline #collection-name {
+  .collection-load-inline #collection-name,
+  .collection-load-inline #deck-name {
     min-width: 0;
   }
 

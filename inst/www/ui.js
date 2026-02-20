@@ -218,7 +218,8 @@ function renderCardsPage(pageNumber) {
   clearCardPreview(true);
   hideBottomScrollbar();
 
-  const filteredRows = applyCardFiltersAndSorting(UI_STATE.rows);
+  const cardRows = UI_STATE.rows.filter(isCardLikeRow);
+  const filteredRows = applyCardFiltersAndSorting(cardRows);
   const totalRows = filteredRows.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / UI_STATE.pageSize));
   const nextPage = Number.isFinite(pageNumber) ? Math.floor(pageNumber) : 1;
@@ -231,7 +232,7 @@ function renderCardsPage(pageNumber) {
   const browser = document.createElement("section");
   browser.classList.add("collection-browser");
 
-  const toolbar = renderCardsToolbar(totalRows, UI_STATE.rows.length);
+  const toolbar = renderCardsToolbar(totalRows, cardRows.length);
   browser.appendChild(toolbar);
 
   const grid = document.createElement("div");
@@ -247,6 +248,34 @@ function renderCardsPage(pageNumber) {
 
   wrap.appendChild(browser);
   renderTablePager(totalRows, startIndex, pageRows.length);
+}
+
+function isCardLikeRow(rowData) {
+  const title = formatCellValue(readCellValue(rowData, "name")).trim();
+  const scryfallId = formatCellValue(readFirstCellValue(rowData, ["scryfall_id", "scry_fall_id"])).trim();
+  if (scryfallId) {
+    return true;
+  }
+  if (!title) {
+    return false;
+  }
+
+  const isOnlyDigits = /^[0-9]+$/.test(title);
+  if (!isOnlyDigits) {
+    return true;
+  }
+
+  const hasSupportingData = [
+    readCellValue(rowData, "type_line"),
+    readCellValue(rowData, "oracle_text"),
+    readFirstCellValue(rowData, ["set", "set_code"]),
+    readCellValue(rowData, "collector_number"),
+    readCellValue(rowData, "mana_cost")
+  ]
+    .map((value) => formatCellValue(value).trim())
+    .some(Boolean);
+
+  return hasSupportingData;
 }
 
 function renderCardsToolbar(filteredCount, totalCount) {
