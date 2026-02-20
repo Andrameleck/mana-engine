@@ -149,17 +149,28 @@
         </section>
       </section>
 
-      <section class="panel">
-        <div class="panel-head">
-          <h3 id="table-title">Table</h3>
-          <div id="load-summary" class="summary muted">No data loaded.</div>
-        </div>
-        <div id="table-wrap" class="table-wrap"></div>
-        <div id="table-scrollbar" class="table-scrollbar" aria-hidden="true">
-          <div id="table-scrollbar-inner"></div>
-        </div>
-        <div id="table-pager" class="table-pager"></div>
-      </section>
+      <div id="workspace-lower" class="workspace-lower">
+        <section class="panel table-panel">
+          <div class="panel-head">
+            <h3 id="table-title">Table</h3>
+            <div id="load-summary" class="summary muted">No data loaded.</div>
+          </div>
+          <div id="table-wrap" class="table-wrap"></div>
+          <div id="table-scrollbar" class="table-scrollbar" aria-hidden="true">
+            <div id="table-scrollbar-inner"></div>
+          </div>
+          <div id="table-pager" class="table-pager"></div>
+        </section>
+
+        <aside id="deck-stats-panel" class="panel deck-stats-panel is-hidden" aria-live="polite">
+          <div class="panel-head">
+            <h3>Statistiques</h3>
+          </div>
+          <div id="deck-stats-content" class="deck-stats-content muted">
+            Selectionne un deck pour afficher ses statistiques.
+          </div>
+        </aside>
+      </div>
     </main>
   </div>
 
