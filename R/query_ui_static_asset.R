@@ -13,5 +13,12 @@ query_ui_static_asset <- function(file, res) {
   }
 
   res$setHeader("Content-Type", query_ui_content_type(file_name))
-  paste(readLines(path, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+
+  con <- file(path, open = "rb")
+  on.exit(close(con), add = TRUE)
+  size <- file.info(path)$size
+  if (!is.finite(size) || size <= 0) {
+    return("")
+  }
+  readChar(con, nchars = size, useBytes = TRUE)
 }

@@ -13,6 +13,27 @@ mtgcodex.api::start_api(host = "0.0.0.0", port = 8000)
 
 Then open `http://localhost:8000/ui`.
 
+## Frontend (Vite)
+
+The web UI is now structured as a Vite app in `frontend/`.
+
+### Dev server
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### Production build served by Plumber
+
+```bash
+cd frontend
+npm run build
+```
+
+Build output is written to `inst/www/`, which is what `/ui` and `/ui/static/<file>` serve.
+
 ## Endpoints
 
 - `GET /health`
