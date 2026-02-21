@@ -1,3 +1,16 @@
+import {
+  uploadCollection,
+  importCollectionCsv,
+  listStoredCollections,
+  getStoredCollection,
+  deleteStoredCollection
+} from "./api.js";
+import {
+  renderCollection,
+  getCollectionLanguage,
+  setCollectionLanguage
+} from "./ui.js";
+
 (function bootstrap() {
   const TAB_META = {
     collections: {
@@ -65,9 +78,7 @@
   }
 
   function onLanguageSelect(language) {
-    if (typeof window.setCollectionLanguage === "function") {
-      window.setCollectionLanguage(language);
-    }
+    setCollectionLanguage(language);
     applyLanguageButtonState(language);
     if (state.activeTab === "collections" && state.selectedCollectionId) {
       loadStoredCollectionIntoTable(state.selectedCollectionId);
@@ -1463,9 +1474,7 @@
   }
 
   async function init() {
-    const initialLanguage = typeof window.getCollectionLanguage === "function"
-      ? window.getCollectionLanguage()
-      : "en";
+    const initialLanguage = getCollectionLanguage();
     applyLanguageButtonState(initialLanguage);
 
     if (nodes.langEnButton && nodes.langFrButton) {

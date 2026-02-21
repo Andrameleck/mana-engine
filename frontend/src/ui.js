@@ -1259,3 +1259,9 @@ function loadSavedLanguage() {
 window.renderCollection = renderCollection;
 window.getCollectionLanguage = getCollectionLanguage;
 window.setCollectionLanguage = setCollectionLanguage;
+
+export {
+  renderCollection,
+  getCollectionLanguage,
+  setCollectionLanguage
+};

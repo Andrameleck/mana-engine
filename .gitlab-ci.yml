@@ -7,7 +7,6 @@ image: rocker/geospatial:latest
 variables:
   CI_CACHE_DIR: "$CI_PROJECT_DIR/ci"
   R_LIBS_USER: "$CI_CACHE_DIR/lib"
-  BRANCH_PAGES: "gitlab-pages"
   COVERAGE_REPORT: "$CI_CACHE_DIR/coverage.RDS"
 
 cache:
@@ -35,7 +34,7 @@ cache:
 
 check:
   rules:
-    - if: '$CI_COMMIT_BRANCH == "gitlab-pages" || $CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
     - if: '$CI_PIPELINE_SOURCE == "push"'
       when: on_success
@@ -130,41 +129,5 @@ pages:
     - job: cover-rep
       artifacts: true
   script:
-    - git add -f public
-    - git config --global user.email "gitlab-ci@inrae.fr"
-    - git config --global user.name "GitLab CI"
-    - git commit -m "Update GitLab pages"
-
-    # Capture the current commit hash for cherry-picking
-    - HASH_COMMIT_PAGES="$(git rev-parse HEAD)"
-
-    # Set remote URL for pushing changes
-    - git remote set-url origin https://whatever:${PAGES_TOKEN}@forge.inrae.fr/${CI_PROJECT_NAMESPACE}/${CI_PROJECT_NAME}.git
-
-    # Checkout or create the branch
-    - |
-      if git ls-remote --exit-code --heads origin "$BRANCH_PAGES" > /dev/null; then
-        echo "Remote branch '$BRANCH_PAGES' exists. Checking out and resetting."
-        git fetch origin "$BRANCH_PAGES"
-        git checkout -B "$BRANCH_PAGES" origin/"$BRANCH_PAGES"
-      else
-        echo "Remote branch '$BRANCH_PAGES' does not exist. Creating new local branch."
-        git checkout -b "$BRANCH_PAGES"
-        find . -maxdepth 1 -mindepth 1 ! -name public ! -name .git ! -name ci -exec rm -rf {} +
-        git add .
-        git commit -m "gitlab-pages initialization"
-      fi
-
-    # Cherry-pick the latest commit to the new branch
-    - |
-      git cherry-pick "$HASH_COMMIT_PAGES" --strategy-option theirs || \
-        (if git status | grep -q 'You are currently cherry-picking'; then
-          echo "Cherry-pick resulted in empty commit. Skipping."
-          git cherry-pick --skip
-        else
-          echo "Cherry-pick failed unexpectedly." >&2
-          exit 1
-        fi)
-
-    # Push the changes to the remote
-    - git push --set-upstream origin "$BRANCH_PAGES"
+    - test -d public
+    - echo "Publishing GitLab Pages from public/ artifacts"

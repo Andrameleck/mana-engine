@@ -6,14 +6,11 @@ query_ui_index_html <- function() {
     return("<h1>UI not found</h1>")
   }
 
-  html <- paste(readLines(index_file, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
-  css_file <- file.path(root, "styles.css")
-
-  if (file.exists(css_file)) {
-    css <- paste(readLines(css_file, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
-    inline_style <- paste0("<style>\n", css, "\n</style>\n")
-    html <- sub("</head>", paste0(inline_style, "</head>"), html, fixed = TRUE)
+  con <- file(index_file, open = "rb")
+  on.exit(close(con), add = TRUE)
+  size <- file.info(index_file)$size
+  if (!is.finite(size) || size <= 0) {
+    return("")
   }
-
-  html
+  readChar(con, nchars = size, useBytes = TRUE)
 }
