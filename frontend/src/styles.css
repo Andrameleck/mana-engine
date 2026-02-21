@@ -548,36 +548,37 @@ button {
 
 .deck-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
   gap: 10px;
 }
 
 .deck-kpi-card {
-  border: 1px solid rgba(126, 117, 176, 0.45);
-  border-radius: 12px;
+  border: 1px solid rgba(112, 91, 170, 0.62);
+  border-radius: 10px;
   background:
-    linear-gradient(150deg, rgba(120, 89, 185, 0.16), rgba(12, 18, 36, 0.82)),
-    rgba(14, 18, 29, 0.9);
-  min-height: 82px;
-  padding: 10px 11px;
+    radial-gradient(circle at 78% 88%, rgba(27, 46, 119, 0.32), transparent 45%),
+    radial-gradient(circle at 20% 20%, rgba(135, 87, 197, 0.14), transparent 55%),
+    rgba(9, 16, 42, 0.9);
+  min-height: 74px;
+  padding: 9px 10px;
   display: grid;
   align-content: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .deck-kpi-label {
   margin: 0;
-  color: #97a4bf;
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  color: #8da0cb;
+  font-size: 10px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .deck-kpi-value {
   margin: 0;
-  color: #eef2fb;
+  color: #f3f6ff;
   font-family: var(--mono);
-  font-size: 20px;
+  font-size: 30px;
   line-height: 1.2;
 }
 
@@ -1388,10 +1389,6 @@ td.col-scry-fall-id {
   }
 
   .deck-mix-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .deck-kpi-grid {
     grid-template-columns: 1fr;
   }
 
