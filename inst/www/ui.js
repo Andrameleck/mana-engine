@@ -1684,3 +1684,11 @@ window.getCollectionLanguage = getCollectionLanguage;
 window.setCollectionLanguage = setCollectionLanguage;
 window.bindRowPreviewEvents = bindRowPreviewEvents;
 window.renderManaCostCell = renderManaCostCell;
+
+export {
+  renderCollection,
+  getCollectionLanguage,
+  setCollectionLanguage,
+  bindRowPreviewEvents,
+  renderManaCostCell
+};

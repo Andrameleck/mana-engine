@@ -126,6 +126,19 @@ function(collection_id = "") {
   )
 }
 
+#* Search combo references from Commander Spellbook
+#* @param q Card seed query.
+#* @param limit Max combo variants to fetch (1-100).
+#* @serializer unboxedJSON
+#* @get /reference/spellbook/variants
+function(q = "", limit = "40") {
+  query_call(
+    "query_spellbook_variants",
+    q = q,
+    limit = limit
+  )
+}
+
 #* UI entrypoint
 #* @serializer contentType list(type="text/html; charset=utf-8")
 #* @get /ui

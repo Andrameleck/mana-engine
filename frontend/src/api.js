@@ -88,16 +88,37 @@ async function deleteStoredCollection(collectionId) {
   return data;
 }
 
+async function fetchSpellbookVariants(query, limit = 40) {
+  const params = new URLSearchParams({
+    q: String(query || "").trim(),
+    limit: String(limit || 40)
+  });
+  const response = await fetch(`/reference/spellbook/variants?${params.toString()}`, {
+    method: "GET"
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok && data.ok !== false) {
+    return {
+      ok: false,
+      error: `HTTP ${response.status}`,
+      results: []
+    };
+  }
+  return data;
+}
+
 window.uploadCollection = uploadCollection;
 window.importCollectionCsv = importCollectionCsv;
 window.listStoredCollections = listStoredCollections;
 window.getStoredCollection = getStoredCollection;
 window.deleteStoredCollection = deleteStoredCollection;
+window.fetchSpellbookVariants = fetchSpellbookVariants;
 
 export {
   uploadCollection,
   importCollectionCsv,
   listStoredCollections,
   getStoredCollection,
-  deleteStoredCollection
+  deleteStoredCollection,
+  fetchSpellbookVariants
 };

@@ -160,6 +160,31 @@
                 Top groupes
                 <input id="strategy-group-limit" type="number" min="3" max="12" value="6">
               </label>
+              <label for="strategy-include-known" class="strategy-toggle">
+                Inclure cartes externes (Scryfall)
+                <span class="strategy-toggle-row">
+                  <input id="strategy-include-known" type="checkbox">
+                  <span>Etendre le calcul avec des cartes hors collection</span>
+                </span>
+              </label>
+              <label for="strategy-include-spellbook" class="strategy-toggle">
+                Inclure reference combos (Commander Spellbook)
+                <span class="strategy-toggle-row">
+                  <input id="strategy-include-spellbook" type="checkbox">
+                  <span>Prioriser les cartes presentes dans les combos publics</span>
+                </span>
+              </label>
+              <label class="strategy-mana-filter">
+                Filtre mana (couleurs autorisees)
+                <span class="strategy-mana-filter-row">
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="W"><span>W</span></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="U"><span>U</span></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="B"><span>B</span></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="R"><span>R</span></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="G"><span>G</span></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="C"><span>C</span></label>
+                </span>
+              </label>
               <div class="actions strategy-actions">
                 <button type="button" id="strategy-run-btn">Calculer</button>
               </div>
@@ -223,8 +248,6 @@
     </div>
   </aside>
 
-  <script src="/ui/static/api.js"></script>
-  <script src="/ui/static/ui.js"></script>
-  <script src="/ui/static/main.js"></script>
+  <script type="module" src="/ui/static/main.js"></script>
 </body>
 </html>

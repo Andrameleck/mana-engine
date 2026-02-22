@@ -3,7 +3,8 @@ import {
   importCollectionCsv,
   listStoredCollections,
   getStoredCollection,
-  deleteStoredCollection
+  deleteStoredCollection,
+  fetchSpellbookVariants
 } from "./api.js";
 import {
   renderCollection,
@@ -40,8 +41,27 @@ import {
       seedName: "",
       directLimit: 12,
       groupLimit: 6,
+      manaFilter: {
+        W: false,
+        U: false,
+        B: false,
+        R: false,
+        G: false,
+        C: false
+      },
       modelCache: new Map(),
-      lastCollectionId: null
+      lastCollectionId: null,
+      includeKnownCards: false,
+      includeSpellbookCombos: false,
+      knownCardsModel: null,
+      knownCardsModelKey: "",
+      knownCardsModelPromise: null,
+      knownCardsModelPromiseKey: "",
+      knownCardsError: "",
+      spellbookCache: new Map(),
+      spellbookPromiseCache: new Map(),
+      spellbookError: "",
+      runToken: 0
     }
   };
 
@@ -86,6 +106,9 @@ import {
       seedList: document.getElementById("strategy-seed-list"),
       directLimitInput: document.getElementById("strategy-direct-limit"),
       groupLimitInput: document.getElementById("strategy-group-limit"),
+      includeKnownInput: document.getElementById("strategy-include-known"),
+      includeSpellbookInput: document.getElementById("strategy-include-spellbook"),
+      manaFilterInputs: Array.from(document.querySelectorAll("input[data-strategy-mana]")),
       runButton: document.getElementById("strategy-run-btn"),
       status: document.getElementById("strategy-status"),
       directList: document.getElementById("strategy-direct-list"),
@@ -137,6 +160,42 @@ import {
     combo_worldgorger: "Worldgorger line",
     combo_chain_smog: "Chain of Smog line"
   };
+  const STRATEGY_FEATURE_SCRYFALL_QUERY = {
+    graveyard: "(oracle:graveyard OR oracle:mill OR oracle:dredge OR oracle:surveil)",
+    reanimate: "(oracle:\"from your graveyard to the battlefield\" OR oracle:reanimate OR oracle:unearth)",
+    entomb_line: "(oracle:\"search your library\" oracle:graveyard)",
+    poison_toxic: "(oracle:toxic OR oracle:infect OR oracle:\"poison counter\" OR oracle:corrupted)",
+    proliferate: "oracle:proliferate",
+    discard: "(oracle:discard OR oracle:connive OR oracle:loot)",
+    draw: "oracle:\"draw a card\"",
+    sacrifice: "oracle:sacrifice",
+    deathtouch: "keyword:deathtouch",
+    combat_evasion: "(keyword:flying OR keyword:trample OR keyword:menace OR oracle:\"can't be blocked\")",
+    fight_bite: "(oracle:fight OR oracle:\"deals damage equal to\")",
+    etb: "oracle:\"enters the battlefield\"",
+    token: "oracle:token",
+    removal: "(oracle:\"destroy target\" OR oracle:\"exile target\" OR oracle:\"counter target\")",
+    tutor: "oracle:\"search your library\"",
+    recursion: "(oracle:flashback OR oracle:escape OR oracle:\"from your graveyard to your hand\")",
+    combo_copy: "(oracle:\"copy target spell\" OR oracle:magecraft OR oracle:\"cast or copy\")",
+    combo_lifeloss: "(oracle:\"each opponent loses\" OR oracle:\"target opponent loses\")",
+    combo_worldgorger: "(oracle:\"Worldgorger Dragon\" OR oracle:\"exile all other permanents you control\")",
+    combo_chain_smog: "(oracle:\"discard two cards\" OR oracle:\"you may copy this spell\")"
+  };
+  const STRATEGY_SEED_QUERY_OVERRIDES = {
+    grindstone: [
+      "(name:\"Painter's Servant\" OR (oracle:\"choose a color\" oracle:\"chosen color\"))",
+      "(oracle:\"untap target artifact\" OR oracle:\"untap all artifacts\")",
+      "(oracle:\"puts the top\" oracle:\"library\" oracle:\"graveyard\" OR oracle:\"mill\")"
+    ]
+  };
+  const STRATEGY_KNOWN_COMBO_PAIRS = [
+    { a: "grindstone", b: "painter s servant", boost: 0.95 },
+    { a: "entomb", b: "reanimate", boost: 0.65 },
+    { a: "entomb", b: "animate dead", boost: 0.62 },
+    { a: "entomb", b: "dance of the dead", boost: 0.60 },
+    { a: "chain of smog", b: "witherbloom apprentice", boost: 0.92 }
+  ];
 
   function applyLanguageButtonState(language) {
     if (!nodes.langEnButton || !nodes.langFrButton) {
@@ -149,8 +208,15 @@ import {
   function onLanguageSelect(language) {
     setCollectionLanguage(language);
     applyLanguageButtonState(language);
+    resetStrategyKnownCardsCache();
     if (state.activeTab === "collections" && state.selectedCollectionId) {
       loadStoredCollectionIntoTable(state.selectedCollectionId);
+    }
+    if (state.activeTab === "strategy") {
+      const collectionId = state.selectedCollectionId;
+      const payload = collectionId ? state.collectionPayloadById[collectionId] : null;
+      const meta = state.collections.find((entry) => entry.id === collectionId);
+      renderStrategyPanel(payload, meta);
     }
   }
 
@@ -215,6 +281,42 @@ import {
     const strategyNodes = nodes.strategy;
     if (!strategyNodes.seedInput || !strategyNodes.runButton) {
       return;
+    }
+
+    if (strategyNodes.includeKnownInput) {
+      strategyNodes.includeKnownInput.checked = isStrategyIncludeKnownEnabled();
+      strategyNodes.includeKnownInput.addEventListener("change", () => {
+        state.strategy.includeKnownCards = strategyNodes.includeKnownInput.checked === true;
+        resetStrategyKnownCardsCache();
+        const collectionId = state.selectedCollectionId;
+        const payload = collectionId ? state.collectionPayloadById[collectionId] : null;
+        const meta = state.collections.find((entry) => entry.id === collectionId);
+        renderStrategyPanel(payload, meta);
+      });
+    }
+    if (strategyNodes.includeSpellbookInput) {
+      strategyNodes.includeSpellbookInput.checked = isStrategyIncludeSpellbookEnabled();
+      strategyNodes.includeSpellbookInput.addEventListener("change", () => {
+        state.strategy.includeSpellbookCombos = strategyNodes.includeSpellbookInput.checked === true;
+        resetStrategySpellbookCache();
+        const collectionId = state.selectedCollectionId;
+        const payload = collectionId ? state.collectionPayloadById[collectionId] : null;
+        const meta = state.collections.find((entry) => entry.id === collectionId);
+        renderStrategyPanel(payload, meta);
+      });
+    }
+
+    if (Array.isArray(strategyNodes.manaFilterInputs) && strategyNodes.manaFilterInputs.length > 0) {
+      strategyNodes.manaFilterInputs.forEach((inputNode) => {
+        const code = String(inputNode?.dataset?.strategyMana || "").toUpperCase();
+        if (!"WUBRGC".includes(code)) {
+          return;
+        }
+        inputNode.checked = state.strategy.manaFilter[code] === true;
+        inputNode.addEventListener("change", () => {
+          state.strategy.manaFilter[code] = inputNode.checked === true;
+        });
+      });
     }
 
     strategyNodes.seedInput.addEventListener("input", () => {
@@ -1056,7 +1158,27 @@ import {
     }
 
     const model = getStrategyModelForCollection(state.selectedCollectionId, payload);
-    strategyNodes.sourceMeta.textContent = `${collectionName} | ${model.cards.length} cartes analysees`;
+    const includeKnown = isStrategyIncludeKnownEnabled();
+    if (includeKnown) {
+      const knownCount = Array.isArray(state.strategy.knownCardsModel?.cards)
+        ? state.strategy.knownCardsModel.cards.length
+        : 0;
+      if (knownCount > 0) {
+        strategyNodes.sourceMeta.textContent = `${collectionName} | ${model.cards.length} cartes collection + ${knownCount} cartes via Scryfall (seed libre)`;
+      } else if (state.strategy.knownCardsError) {
+        strategyNodes.sourceMeta.textContent = `${collectionName} | ${model.cards.length} cartes collection (Scryfall indisponible)`;
+      } else {
+        strategyNodes.sourceMeta.textContent = `${collectionName} | ${model.cards.length} cartes collection (+ seed/cartes via Scryfall au calcul)`;
+      }
+    } else {
+      strategyNodes.sourceMeta.textContent = `${collectionName} | ${model.cards.length} cartes analysees`;
+    }
+    if (isStrategyIncludeSpellbookEnabled()) {
+      const spellbookHint = state.strategy.spellbookError
+        ? " | Spellbook indisponible"
+        : " | + reference combos Commander Spellbook";
+      strategyNodes.sourceMeta.textContent += spellbookHint;
+    }
 
     const currentCollectionChanged = state.strategy.lastCollectionId !== state.selectedCollectionId;
     state.strategy.lastCollectionId = state.selectedCollectionId;
@@ -1094,6 +1216,7 @@ import {
     if (!strategyNodes.seedInput || !strategyNodes.status) {
       return;
     }
+    const runToken = ++state.strategy.runToken;
 
     const collectionId = state.selectedCollectionId;
     const payload = collectionId ? state.collectionPayloadById[collectionId] : null;
@@ -1103,6 +1226,24 @@ import {
     }
 
     const model = getStrategyModelForCollection(collectionId, payload);
+    const includeKnown = isStrategyIncludeKnownEnabled();
+    executeStrategyComputation(strategyNodes, model, rawSeedFromUi(strategyNodes), includeKnown, runToken)
+      .catch((error) => {
+        if (runToken !== state.strategy.runToken) {
+          return;
+        }
+        strategyNodes.status.textContent = `Erreur pendant le calcul: ${String(error?.message || error || "inconnue")}`;
+      });
+  }
+
+  function rawSeedFromUi(strategyNodes) {
+    return String(strategyNodes.seedInput.value || state.strategy.seedName || "").trim();
+  }
+
+  async function executeStrategyComputation(strategyNodes, model, rawSeed, includeKnown, runToken) {
+    if (runToken !== state.strategy.runToken) {
+      return;
+    }
     if (!model.cards.length) {
       strategyNodes.status.textContent = "Collection vide ou cartes non reconnues.";
       strategyNodes.directList.innerHTML = '<p class="muted">Aucun resultat.</p>';
@@ -1110,17 +1251,55 @@ import {
       return;
     }
 
-    const rawSeed = String(strategyNodes.seedInput.value || state.strategy.seedName || "").trim();
     if (!rawSeed) {
       strategyNodes.status.textContent = "Saisis une carte seed (ex: Entomb).";
       return;
     }
 
-    const seedCard = resolveSeedCard(rawSeed, model.cards);
+    const strategyLanguage = normalizeStrategyLanguage(getCollectionLanguage());
+    let seedCard = resolveSeedCard(rawSeed, model.cards);
+    if (!seedCard && includeKnown) {
+      strategyNodes.status.textContent = `Recherche de la seed "${rawSeed}" via Scryfall...`;
+      seedCard = await resolveStrategySeedFromScryfall(rawSeed, strategyLanguage);
+      if (runToken !== state.strategy.runToken) {
+        return;
+      }
+    }
     if (!seedCard) {
-      strategyNodes.status.textContent = `Carte "${rawSeed}" introuvable dans la collection.`;
+      strategyNodes.status.textContent = includeKnown
+        ? `Carte "${rawSeed}" introuvable (collection et Scryfall).`
+        : `Carte "${rawSeed}" introuvable dans la collection.`;
       return;
     }
+
+    let activeModel = model;
+    if (includeKnown) {
+      strategyNodes.status.textContent = `Recherche Scryfall en cours pour ${seedCard.name}...`;
+      const knownModel = await getKnownCardsStrategyModel(seedCard, strategyLanguage).catch(() => ({ cards: [] }));
+      if (runToken !== state.strategy.runToken) {
+        return;
+      }
+      if (knownModel.cards.length > 0) {
+        activeModel = mergeStrategyModels(model, knownModel);
+      } else if (state.strategy.knownCardsError) {
+        strategyNodes.status.textContent = "Scryfall indisponible, calcul sur la collection uniquement.";
+      }
+    }
+
+    if (seedCard.source === "scryfall") {
+      activeModel = mergeStrategyModels(activeModel, { cards: [seedCard] });
+    }
+    const scryfallAddedCount = Math.max(0, activeModel.cards.length - model.cards.length);
+
+    const manaFilterCodes = getActiveStrategyManaFilterCodes();
+    const colorFilteredCards = filterStrategyCardsByMana(activeModel.cards, manaFilterCodes, seedCard?.key);
+    if (colorFilteredCards.length <= 1) {
+      renderDirectSynergyCards([], seedCard.name);
+      renderGroupCards([], seedCard.name);
+      strategyNodes.status.textContent = `${seedCard.name}: aucun candidat apres filtre mana ${formatStrategyManaFilter(manaFilterCodes)}.`;
+      return;
+    }
+    activeModel = { cards: colorFilteredCards };
 
     state.strategy.seedName = seedCard.name;
     strategyNodes.seedInput.value = seedCard.name;
@@ -1130,13 +1309,557 @@ import {
     state.strategy.directLimit = directLimit;
     state.strategy.groupLimit = groupLimit;
 
-    const direct = computeDirectSynergies(seedCard, model.cards, directLimit);
-    const groups = computeSynergyGroups(seedCard, direct, model.cards, groupLimit);
+    const resolvedSeed = resolveSeedCard(seedCard.name, activeModel.cards) || seedCard;
+    let spellbookContext = {
+      boostByKey: new Map(),
+      variantCount: 0,
+      variants: []
+    };
+    if (isStrategyIncludeSpellbookEnabled()) {
+      strategyNodes.status.textContent = `Analyse Commander Spellbook en cours pour ${resolvedSeed.name}...`;
+      spellbookContext = await getStrategySpellbookContext(resolvedSeed);
+      if (runToken !== state.strategy.runToken) {
+        return;
+      }
+    }
 
-    renderDirectSynergyCards(direct, seedCard.name);
-    renderGroupCards(groups, seedCard.name);
+    const direct = computeDirectSynergies(
+      resolvedSeed,
+      activeModel.cards,
+      directLimit,
+      spellbookContext.boostByKey
+    );
+    const spellbookGroups = isStrategyIncludeSpellbookEnabled()
+      ? computeSpellbookSynergyGroups(resolvedSeed, direct, activeModel.cards, groupLimit, spellbookContext)
+      : [];
+    const fallbackGroups = computeSynergyGroups(resolvedSeed, direct, activeModel.cards, groupLimit);
+    const groups = mergeStrategyGroups(spellbookGroups, fallbackGroups, groupLimit);
 
-    strategyNodes.status.textContent = `${seedCard.name}: ${direct.length} synergies directes, ${groups.length} groupes construits.`;
+    renderDirectSynergyCards(direct, resolvedSeed.name);
+    renderGroupCards(groups, resolvedSeed.name);
+
+    const suffix = includeKnown && scryfallAddedCount > 0
+      ? ` (incluant ${scryfallAddedCount} cartes Scryfall)`
+      : "";
+    const manaSuffix = manaFilterCodes.length > 0 ? ` | filtre mana ${formatStrategyManaFilter(manaFilterCodes)}` : "";
+    const spellbookSuffix = isStrategyIncludeSpellbookEnabled()
+      ? (
+        spellbookContext.variantCount > 0
+          ? ` | Spellbook ${spellbookContext.variantCount} combos`
+          : (state.strategy.spellbookError ? " | Spellbook indisponible" : "")
+      )
+      : "";
+    strategyNodes.status.textContent = `${resolvedSeed.name}: ${direct.length} synergies directes, ${groups.length} groupes construits.${suffix}${manaSuffix}${spellbookSuffix}`;
+  }
+
+  function isStrategyIncludeKnownEnabled() {
+    return state.strategy.includeKnownCards === true;
+  }
+
+  function isStrategyIncludeSpellbookEnabled() {
+    return state.strategy.includeSpellbookCombos === true;
+  }
+
+  function getActiveStrategyManaFilterCodes() {
+    const filter = state.strategy?.manaFilter || {};
+    return ["W", "U", "B", "R", "G", "C"].filter((code) => filter[code] === true);
+  }
+
+  function formatStrategyManaFilter(codes) {
+    const safe = Array.isArray(codes) ? codes.filter((code) => "WUBRGC".includes(String(code))) : [];
+    if (safe.length === 0) {
+      return "aucun";
+    }
+    return safe.join("/");
+  }
+
+  function filterStrategyCardsByMana(cards, selectedCodes, seedKey = "") {
+    const safeCards = Array.isArray(cards) ? cards : [];
+    const selected = new Set(Array.isArray(selectedCodes) ? selectedCodes : []);
+    if (selected.size === 0) {
+      return safeCards;
+    }
+    const normalizedSeedKey = normalizeStrategyName(seedKey);
+    return safeCards.filter((card) => {
+      if (normalizedSeedKey && normalizeStrategyName(card?.key) === normalizedSeedKey) {
+        return true;
+      }
+      const cardColors = Array.isArray(card?.colors) ? card.colors.filter((code) => "WUBRG".includes(code)) : [];
+      if (cardColors.length === 0) {
+        return selected.has("C");
+      }
+      return cardColors.every((code) => selected.has(code));
+    });
+  }
+
+  function resetStrategyKnownCardsCache() {
+    state.strategy.knownCardsModel = null;
+    state.strategy.knownCardsModelKey = "";
+    state.strategy.knownCardsModelPromise = null;
+    state.strategy.knownCardsModelPromiseKey = "";
+    state.strategy.knownCardsError = "";
+  }
+
+  function resetStrategySpellbookCache() {
+    state.strategy.spellbookCache = new Map();
+    state.strategy.spellbookPromiseCache = new Map();
+    state.strategy.spellbookError = "";
+  }
+
+  async function getStrategySpellbookContext(seedCard) {
+    const seedKey = normalizeStrategyName(seedCard?.key || seedCard?.name || "");
+    if (!seedKey) {
+      return { boostByKey: new Map(), variantCount: 0, variants: [] };
+    }
+    if (state.strategy.spellbookCache.has(seedKey)) {
+      return state.strategy.spellbookCache.get(seedKey);
+    }
+    if (state.strategy.spellbookPromiseCache.has(seedKey)) {
+      return state.strategy.spellbookPromiseCache.get(seedKey);
+    }
+
+    const task = fetchStrategySpellbookContext(seedCard)
+      .then((context) => {
+        state.strategy.spellbookCache.set(seedKey, context);
+        state.strategy.spellbookError = "";
+        return context;
+      })
+      .catch((error) => {
+        state.strategy.spellbookError = String(error?.message || "Spellbook indisponible");
+        const fallback = { boostByKey: new Map(), variantCount: 0, variants: [] };
+        state.strategy.spellbookCache.set(seedKey, fallback);
+        return fallback;
+      })
+      .finally(() => {
+        state.strategy.spellbookPromiseCache.delete(seedKey);
+      });
+
+    state.strategy.spellbookPromiseCache.set(seedKey, task);
+    return task;
+  }
+
+  async function fetchStrategySpellbookContext(seedCard) {
+    const seedName = String(seedCard?.name || "").trim();
+    if (!seedName) {
+      return { boostByKey: new Map(), variantCount: 0, variants: [] };
+    }
+
+    const payload = await fetchSpellbookVariants(seedName, 40);
+    if (!payload || payload.ok === false || payload?.results == null) {
+      throw new Error(payload?.error || payload?.detail || payload?.details || "Spellbook HTTP error");
+    }
+
+    const variants = Array.isArray(payload.results) ? payload.results : [];
+    const seedKey = normalizeStrategyName(seedCard?.key || seedName);
+    const boostByKey = new Map();
+    const variantCards = [];
+    let variantCount = 0;
+
+    variants.forEach((variant) => {
+      const uses = Array.isArray(variant?.uses) ? variant.uses : [];
+      const status = String(variant?.status || "").toUpperCase();
+      if (uses.length === 0) {
+        return;
+      }
+      if (status && status !== "OK") {
+        return;
+      }
+
+      const normalizedNames = uses
+        .map((entry) => normalizeStrategyName(entry?.card?.name || ""))
+        .filter(Boolean);
+      if (!normalizedNames.includes(seedKey)) {
+        return;
+      }
+
+      variantCount += 1;
+      const popularity = Number(variant?.popularity) || 0;
+      const popularityFactor = Math.min(1, Math.log10(popularity + 1) / 4);
+      const baseBoost = 0.28 + popularityFactor * 0.32;
+
+      normalizedNames.forEach((nameKey) => {
+        if (!nameKey || nameKey === seedKey) {
+          return;
+        }
+        const previous = boostByKey.get(nameKey) || 0;
+        boostByKey.set(nameKey, Math.min(1.2, previous + baseBoost));
+      });
+
+      variantCards.push({
+        cardKeys: normalizedNames,
+        popularity
+      });
+    });
+
+    return { boostByKey, variantCount, variants: variantCards };
+  }
+
+  async function getKnownCardsStrategyModel(seedCard, strategyLanguage = "en") {
+    const seedKey = String(seedCard?.key || "").trim();
+    const language = normalizeStrategyLanguage(strategyLanguage);
+    const cacheKey = `${seedKey}::${language}`;
+    if (!seedKey) {
+      return { cards: [] };
+    }
+    if (state.strategy.knownCardsModel && state.strategy.knownCardsModelKey === cacheKey) {
+      return state.strategy.knownCardsModel;
+    }
+    if (state.strategy.knownCardsModelPromise && state.strategy.knownCardsModelPromiseKey === cacheKey) {
+      return state.strategy.knownCardsModelPromise;
+    }
+
+    state.strategy.knownCardsModelPromiseKey = cacheKey;
+    state.strategy.knownCardsModelPromise = fetchKnownCardsFromScryfall(seedCard, language)
+      .then((rows) => {
+        const model = buildStrategyModelFromRows(rows);
+        state.strategy.knownCardsModel = model;
+        state.strategy.knownCardsModelKey = cacheKey;
+        state.strategy.knownCardsError = "";
+        return model;
+      })
+      .catch((error) => {
+        state.strategy.knownCardsError = String(error?.message || "Scryfall indisponible");
+        state.strategy.knownCardsModel = { cards: [] };
+        state.strategy.knownCardsModelKey = cacheKey;
+        return state.strategy.knownCardsModel;
+      })
+      .finally(() => {
+        state.strategy.knownCardsModelPromise = null;
+        state.strategy.knownCardsModelPromiseKey = "";
+      });
+
+    return state.strategy.knownCardsModelPromise;
+  }
+
+  function scryfallQueriesForSeed(seedCard) {
+    const seedKey = normalizeStrategyName(seedCard?.name || seedCard?.key || "");
+    const overrideQueries = STRATEGY_SEED_QUERY_OVERRIDES[seedKey] || [];
+    const featureEntries = Object.entries(seedCard?.features || {})
+      .map(([id, score]) => ({ id, score: Number(score) || 0 }))
+      .filter((entry) => entry.score > 0 && STRATEGY_FEATURE_SCRYFALL_QUERY[entry.id])
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 3);
+
+    const queries = [
+      ...overrideQueries,
+      ...featureEntries.map((entry) => STRATEGY_FEATURE_SCRYFALL_QUERY[entry.id])
+    ];
+    const seedName = String(seedCard?.name || "").trim();
+    if (seedName) {
+      queries.push(`(oracle:\"${seedName}\" OR oracle:\"from your graveyard\" OR oracle:proliferate OR oracle:\"poison counter\")`);
+    }
+    return Array.from(new Set(queries)).slice(0, 4);
+  }
+
+  function normalizeStrategyLanguage(language) {
+    return String(language || "").toLowerCase() === "fr" ? "fr" : "en";
+  }
+
+  async function resolveStrategySeedFromScryfall(rawSeedName, strategyLanguage = "en") {
+    const seedName = String(rawSeedName || "").trim();
+    if (!seedName) {
+      return null;
+    }
+
+    const record = await fetchScryfallNamedCardRecord(seedName, strategyLanguage);
+    if (!record) {
+      return null;
+    }
+
+    const rows = [mapScryfallCardToStrategyRow(record, strategyLanguage)];
+    const model = buildStrategyModelFromRows(rows);
+    return Array.isArray(model.cards) && model.cards.length > 0 ? model.cards[0] : null;
+  }
+
+  async function fetchScryfallNamedCardRecord(cardName, strategyLanguage = "en") {
+    const seedName = String(cardName || "").trim();
+    if (!seedName) {
+      return null;
+    }
+    const baseCard = await fetchScryfallNamedCard(seedName);
+    if (!baseCard) {
+      return null;
+    }
+    return fetchScryfallLocalizedCard(baseCard, strategyLanguage);
+  }
+
+  async function fetchScryfallNamedCard(cardName) {
+    const exactUrl = `https://api.scryfall.com/cards/named?${new URLSearchParams({ exact: cardName }).toString()}`;
+    const exactCard = await fetchScryfallJson(exactUrl);
+    if (exactCard && exactCard.object === "card") {
+      return exactCard;
+    }
+
+    const fuzzyUrl = `https://api.scryfall.com/cards/named?${new URLSearchParams({ fuzzy: cardName }).toString()}`;
+    const fuzzyCard = await fetchScryfallJson(fuzzyUrl);
+    if (fuzzyCard && fuzzyCard.object === "card") {
+      return fuzzyCard;
+    }
+    return null;
+  }
+
+  async function fetchScryfallLocalizedCard(card, strategyLanguage = "en") {
+    if (!card || card.object !== "card") {
+      return null;
+    }
+    const language = normalizeStrategyLanguage(strategyLanguage);
+    if (language === "en" || String(card.lang || "").toLowerCase() === language) {
+      return card;
+    }
+
+    const cardId = String(card.id || "").trim();
+    if (!cardId) {
+      return card;
+    }
+
+    const localizedUrl = `https://api.scryfall.com/cards/${encodeURIComponent(cardId)}/${language}`;
+    const localized = await fetchScryfallJson(localizedUrl);
+    if (localized && localized.object === "card") {
+      return localized;
+    }
+    return card;
+  }
+
+  async function fetchScryfallJson(url) {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { Accept: "application/json" }
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || payload?.object === "error") {
+      return null;
+    }
+    return payload;
+  }
+
+  function scryfallDisplayName(card, strategyLanguage = "en") {
+    const language = normalizeStrategyLanguage(strategyLanguage);
+    const printed = String(card?.printed_name || "").trim();
+    const named = String(card?.name || "").trim();
+    if (language === "fr") {
+      return printed || named;
+    }
+    return named || printed;
+  }
+
+  function scryfallDisplayTypeLine(card, strategyLanguage = "en") {
+    const language = normalizeStrategyLanguage(strategyLanguage);
+    const printed = String(card?.printed_type_line || "").trim();
+    const canonical = String(card?.type_line || "").trim();
+    if (language === "fr") {
+      return printed || canonical;
+    }
+    return canonical || printed;
+  }
+
+  function scryfallDisplayOracleText(card, strategyLanguage = "en") {
+    const language = normalizeStrategyLanguage(strategyLanguage);
+    const printed = String(card?.printed_text || "").trim();
+    const canonical = String(card?.oracle_text || "").trim();
+    if (language === "fr") {
+      return printed || canonical;
+    }
+    return canonical || printed;
+  }
+
+  function scryfallManaCost(card) {
+    const base = String(card?.mana_cost || "").trim();
+    if (base) {
+      return base;
+    }
+    if (!Array.isArray(card?.card_faces)) {
+      return "";
+    }
+    return card.card_faces
+      .map((face) => String(face?.mana_cost || "").trim())
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  function mapScryfallCardToStrategyRow(card, strategyLanguage = "en") {
+    const displayName = scryfallDisplayName(card, strategyLanguage);
+    return {
+      name: displayName || String(card?.name || "").trim(),
+      name_en: String(card?.name || "").trim(),
+      mana_cost: scryfallManaCost(card),
+      oracle_text: scryfallDisplayOracleText(card, strategyLanguage),
+      keywords: Array.isArray(card?.keywords) ? card.keywords.join(", ") : "",
+      type_line: scryfallDisplayTypeLine(card, strategyLanguage),
+      colors: Array.isArray(card?.colors) ? card.colors.join("") : "",
+      color_identity: Array.isArray(card?.color_identity) ? card.color_identity.join("") : "",
+      scryfall_id: String(card?.id || "").trim(),
+      set_code: String(card?.set || "").trim(),
+      collector_number: String(card?.collector_number || "").trim(),
+      language: String(card?.lang || normalizeStrategyLanguage(strategyLanguage)).trim(),
+      source: "scryfall"
+    };
+  }
+
+  async function fetchScryfallSearchCards(query, maxCards, strategyLanguage = "en") {
+    const language = normalizeStrategyLanguage(strategyLanguage);
+    const queryBase = String(query || "").trim();
+    if (!queryBase) {
+      return [];
+    }
+
+    const hardLimit = Math.max(40, Number(maxCards) || 180);
+    const langQuery = /\blang:(en|fr)\b/i.test(queryBase) ? queryBase : `(${queryBase}) lang:${language}`;
+
+    async function runSearch(searchQuery) {
+      const collected = [];
+      let nextUrl = `https://api.scryfall.com/cards/search?${new URLSearchParams({
+        q: searchQuery,
+        unique: "cards",
+        order: "edhrec",
+        include_multilingual: "true"
+      }).toString()}`;
+
+      while (nextUrl && collected.length < hardLimit) {
+        const response = await fetch(nextUrl, {
+          method: "GET",
+          headers: { Accept: "application/json" }
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.object === "error") {
+          throw new Error(payload?.details || `Scryfall HTTP ${response.status}`);
+        }
+        const batch = Array.isArray(payload.data) ? payload.data : [];
+        for (const card of batch) {
+          collected.push(card);
+          if (collected.length >= hardLimit) {
+            break;
+          }
+        }
+        nextUrl = payload.has_more && payload.next_page ? payload.next_page : "";
+      }
+      return collected;
+    }
+
+    let collected = await runSearch(langQuery);
+    if (collected.length === 0 && language !== "en") {
+      collected = await runSearch(queryBase);
+    }
+    return collected;
+  }
+
+  function strategySourceFromRow(row) {
+    const explicit = rowValue(row, ["source", "card_source", "source_api", "source_origin"]).toLowerCase();
+    if (explicit.includes("scryfall")) {
+      return "scryfall";
+    }
+    return "collection";
+  }
+
+  function strategySourceBadgeText(sourceType) {
+    if (sourceType !== "scryfall") {
+      return "";
+    }
+    return getCollectionLanguage() === "fr" ? "Source: Scryfall" : "Source: Scryfall";
+  }
+
+  function appendStrategyCardBadge(container, label, toneClass) {
+    if (!container) {
+      return;
+    }
+    const text = String(label || "").trim();
+    if (!text) {
+      return;
+    }
+    const badgeNode = document.createElement("span");
+    badgeNode.className = `strategy-card-badge ${toneClass}`;
+    badgeNode.textContent = text;
+    container.appendChild(badgeNode);
+  }
+
+  async function localizeScryfallCards(cards, strategyLanguage = "en") {
+    const language = normalizeStrategyLanguage(strategyLanguage);
+    if (language === "en" || !Array.isArray(cards) || cards.length === 0) {
+      return Array.isArray(cards) ? cards : [];
+    }
+
+    const collected = [];
+    for (let i = 0; i < cards.length; i += 8) {
+      const chunk = cards.slice(i, i + 8);
+      const localizedChunk = await Promise.all(
+        chunk.map((card) => fetchScryfallLocalizedCard(card, language).catch(() => card))
+      );
+      localizedChunk.forEach((item, index) => {
+        if (item && item.object === "card") {
+          collected.push(item);
+          return;
+        }
+        if (chunk[index]) {
+          collected.push(chunk[index]);
+        }
+      });
+    }
+    return collected;
+  }
+
+  async function fetchScryfallSearchCardsLocalized(query, maxCards, strategyLanguage = "en") {
+    const base = await fetchScryfallSearchCards(query, maxCards, strategyLanguage);
+    const language = normalizeStrategyLanguage(strategyLanguage);
+    if (language === "en") {
+      return base;
+    }
+    const hasWrongLanguage = base.some((card) => String(card?.lang || "").toLowerCase() !== language);
+    if (!hasWrongLanguage) {
+      return base;
+    }
+    return localizeScryfallCards(base, language);
+  }
+
+  async function fetchKnownCardsFromScryfall(seedCard, strategyLanguage = "en") {
+    const language = normalizeStrategyLanguage(strategyLanguage);
+    const queries = scryfallQueriesForSeed(seedCard);
+    if (queries.length === 0) {
+      const onlySeed = await fetchScryfallNamedCardRecord(seedCard?.name || "", language);
+      return onlySeed ? [mapScryfallCardToStrategyRow(onlySeed, language)] : [];
+    }
+
+    const allCards = [];
+    const seedRecord = await fetchScryfallNamedCardRecord(seedCard?.name || "", language);
+    if (seedRecord) {
+      allCards.push(seedRecord);
+    }
+    for (const query of queries) {
+      const cards = await fetchScryfallSearchCardsLocalized(query, 180, language);
+      allCards.push(...cards);
+    }
+
+    const uniqueByName = new Map();
+    allCards.forEach((card) => {
+      const row = mapScryfallCardToStrategyRow(card, language);
+      const key = normalizeStrategyName(row.name || row.name_en);
+      if (!key || uniqueByName.has(key)) {
+        return;
+      }
+      uniqueByName.set(key, row);
+    });
+
+    return Array.from(uniqueByName.values());
+  }
+
+  function mergeStrategyModels(primaryModel, secondaryModel) {
+    const primaryCards = Array.isArray(primaryModel?.cards) ? primaryModel.cards : [];
+    const secondaryCards = Array.isArray(secondaryModel?.cards) ? secondaryModel.cards : [];
+    if (!secondaryCards.length) {
+      return { cards: primaryCards };
+    }
+
+    const byKey = new Map();
+    primaryCards.forEach((card) => {
+      if (card?.key) {
+        byKey.set(card.key, card);
+      }
+    });
+    secondaryCards.forEach((card) => {
+      if (!card?.key || byKey.has(card.key)) {
+        return;
+      }
+      byKey.set(card.key, card);
+    });
+    return { cards: Array.from(byKey.values()) };
   }
 
   function getStrategyModelForCollection(collectionId, payload) {
@@ -1160,12 +1883,14 @@ import {
     const cardsByName = new Map();
 
     rows.forEach((row) => {
-      const name = rowValue(row, ["name", "card_name", "card", "title"]).trim();
-      if (!name) {
+      const displayName = rowValue(row, ["name", "card_name", "card", "title"]).trim();
+      const canonicalName = rowValue(row, ["name_en", "name", "card_name", "card", "title"]).trim();
+      const name = displayName || canonicalName;
+      if (!name && !canonicalName) {
         return;
       }
 
-      const key = normalizeStrategyName(name);
+      const key = normalizeStrategyName(canonicalName || name);
       if (!key) {
         return;
       }
@@ -1188,7 +1913,8 @@ import {
           features,
           semantics,
           colors: colorCodesForRow(row),
-          scryfallId: rowValue(row, ["scryfall_id", "scry_fall_id"]).trim()
+          scryfallId: rowValue(row, ["scryfall_id", "scry_fall_id"]).trim(),
+          source: strategySourceFromRow(row)
         });
         return;
       }
@@ -1199,6 +1925,9 @@ import {
       existing.semantics = mergeStrategySemantics(existing.semantics, semantics);
       if (!existing.scryfallId) {
         existing.scryfallId = rowValue(row, ["scryfall_id", "scry_fall_id"]).trim();
+      }
+      if (existing.source !== "collection") {
+        existing.source = strategySourceFromRow(row);
       }
     });
 
@@ -1253,7 +1982,14 @@ import {
       instantSorceryRef: countPatternHits(source, /instant or sorcery/i),
       discardOut: countPatternHits(source, /\bdiscard\b/i),
       discardPayoff: countPatternHits(source, /whenever .* discard|if .* discarded/i),
-      worldgorgerLine: countPatternHits(source, /worldgorger dragon|exile all other permanents you control/i)
+      worldgorgerLine: countPatternHits(source, /worldgorger dragon|exile all other permanents you control/i),
+      libraryMillOut: countPatternHits(source, /puts? the top .* cards? of .* library into .* graveyard|\bmill\b|target player mills/i),
+      chooseColorGlobal: countPatternHits(source, /choose a color|all cards that aren't on the battlefield.*chosen color|are the chosen color/i),
+      untapArtifactOut: countPatternHits(source, /untap target artifact|untap all artifacts/i),
+      activatedArtifactRef: countPatternHits(source, /activated abilities of artifacts|\{[^}]+\}:\s|activate only/i),
+      artifactTutor: countPatternHits(source, /search your library .* artifact/i),
+      grindstoneClause: countPatternHits(source, /three cards .* share a color/i),
+      painterClause: countPatternHits(source, /as .* enters.* choose a color|cards? that aren't on the battlefield/i)
     };
   }
 
@@ -1337,23 +2073,40 @@ import {
     return cards.find((card) => card.key.includes(normalizedSeed)) || null;
   }
 
-  function computeDirectSynergies(seedCard, cards, limit) {
+  function computeDirectSynergies(seedCard, cards, limit, spellbookBoostByKey = new Map()) {
     const results = cards
       .filter((card) => card.key !== seedCard.key)
       .map((card) => {
         const sim = strategySimilarity(seedCard, card);
+        const spellbookRaw = Number(spellbookBoostByKey?.get?.(card.key) || 0);
+        const spellbookBoost = Math.max(0, spellbookRaw);
+        const externalBoost = Math.min(0.45, spellbookBoost * 0.55);
+        const score = clampScore(sim.score + externalBoost);
         return {
           card,
-          score: sim.score,
+          score,
           featureScore: sim.featureScore,
           ruleScore: sim.ruleScore,
-          colorScore: sim.colorScore
+          colorScore: sim.colorScore,
+          comboBoost: sim.comboBoost,
+          spellbookBoost
         };
       })
-      .filter((entry) => entry.score > 0.05 && (entry.ruleScore > 0.02 || entry.featureScore > 0.08))
+      .filter((entry) => entry.score > 0.05 && (
+        entry.ruleScore > 0.02 ||
+        entry.featureScore > 0.08 ||
+        entry.comboBoost > 0 ||
+        entry.spellbookBoost > 0.12
+      ))
       .sort((left, right) => {
         if (Math.abs(right.score - left.score) > 1e-9) {
           return right.score - left.score;
+        }
+        if (Math.abs((right.spellbookBoost || 0) - (left.spellbookBoost || 0)) > 1e-9) {
+          return (right.spellbookBoost || 0) - (left.spellbookBoost || 0);
+        }
+        if (Math.abs((right.comboBoost || 0) - (left.comboBoost || 0)) > 1e-9) {
+          return (right.comboBoost || 0) - (left.comboBoost || 0);
         }
         return left.card.name.localeCompare(right.card.name);
       });
@@ -1419,6 +2172,110 @@ import {
     }
 
     return deduped;
+  }
+
+  function computeSpellbookSynergyGroups(seedCard, directEntries, allCards, groupLimit, spellbookContext) {
+    const variants = Array.isArray(spellbookContext?.variants) ? spellbookContext.variants : [];
+    if (variants.length === 0) {
+      return [];
+    }
+
+    const cardsByKey = new Map((Array.isArray(allCards) ? allCards : []).map((card) => [card.key, card]));
+    const directByKey = new Map((Array.isArray(directEntries) ? directEntries : []).map((entry) => [entry.card.key, entry]));
+    const directKeys = new Set(directByKey.keys());
+    const seedKey = seedCard.key;
+
+    const groups = [];
+    const seen = new Set();
+
+    variants.forEach((variant) => {
+      const rawKeys = Array.isArray(variant?.cardKeys) ? variant.cardKeys : [];
+      if (!rawKeys.includes(seedKey)) {
+        return;
+      }
+
+      const partnerKeys = rawKeys
+        .filter((key) => key && key !== seedKey && cardsByKey.has(key) && directKeys.has(key))
+        .map((key) => ({
+          key,
+          score: Number(directByKey.get(key)?.score || 0)
+        }))
+        .sort((left, right) => right.score - left.score)
+        .slice(0, 4);
+
+      if (partnerKeys.length === 0) {
+        return;
+      }
+
+      const packageCards = [seedCard].concat(partnerKeys.map((item) => cardsByKey.get(item.key)));
+      const signature = packageCards.map((card) => card.key).sort().join("|");
+      if (seen.has(signature)) {
+        return;
+      }
+      seen.add(signature);
+
+      const split = splitGroupCoreAndSide(seedCard, packageCards);
+      const popularity = Number(variant?.popularity) || 0;
+      const popularityFactor = Math.min(1, Math.log10(popularity + 1) / 4);
+      const avgDirectScore = partnerKeys.reduce((sum, item) => sum + item.score, 0) / partnerKeys.length;
+      const groupScore = clampScore(avgDirectScore * 0.8 + popularityFactor * 0.2);
+
+      const orderedNames = partnerKeys
+        .map((item) => cardsByKey.get(item.key)?.name)
+        .filter(Boolean);
+      const bridgeName = orderedNames[0] || seedCard.name;
+      const lineA = orderedNames.length > 0
+        ? `${seedCard.name} -> ${orderedNames.join(" -> ")}`
+        : seedCard.name;
+      const lineB = orderedNames.length > 1
+        ? `${seedCard.name} -> ${orderedNames.slice().reverse().join(" -> ")}`
+        : lineA;
+
+      groups.push({
+        cards: packageCards,
+        coreCards: split.coreCards,
+        sideCards: split.sideCards,
+        bridgeName,
+        score: groupScore,
+        lineA,
+        lineB
+      });
+    });
+
+    groups.sort((a, b) => {
+      if (Math.abs(b.score - a.score) > 1e-9) {
+        return b.score - a.score;
+      }
+      return a.bridgeName.localeCompare(b.bridgeName);
+    });
+
+    return groups.slice(0, Math.max(1, groupLimit));
+  }
+
+  function mergeStrategyGroups(primaryGroups, fallbackGroups, limit) {
+    const cap = Math.max(1, Number(limit) || 1);
+    const out = [];
+    const seen = new Set();
+
+    function pushUnique(groups) {
+      (Array.isArray(groups) ? groups : []).forEach((group) => {
+        if (!group || !Array.isArray(group.cards)) {
+          return;
+        }
+        const key = group.cards.map((card) => card.key).sort().join("|");
+        if (seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        out.push(group);
+      });
+    }
+
+    pushUnique(primaryGroups);
+    if (out.length < cap) {
+      pushUnique(fallbackGroups);
+    }
+    return out.slice(0, cap);
   }
 
   function splitGroupCoreAndSide(seedCard, rawCards) {
@@ -1499,8 +2356,56 @@ import {
     const featureScore = cosineSimilaritySparse(cardA.features, cardB.features);
     const ruleScore = ruleAwareSynergyScore(cardA.semantics, cardB.semantics);
     const colorScore = colorCompatibilityScore(cardA.colors, cardB.colors);
-    const score = clampScore(featureScore * 0.5 + ruleScore * 0.4 + colorScore * 0.1);
-    return { score, featureScore, ruleScore, colorScore };
+    const comboBoost = comboKnowledgeBoost(cardA, cardB);
+    const score = clampScore(featureScore * 0.5 + ruleScore * 0.4 + colorScore * 0.1 + comboBoost);
+    return { score, featureScore, ruleScore, colorScore, comboBoost };
+  }
+
+  function comboKnowledgeBoost(cardA, cardB) {
+    const keyA = normalizeStrategyName(cardA?.key || cardA?.name || "");
+    const keyB = normalizeStrategyName(cardB?.key || cardB?.name || "");
+    if (!keyA || !keyB) {
+      return 0;
+    }
+
+    let boost = 0;
+    STRATEGY_KNOWN_COMBO_PAIRS.forEach((pair) => {
+      const left = normalizeStrategyName(pair.a);
+      const right = normalizeStrategyName(pair.b);
+      const hit = (keyA === left && keyB === right) || (keyA === right && keyB === left);
+      if (hit) {
+        boost = Math.max(boost, Number(pair.boost) || 0);
+      }
+    });
+
+    const semA = cardA?.semantics || {};
+    const semB = cardB?.semantics || {};
+    const logicalRoleBoost = grindstoneRoleBoost(semA, semB);
+    return clampScore(Math.max(boost, logicalRoleBoost));
+  }
+
+  function grindstoneRoleBoost(semA, semB) {
+    const aMill = bounded((semA.libraryMillOut || 0) + (semA.grindstoneClause || 0));
+    const bMill = bounded((semB.libraryMillOut || 0) + (semB.grindstoneClause || 0));
+    const aColor = bounded((semA.chooseColorGlobal || 0) + (semA.painterClause || 0));
+    const bColor = bounded((semB.chooseColorGlobal || 0) + (semB.painterClause || 0));
+    const aUntap = bounded((semA.untapArtifactOut || 0) + (semA.activatedArtifactRef || 0));
+    const bUntap = bounded((semB.untapArtifactOut || 0) + (semB.activatedArtifactRef || 0));
+
+    let boost = 0;
+    if (aMill && bColor) {
+      boost = Math.max(boost, 0.72);
+    }
+    if (bMill && aColor) {
+      boost = Math.max(boost, 0.72);
+    }
+    if (aMill && bUntap) {
+      boost = Math.max(boost, 0.24);
+    }
+    if (bMill && aUntap) {
+      boost = Math.max(boost, 0.24);
+    }
+    return boost;
   }
 
   function ruleAwareSynergyScore(semA, semB) {
@@ -1530,6 +2435,10 @@ import {
     score += bounded(src.reanimate) * bounded(dst.etbPayoff) * 0.45;
     score += bounded(src.discardOut) * bounded(dst.discardPayoff) * 0.55;
     score += bounded(src.worldgorgerLine) * bounded(dst.reanimate) * 0.90;
+    score += bounded(src.libraryMillOut + src.grindstoneClause) * bounded(dst.chooseColorGlobal + dst.painterClause) * 1.25;
+    score += bounded(src.chooseColorGlobal + src.painterClause) * bounded(dst.libraryMillOut + dst.grindstoneClause) * 1.25;
+    score += bounded(src.libraryMillOut + src.grindstoneClause) * bounded(dst.untapArtifactOut + dst.activatedArtifactRef) * 0.50;
+    score += bounded(src.artifactTutor) * bounded(dst.libraryMillOut + dst.chooseColorGlobal + dst.painterClause) * 0.35;
 
     return clampScore(score);
   }
@@ -1552,6 +2461,10 @@ import {
     const corruptedB = bounded(b.corruptedPayoff || 0);
     const biteA = bounded((a.biteFightRemoval || 0) + (a.deathtouchFlag || 0));
     const biteB = bounded((b.biteFightRemoval || 0) + (b.deathtouchFlag || 0));
+    const millA = bounded((a.libraryMillOut || 0) + (a.grindstoneClause || 0));
+    const millB = bounded((b.libraryMillOut || 0) + (b.grindstoneClause || 0));
+    const colorA = bounded((a.chooseColorGlobal || 0) + (a.painterClause || 0));
+    const colorB = bounded((b.chooseColorGlobal || 0) + (b.painterClause || 0));
 
     const score = Math.min(graveA, graveB) * 0.25 +
       Math.min(spellA, spellB) * 0.18 +
@@ -1559,7 +2472,9 @@ import {
       Math.min(toxicA, toxicB) * 0.28 +
       Math.min(prolifA, prolifB) * 0.24 +
       Math.min(corruptedA, corruptedB) * 0.14 +
-      Math.min(biteA, biteB) * 0.10;
+      Math.min(biteA, biteB) * 0.10 +
+      Math.min(millA, millB) * 0.14 +
+      Math.min(colorA, colorB) * 0.18;
 
     return Math.min(0.55, score);
   }
@@ -1632,10 +2547,12 @@ import {
     target.innerHTML = "";
     const fragment = document.createDocumentFragment();
     directEntries.forEach((entry, index) => {
+      const comboPart = entry.comboBoost > 0 ? ` | combo ${formatDecimal(entry.comboBoost)}` : "";
+      const spellbookPart = entry.spellbookBoost > 0 ? ` | sb ${formatDecimal(entry.spellbookBoost)}` : "";
       fragment.appendChild(
         createStrategyCardElement(
           entry.card,
-          `#${index + 1} | score ${formatDecimal(entry.score)} | rules ${formatDecimal(entry.ruleScore || 0)}`
+          `#${index + 1} | score ${formatDecimal(entry.score)} | rules ${formatDecimal(entry.ruleScore || 0)}${comboPart}${spellbookPart}`
         )
       );
     });
@@ -1792,11 +2709,21 @@ import {
     nameLine.textContent = card.name;
     body.appendChild(nameLine);
 
+    const badgesLine = document.createElement("div");
+    badgesLine.className = "strategy-card-badges";
     if (badge) {
-      const badgeNode = document.createElement("span");
-      badgeNode.className = `strategy-card-badge ${badgeTone === "side" ? "is-side" : "is-core"}`;
-      badgeNode.textContent = badge;
-      body.appendChild(badgeNode);
+      appendStrategyCardBadge(
+        badgesLine,
+        badge,
+        badgeTone === "side" ? "is-side" : "is-core"
+      );
+    }
+    const sourceBadge = strategySourceBadgeText(card?.source || "collection");
+    if (sourceBadge) {
+      appendStrategyCardBadge(badgesLine, sourceBadge, "is-source-scryfall");
+    }
+    if (badgesLine.childNodes.length > 0) {
+      body.appendChild(badgesLine);
     }
 
     if (metaLine) {

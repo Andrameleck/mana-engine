@@ -237,6 +237,55 @@ body {
   justify-content: flex-start;
 }
 
+.strategy-toggle {
+  align-self: stretch;
+}
+
+.strategy-toggle-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+
+.strategy-toggle-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+}
+
+.strategy-mana-filter {
+  align-self: stretch;
+}
+
+.strategy-mana-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.strategy-mana-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(120, 140, 170, 0.35);
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(14, 19, 28, 0.72);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.strategy-mana-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+}
+
 #strategy-status {
   padding: 10px 12px;
   border: 1px solid rgba(120, 140, 170, 0.3);
@@ -344,6 +393,12 @@ body {
   font-weight: 700;
 }
 
+.strategy-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
 .strategy-card-badge.is-core {
   color: #cff8dd;
   border-color: rgba(102, 217, 132, 0.42);
@@ -354,6 +409,12 @@ body {
   color: #dbe9ff;
   border-color: rgba(120, 170, 255, 0.4);
   background: rgba(22, 45, 86, 0.42);
+}
+
+.strategy-card-badge.is-source-scryfall {
+  color: #ffe8c0;
+  border-color: rgba(255, 191, 94, 0.55);
+  background: rgba(93, 56, 12, 0.42);
 }
 
 .strategy-card-mana {
