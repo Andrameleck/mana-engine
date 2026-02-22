@@ -4160,25 +4160,14 @@ If a card would be put into an opponent's graveyard from anywhere, instead exile
 "","","","","Flying, Trample","en","{3}{R}{R}{R}","Worldgorger Dragon","added_from_edhrec","Flying, trample
 When this creature enters, exile all other permanents you control.
 When this creature leaves the battlefield, return the exiled cards to the battlefield under their owners' control.","1","116","33dde6e0-d0a7-4432-a3f4-b48234f4e055",""
-"","","","","Toxic, Deathtouch","en","{B}","Bilious Skulldweller","added_from_user_deck","Deathtouch
-Toxic 1 (Players dealt combat damage by this creature also get a poison counter.)","4","117","dfb81cb1-ac56-4803-a962-359854a447df","ONE"
-"","","","","Toxic, Proliferate","en","{1}{B}","Blightbelly Rat","added_from_user_deck","Toxic 1 (Players dealt combat damage by this creature also get a poison counter.)
-When this creature dies, proliferate. (Choose any number of permanents and/or players, then give each another counter of each kind already there.)","4","118","9255cd01-a611-4fec-b9ec-b271687740ba","ONE"
-"","","","","Toxic, Trample, Proliferate","en","{2}{G}","Bloated Contaminator","added_from_user_deck","Trample
-Toxic 1 (Players dealt combat damage by this creature also get a poison counter.)
-Whenever this creature deals combat damage to a player, proliferate. (Choose any number of permanents and/or players, then give each another counter of each kind already there.)","1","119","411bda96-6c65-475d-9850-0a9b3eefa553","ONE"
-"","","","","Toxic","en","{1}{G}","Branchblight Stalker","added_from_user_deck","Toxic 2 (Players dealt combat damage by this creature also get two poison counters.)","4","120","e5290a4c-1f98-4e97-a407-f951e386b8b0","ONE"
-"","","","","First strike, Deathtouch","en","{1}{B}{G}","Glissa Sunslayer","added_from_user_deck","First strike, deathtouch
-Whenever Glissa Sunslayer deals combat damage to a player, choose one —
-• You draw a card and lose 1 life.
-• Destroy target enchantment.
-• Remove up to three counters from target permanent.","2","121","682b1b62-338a-49d1-9d4e-2d8ee2e6fc76","ONE"
-"","","","","","en","{1}{B}{B}","Hero's Downfall","added_from_user_deck","Destroy target creature or planeswalker.","2","122","ad2c01d9-8f54-46c0-9dc9-d4d4764ce1c9","VOW"
-"","","","","","en","{1}{G}","Infectious Bite","added_from_user_deck","Target creature you control deals damage equal to its power to target creature you don't control. Each opponent gets a poison counter.","2","123","83dfb2a5-cd5c-46c6-9bb8-7c5d00f3e003","ONE"
-"","","","","Toxic","en","{5}{G}{G}","Paladin of Predation","added_from_user_deck","Toxic 6 (Players dealt combat damage by this creature also get six poison counters.)
-This creature can't be blocked by creatures with power 2 or less.","2","124","758dbe61-6dc7-4b08-bdd6-7262257955fc","ONE"
-"","","","","Flying, Toxic","en","{1}{B}","Pestilent Syphoner","added_from_user_deck","Flying
-Toxic 1 (Players dealt combat damage by this creature also get a poison counter.)","4","125","947a1e44-3485-4e24-a34d-6c318584743c","ONE"
-"","","","","Toxic","en","{2}{B}","Stinging Hivemaster","added_from_user_deck","Toxic 1 (Players dealt combat damage by this creature also get a poison counter.)
-When this creature dies, create a 1/1 colorless Phyrexian Mite artifact creature token with toxic 1 and ""This token can't block.""","3","126","cdbbcbe1-5317-455e-8d71-a4e2ad0addfc","ONE"
-"","","","","Proliferate","en","{B}","Whisper of the Dross","added_from_user_deck","Target creature gets -1/-1 until end of turn. Proliferate. (Choose any number of permanents and/or players, then give each another counter of each kind already there.)","4","127","58d287e8-5297-415a-97d5-02002470c52b","ONE"
+"","","","","","en","","Bilious Skulldweller","added_from_user_deck","","4","117","","ONE"
+"","","","","","en","","Blightbelly Rat","added_from_user_deck","","4","118","","ONE"
+"","","","","","en","","Bloated Contaminator","added_from_user_deck","","1","119","","ONE"
+"","","","","","en","","Branchblight Stalker","added_from_user_deck","","4","120","","ONE"
+"","","","","","en","","Glissa Sunslayer","added_from_user_deck","","2","121","","ONE"
+"","","","","","en","","Hero's Downfall","added_from_user_deck","","2","122","","VOW"
+"","","","","","en","","Infectious Bite","added_from_user_deck","","2","123","","ONE"
+"","","","","","en","","Paladin of Predation","added_from_user_deck","","2","124","","ONE"
+"","","","","","en","","Pestilent Syphoner","added_from_user_deck","","4","125","","ONE"
+"","","","","","en","","Stinging Hivemaster","added_from_user_deck","","3","126","","ONE"
+"","","","","","en","","Whisper of the Dross","added_from_user_deck","","4","127","","ONE"

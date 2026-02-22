@@ -139,13 +139,50 @@
       </section>
 
       <section id="tab-strategy" class="tab-view" aria-labelledby="workspace-title">
-        <section class="panel">
+        <section class="panel strategy-panel">
           <div class="panel-head">
-            <h3>Strategy module</h3>
+            <h3>Synergy Finder</h3>
           </div>
-          <p class="muted">
-            Placeholder ready for future strategy workflows (archetypes, plan templates, matchup notes).
-          </p>
+
+          <div class="strategy-controls">
+            <p id="strategy-source-meta" class="muted">Selectionne un dossier collection pour activer le calcul.</p>
+            <div class="strategy-control-grid">
+              <label for="strategy-seed-input">
+                Carte seed
+                <input id="strategy-seed-input" type="search" placeholder="Entomb">
+                <datalist id="strategy-seed-list"></datalist>
+              </label>
+              <label for="strategy-direct-limit">
+                Top synergies directes
+                <input id="strategy-direct-limit" type="number" min="4" max="24" value="12">
+              </label>
+              <label for="strategy-group-limit">
+                Top groupes
+                <input id="strategy-group-limit" type="number" min="3" max="12" value="6">
+              </label>
+              <div class="actions strategy-actions">
+                <button type="button" id="strategy-run-btn">Calculer</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="strategy-status" class="muted">En attente de calcul.</div>
+
+          <div class="strategy-results-grid">
+            <section class="strategy-result-block">
+              <div class="strategy-result-head">
+                <h4>Synergies directes</h4>
+              </div>
+              <div id="strategy-direct-list" class="strategy-card-grid"></div>
+            </section>
+
+            <section class="strategy-result-block">
+              <div class="strategy-result-head">
+                <h4>Groupes de cartes</h4>
+              </div>
+              <div id="strategy-group-list" class="strategy-group-list"></div>
+            </section>
+          </div>
         </section>
       </section>
 

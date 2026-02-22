@@ -59,7 +59,9 @@ const UI_STATE = {
   currentPage: 1,
   viewMode: "table",
   searchQuery: "",
-  sortKey: CARD_VIEW_SORT_KEYS.NAME_ASC
+  sortKey: CARD_VIEW_SORT_KEYS.NAME_ASC,
+  activeViewKey: "",
+  viewStateByKey: new Map()
 };
 
 const PREVIEW_STATE = {
@@ -72,6 +74,7 @@ const PREVIEW_STATE = {
 };
 
 let releaseScrollbarSync = null;
+const TILE_MANA_CACHE = new Map();
 
 initPreviewEvents();
 
@@ -82,6 +85,7 @@ function renderCollection(payload) {
 
   wrap.innerHTML = "";
   wrap.classList.remove("is-card-view");
+  wrap.classList.remove("is-card-view-deck");
   wrap.removeAttribute("data-table");
   releaseTableScrollbarSync();
 
@@ -106,9 +110,14 @@ function renderCollection(payload) {
     ? "cards"
     : "table";
   wrap.classList.toggle("is-card-view", UI_STATE.viewMode === "cards");
+  hydrateViewStateForPayload(payload);
+  wrap.classList.toggle("is-card-view-deck", isDeckCardsContext());
 
-  UI_STATE.rawColumns = Array.isArray(payload.columns) ? payload.columns : [];
+  const payloadColumns = Array.isArray(payload.columns)
+    ? payload.columns.filter((column) => String(column || "").trim().length > 0)
+    : [];
   UI_STATE.rows = Array.isArray(payload.rows) ? payload.rows.map(normalizeRowObject) : [];
+  UI_STATE.rawColumns = payloadColumns.length > 0 ? payloadColumns : deriveColumnsFromRows(UI_STATE.rows);
   UI_STATE.columns = selectVisibleColumns(UI_STATE.rawColumns);
 
   const payloadPageSize = Number(payload.page_size);
@@ -131,6 +140,51 @@ function renderCollection(payload) {
     return;
   }
   renderTablePage(UI_STATE.currentPage);
+}
+
+function viewStateKeyFromPayload(payload) {
+  const context = String(payload?.ui_context || payload?.source_type || "default")
+    .toLowerCase()
+    .trim();
+  const identity = String(payload?.path || payload?.table || "unknown")
+    .toLowerCase()
+    .trim();
+  return `${context}::${identity}`;
+}
+
+function hydrateViewStateForPayload(payload) {
+  const key = viewStateKeyFromPayload(payload);
+  UI_STATE.activeViewKey = key;
+
+  if (!UI_STATE.viewStateByKey.has(key)) {
+    UI_STATE.searchQuery = "";
+    UI_STATE.sortKey = CARD_VIEW_SORT_KEYS.NAME_ASC;
+    UI_STATE.viewStateByKey.set(key, {
+      searchQuery: UI_STATE.searchQuery,
+      sortKey: UI_STATE.sortKey
+    });
+    return;
+  }
+
+  const saved = UI_STATE.viewStateByKey.get(key) || {};
+  UI_STATE.searchQuery = String(saved.searchQuery || "");
+  UI_STATE.sortKey = String(saved.sortKey || CARD_VIEW_SORT_KEYS.NAME_ASC);
+}
+
+function persistCurrentViewState() {
+  const key = String(UI_STATE.activeViewKey || "").trim();
+  if (!key) {
+    return;
+  }
+
+  UI_STATE.viewStateByKey.set(key, {
+    searchQuery: UI_STATE.searchQuery,
+    sortKey: UI_STATE.sortKey
+  });
+}
+
+function isDeckCardsContext() {
+  return UI_STATE.viewMode === "cards" && String(UI_STATE.activeViewKey || "").startsWith("decks::");
 }
 
 function renderTablePage(pageNumber) {
@@ -218,40 +272,68 @@ function renderCardsPage(pageNumber) {
   clearCardPreview(true);
   hideBottomScrollbar();
 
-  const cardRows = UI_STATE.rows.filter(isCardLikeRow);
+  const sourceRows = isDeckCardsContext()
+    ? annotateDeckRowsWithZone(UI_STATE.rows)
+    : UI_STATE.rows;
+  const cardRows = sourceRows.filter(isCardLikeRow);
   const filteredRows = applyCardFiltersAndSorting(cardRows);
   const totalRows = filteredRows.length;
-  const totalPages = Math.max(1, Math.ceil(totalRows / UI_STATE.pageSize));
-  const nextPage = Number.isFinite(pageNumber) ? Math.floor(pageNumber) : 1;
-  UI_STATE.currentPage = Math.min(Math.max(nextPage, 1), totalPages);
+  const deckContext = isDeckCardsContext();
+  const filteredLiteralCount = deckContext ? sumCardQuantities(filteredRows) : totalRows;
+  const totalLiteralCount = deckContext ? sumCardQuantities(cardRows) : cardRows.length;
+  let startIndex = 0;
+  let pageRows = filteredRows;
 
-  const startIndex = (UI_STATE.currentPage - 1) * UI_STATE.pageSize;
-  const endIndex = startIndex + UI_STATE.pageSize;
-  const pageRows = filteredRows.slice(startIndex, endIndex);
+  if (!deckContext) {
+    const totalPages = Math.max(1, Math.ceil(totalRows / UI_STATE.pageSize));
+    const nextPage = Number.isFinite(pageNumber) ? Math.floor(pageNumber) : 1;
+    UI_STATE.currentPage = Math.min(Math.max(nextPage, 1), totalPages);
+    startIndex = (UI_STATE.currentPage - 1) * UI_STATE.pageSize;
+    const endIndex = startIndex + UI_STATE.pageSize;
+    pageRows = filteredRows.slice(startIndex, endIndex);
+  } else {
+    UI_STATE.currentPage = 1;
+  }
 
   const browser = document.createElement("section");
   browser.classList.add("collection-browser");
 
-  const toolbar = renderCardsToolbar(totalRows, cardRows.length);
+  const toolbar = renderCardsToolbar(filteredLiteralCount, totalLiteralCount);
   browser.appendChild(toolbar);
 
-  const grid = document.createElement("div");
-  grid.classList.add("collection-card-grid");
   if (pageRows.length === 0) {
+    const grid = document.createElement("div");
+    grid.classList.add("collection-card-grid");
     grid.innerHTML = '<div class="collection-empty-state muted">Aucune carte ne correspond a ta recherche.</div>';
+    browser.appendChild(grid);
+  } else if (deckContext) {
+    const grouped = splitDeckRowsByZone(pageRows);
+    if (grouped.main.length > 0) {
+      browser.appendChild(createDeckCardSection("Main Deck", grouped.main, "main"));
+    }
+    if (grouped.side.length > 0) {
+      browser.appendChild(createDeckCardSection("Sideboard", grouped.side, "side"));
+    }
   } else {
+    const grid = document.createElement("div");
+    grid.classList.add("collection-card-grid");
     pageRows.forEach((rowData) => {
       grid.appendChild(createCollectionCardTile(rowData));
     });
+    browser.appendChild(grid);
   }
-  browser.appendChild(grid);
 
   wrap.appendChild(browser);
+  if (deckContext) {
+    hideTablePager();
+    return;
+  }
   renderTablePager(totalRows, startIndex, pageRows.length);
 }
 
 function isCardLikeRow(rowData) {
-  const title = formatCellValue(readCellValue(rowData, "name")).trim();
+  const inferred = inferDeckEntryFromRow(rowData);
+  const title = formatCellValue(readCellValue(rowData, "name")).trim() || inferred.name;
   const scryfallId = formatCellValue(readFirstCellValue(rowData, ["scryfall_id", "scry_fall_id"])).trim();
   if (scryfallId) {
     return true;
@@ -310,6 +392,7 @@ function renderCardsToolbar(filteredCount, totalCount) {
     searchInput.value = UI_STATE.searchQuery;
     searchInput.addEventListener("input", () => {
       UI_STATE.searchQuery = searchInput.value || "";
+      persistCurrentViewState();
       renderCardsPage(1);
     });
   }
@@ -318,6 +401,7 @@ function renderCardsToolbar(filteredCount, totalCount) {
     sortSelect.value = UI_STATE.sortKey;
     sortSelect.addEventListener("change", () => {
       UI_STATE.sortKey = sortSelect.value || CARD_VIEW_SORT_KEYS.NAME_ASC;
+      persistCurrentViewState();
       renderCardsPage(1);
     });
   }
@@ -381,15 +465,11 @@ function createCollectionCardTile(rowData) {
 
   const meta = document.createElement("div");
   meta.classList.add("collection-card-meta");
-  const manaCost = formatCellValue(readCellValue(rowData, "mana_cost"));
   meta.innerHTML = `
     <p class="collection-card-name">${escapeHtml(formatMainCardTitle(rowData))}</p>
     <p class="collection-card-line">${escapeHtml(formatCardTileSubtitle(rowData))}</p>
   `;
-  const manaIcons = createCardTileManaIcons(manaCost);
-  if (manaIcons) {
-    meta.appendChild(manaIcons);
-  }
+  appendCardTileMana(meta, rowData);
   tile.appendChild(meta);
 
   return tile;
@@ -654,7 +734,47 @@ function normalizeRowObject(row) {
   if (Array.isArray(row) && row.length === 1 && row[0] && typeof row[0] === "object") {
     return row[0];
   }
-  return {};
+  if (Array.isArray(row)) {
+    if (row.length === 1) {
+      return { line: formatCellValue(row[0]) };
+    }
+    const out = {};
+    row.forEach((value, index) => {
+      out[`col_${index + 1}`] = value;
+    });
+    return out;
+  }
+  if (row == null) {
+    return {};
+  }
+  return {
+    line: String(row)
+  };
+}
+
+function sumCardQuantities(rows) {
+  const source = Array.isArray(rows) ? rows : [];
+  return source.reduce((sum, rowData) => sum + readCardQuantity(rowData), 0);
+}
+
+function deriveColumnsFromRows(rows) {
+  const sourceRows = Array.isArray(rows) ? rows : [];
+  const collected = [];
+  const seen = new Set();
+  sourceRows.forEach((row) => {
+    if (!row || typeof row !== "object") {
+      return;
+    }
+    Object.keys(row).forEach((key) => {
+      const normalized = String(key || "").trim();
+      if (!normalized || seen.has(normalized.toLowerCase())) {
+        return;
+      }
+      seen.add(normalized.toLowerCase());
+      collected.push(normalized);
+    });
+  });
+  return collected;
 }
 
 function readCellValue(row, col) {
@@ -706,8 +826,11 @@ function applyCardFiltersAndSorting(rows) {
   let filteredRows = sourceRows;
   if (query) {
     filteredRows = sourceRows.filter((rowData) => {
+      const inferred = inferDeckEntryFromRow(rowData);
       const lookup = [
+        inferred.name,
         readCellValue(rowData, "name"),
+        readCellValue(rowData, "line"),
         readCellValue(rowData, "type_line"),
         readCellValue(rowData, "set"),
         readCellValue(rowData, "set_code"),
@@ -754,7 +877,11 @@ function applyCardFiltersAndSorting(rows) {
 function readCardQuantity(rowData) {
   const quantityRaw = readFirstCellValue(rowData, ["quantity", "qty", "count", "owned"]);
   const quantity = Number.parseInt(String(quantityRaw || "").trim(), 10);
-  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+  if (Number.isFinite(quantity) && quantity > 0) {
+    return quantity;
+  }
+  const inferred = inferDeckEntryFromRow(rowData);
+  return inferred.quantity > 0 ? inferred.quantity : 1;
 }
 
 function formatCardTileSubtitle(rowData) {
@@ -787,13 +914,136 @@ function createCardTileManaIcons(manaCostText) {
   return wrap;
 }
 
+function appendCardTileMana(metaNode, rowData) {
+  if (!metaNode) {
+    return;
+  }
+
+  const rowMana = readRowManaCost(rowData);
+  const immediate = createCardTileManaIcons(rowMana);
+  if (immediate) {
+    metaNode.appendChild(immediate);
+    return;
+  }
+
+  const fallback = createCardTileColorIdentityIcons(rowData);
+  if (fallback) {
+    metaNode.appendChild(fallback);
+  }
+
+  hydrateCardTileManaFromScryfall(metaNode, rowData);
+}
+
+function readRowManaCost(rowData) {
+  return formatCellValue(readFirstCellValue(rowData, ["mana_cost", "manacost", "cost"])).trim();
+}
+
+function createCardTileColorIdentityIcons(rowData) {
+  const source = [
+    formatCellValue(readFirstCellValue(rowData, ["color_identity", "colors"])),
+    formatCellValue(readCellValue(rowData, "color"))
+  ]
+    .join(" ")
+    .toUpperCase();
+  const symbols = Array.from(new Set((source.match(/[WUBRG]/g) || [])));
+  if (symbols.length === 0) {
+    return null;
+  }
+
+  const wrap = document.createElement("div");
+  wrap.classList.add("collection-card-mana", "mana-cost-icons");
+  wrap.dataset.manaFallback = "color_identity";
+  symbols.forEach((symbol) => {
+    wrap.appendChild(createManaSymbol(symbol));
+  });
+  wrap.title = "Color identity";
+  return wrap;
+}
+
+function hydrateCardTileManaFromScryfall(metaNode, rowData) {
+  resolveCardManaCost(rowData)
+    .then((manaCost) => {
+      const normalized = String(manaCost || "").trim();
+      if (!normalized) {
+        return;
+      }
+
+      const manaIcons = createCardTileManaIcons(normalized);
+      if (!manaIcons) {
+        return;
+      }
+
+      const existing = metaNode.querySelector(".collection-card-mana");
+      if (existing && existing.dataset.manaFallback !== "color_identity") {
+        return;
+      }
+      if (existing) {
+        existing.replaceWith(manaIcons);
+      } else {
+        metaNode.appendChild(manaIcons);
+      }
+    })
+    .catch(() => {});
+}
+
+function resolveCardManaCost(rowData) {
+  const scryfallId = formatCellValue(readFirstCellValue(rowData, ["scryfall_id", "scry_fall_id"])).trim();
+  const inferred = inferDeckEntryFromRow(rowData);
+  const cardName = formatCellValue(readCellValue(rowData, "name")).trim() || inferred.name;
+  const cacheKey = scryfallId ? `id:${scryfallId}` : `name:${cardName.toLowerCase()}`;
+
+  if (!cacheKey || cacheKey === "name:") {
+    return Promise.resolve("");
+  }
+
+  const cached = TILE_MANA_CACHE.get(cacheKey);
+  if (cached != null) {
+    return Promise.resolve(cached);
+  }
+
+  const task = resolveCardManaCostFromApi(scryfallId, cardName)
+    .then((manaCost) => {
+      const normalized = String(manaCost || "").trim();
+      TILE_MANA_CACHE.set(cacheKey, normalized);
+      return normalized;
+    })
+    .catch(() => {
+      TILE_MANA_CACHE.set(cacheKey, "");
+      return "";
+    });
+
+  TILE_MANA_CACHE.set(cacheKey, task);
+  return task;
+}
+
+async function resolveCardManaCostFromApi(scryfallId, cardName) {
+  if (scryfallId) {
+    const byId = await fetchJson(`https://api.scryfall.com/cards/${encodeURIComponent(scryfallId)}`);
+    const manaCost = String(byId?.mana_cost || "").trim();
+    if (manaCost) {
+      return manaCost;
+    }
+  }
+
+  if (cardName) {
+    const byName = await fetchCardByName(cardName, "en");
+    const manaCost = String(byName?.mana_cost || "").trim();
+    if (manaCost) {
+      return manaCost;
+    }
+  }
+
+  return "";
+}
+
 function cardImageUrlFromRow(rowData) {
   const scryfallId = formatCellValue(readFirstCellValue(rowData, ["scryfall_id", "scry_fall_id"])).trim();
   if (scryfallId) {
     return `https://api.scryfall.com/cards/${encodeURIComponent(scryfallId)}?format=image&version=normal`;
   }
 
-  const cardName = formatCellValue(readCellValue(rowData, "name")).trim();
+  const inferred = inferDeckEntryFromRow(rowData);
+  const cardName = formatCellValue(readCellValue(rowData, "name")).trim() || inferred.name;
   if (!cardName) {
     return "";
   }
@@ -992,8 +1242,181 @@ function columnClassName(col) {
 }
 
 function formatMainCardTitle(rowData) {
+  const inferred = inferDeckEntryFromRow(rowData);
   const fallback = readFirstCellValue(rowData, ["scryfall_id", "scry_fall_id"]);
-  return formatCellValue(readCellValue(rowData, "name")) || formatCellValue(fallback) || "Carte";
+  return formatCellValue(readCellValue(rowData, "name")) || inferred.name || formatCellValue(fallback) || "Carte";
+}
+
+function inferDeckEntryFromRow(rowData) {
+  const explicitName = formatCellValue(readCellValue(rowData, "name")).trim();
+  const explicitQty = Number.parseInt(
+    String(readFirstCellValue(rowData, ["quantity", "qty", "count", "owned"]) || "").trim(),
+    10
+  );
+  if (explicitName) {
+    return {
+      name: explicitName,
+      quantity: Number.isFinite(explicitQty) && explicitQty > 0 ? explicitQty : 1
+    };
+  }
+
+  const rawLine = formatCellValue(readFirstCellValue(rowData, ["line", "card_line", "raw", "entry"])).trim();
+  if (!rawLine) {
+    return { name: "", quantity: 0 };
+  }
+
+  const stripped = rawLine.replace(/^SB:\s*/i, "").trim();
+  if (!stripped || /^(#|\/\/)/.test(stripped)) {
+    return { name: "", quantity: 0 };
+  }
+  if (/^(sideboard|commander|maybeboard|companion|deck|mainboard)\b/i.test(stripped)) {
+    return { name: "", quantity: 0 };
+  }
+
+  let quantity = 1;
+  let name = stripped;
+  const withQty = stripped.match(/^([0-9]+)\s*x?\s+(.+)$/i);
+  if (withQty) {
+    quantity = Number.parseInt(withQty[1], 10);
+    name = withQty[2].trim();
+  }
+
+  name = name
+    .replace(/\s+\([^)]+\)\s+[A-Za-z0-9-]+(?:\s*\*?[A-Za-z0-9]+)?\s*$/u, "")
+    .replace(/\s+\[[^\]]+\]\s*$/u, "")
+    .replace(/\s+\*\w+\s*$/u, "")
+    .trim();
+
+  if (!name) {
+    return { name: "", quantity: 0 };
+  }
+
+  return {
+    name,
+    quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1
+  };
+}
+
+function annotateDeckRowsWithZone(rows) {
+  const source = Array.isArray(rows) ? rows : [];
+  const annotated = [];
+  let currentZone = "main";
+
+  source.forEach((rowData) => {
+    const row = rowData && typeof rowData === "object" ? { ...rowData } : normalizeRowObject(rowData);
+    const zoneMarker = detectDeckZoneMarker(row);
+    if (zoneMarker) {
+      currentZone = zoneMarker;
+      row.__deck_zone = currentZone;
+      row.__deck_zone_marker = true;
+      annotated.push(row);
+      return;
+    }
+
+    const explicitZone = explicitDeckZoneFromRow(row);
+    row.__deck_zone = explicitZone || currentZone;
+    annotated.push(row);
+  });
+
+  return annotated;
+}
+
+function detectDeckZoneMarker(rowData) {
+  const line = formatCellValue(readFirstCellValue(rowData, ["line", "card_line", "raw", "entry", "name"])).trim();
+  if (!line) {
+    return "";
+  }
+  const normalized = line.toLowerCase().replace(/\s+/g, " ").trim();
+  if (/^(sideboard|sb|side)\b:?$/i.test(normalized)) {
+    return "side";
+  }
+  if (/^(mainboard|main deck|deck|maindeck)\b:?$/i.test(normalized)) {
+    return "main";
+  }
+  return "";
+}
+
+function explicitDeckZoneFromRow(rowData) {
+  const candidates = [
+    readFirstCellValue(rowData, ["deck_zone", "zone", "section", "board", "group"]),
+    readFirstCellValue(rowData, ["is_sideboard", "sideboard"])
+  ];
+  const direct = formatCellValue(candidates[0]).toLowerCase().trim();
+  if (direct) {
+    if (/side|sb/.test(direct)) {
+      return "side";
+    }
+    if (/main|deck/.test(direct)) {
+      return "main";
+    }
+  }
+
+  const sideFlag = formatCellValue(candidates[1]).toLowerCase().trim();
+  if (["1", "true", "yes", "y"].includes(sideFlag)) {
+    return "side";
+  }
+  if (["0", "false", "no", "n"].includes(sideFlag)) {
+    return "main";
+  }
+
+  const rawLine = formatCellValue(readFirstCellValue(rowData, ["line", "card_line", "raw", "entry"])).trim();
+  if (/^sb:\s*/i.test(rawLine)) {
+    return "side";
+  }
+  return "";
+}
+
+function splitDeckRowsByZone(rows) {
+  const source = Array.isArray(rows) ? rows : [];
+  const grouped = { main: [], side: [] };
+  source.forEach((rowData) => {
+    if (!isCardLikeRow(rowData)) {
+      return;
+    }
+    const zone = readDeckZone(rowData);
+    if (zone === "side") {
+      grouped.side.push(rowData);
+    } else {
+      grouped.main.push(rowData);
+    }
+  });
+  return grouped;
+}
+
+function readDeckZone(rowData) {
+  const zone = String(rowData?.__deck_zone || "").toLowerCase().trim();
+  if (zone === "side") {
+    return "side";
+  }
+  return "main";
+}
+
+function createDeckCardSection(title, rows, zone) {
+  const section = document.createElement("section");
+  section.classList.add("deck-card-section", zone === "side" ? "is-side" : "is-main");
+
+  const titleRow = document.createElement("div");
+  titleRow.classList.add("deck-card-section-head");
+  const literalCount = sumCardQuantities(rows);
+  titleRow.innerHTML = `
+    <h3>${escapeHtml(title)}</h3>
+    <span>${literalCount} cartes</span>
+  `;
+  section.appendChild(titleRow);
+
+  const grid = document.createElement("div");
+  grid.classList.add("collection-card-grid", "deck-card-grid");
+  rows.forEach((rowData) => {
+    const tile = createCollectionCardTile(rowData);
+    if (zone === "side") {
+      tile.classList.add("is-side");
+    } else {
+      tile.classList.add("is-main");
+    }
+    grid.appendChild(tile);
+  });
+  section.appendChild(grid);
+  return section;
 }
 
 function formatPrimaryText(rowData) {
@@ -1259,3 +1682,5 @@ function loadSavedLanguage() {
 window.renderCollection = renderCollection;
 window.getCollectionLanguage = getCollectionLanguage;
 window.setCollectionLanguage = setCollectionLanguage;
+window.bindRowPreviewEvents = bindRowPreviewEvents;
+window.renderManaCostCell = renderManaCostCell;

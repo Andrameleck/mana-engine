@@ -8,7 +8,9 @@ import {
 import {
   renderCollection,
   getCollectionLanguage,
-  setCollectionLanguage
+  setCollectionLanguage,
+  bindRowPreviewEvents,
+  renderManaCostCell
 } from "./ui.js";
 
 (function bootstrap() {
@@ -33,7 +35,14 @@ import {
     collectionPayloadById: {},
     selectedCollectionId: null,
     decks: [],
-    selectedDeckId: null
+    selectedDeckId: null,
+    strategy: {
+      seedName: "",
+      directLimit: 12,
+      groupLimit: 6,
+      modelCache: new Map(),
+      lastCollectionId: null
+    }
   };
 
   const DECK_STORAGE_KEY = "mtgcodex_ui_decks_v1";
@@ -41,6 +50,10 @@ import {
   const DECK_STATS_STATE = {
     requestToken: 0,
     metadataCache: new Map()
+  };
+  const DECK_ANALYSIS_STATE = {
+    requestToken: 0,
+    activePane: "stats"
   };
 
   const nodes = {
@@ -66,7 +79,63 @@ import {
       fileInput: document.getElementById("deck-source-file"),
       pickFileButton: document.getElementById("deck-pick-file"),
       list: document.getElementById("decks-list")
+    },
+    strategy: {
+      sourceMeta: document.getElementById("strategy-source-meta"),
+      seedInput: document.getElementById("strategy-seed-input"),
+      seedList: document.getElementById("strategy-seed-list"),
+      directLimitInput: document.getElementById("strategy-direct-limit"),
+      groupLimitInput: document.getElementById("strategy-group-limit"),
+      runButton: document.getElementById("strategy-run-btn"),
+      status: document.getElementById("strategy-status"),
+      directList: document.getElementById("strategy-direct-list"),
+      groupList: document.getElementById("strategy-group-list")
     }
+  };
+
+  const STRATEGY_FEATURE_PATTERNS = [
+    { id: "graveyard", weight: 1, regex: /\bgraveyard\b|\bmill\b|\bdredge\b|descend/i },
+    { id: "reanimate", weight: 2, regex: /return target .*graveyard.*battlefield|return .* from your graveyard to the battlefield|\breanimate\b|\bresurrect\b/i },
+    { id: "entomb_line", weight: 2, regex: /search your library .* put .* graveyard|put .* from your library .* graveyard/i },
+    { id: "poison_toxic", weight: 2, regex: /\btoxic\b|\bpoison counter\b|\binfect\b|\bcorrupted\b/i },
+    { id: "proliferate", weight: 2, regex: /\bproliferate\b/i },
+    { id: "discard", weight: 1, regex: /\bdiscard\b|loot|connive/i },
+    { id: "draw", weight: 1, regex: /\bdraw\b/i },
+    { id: "sacrifice", weight: 1, regex: /\bsacrifice\b/i },
+    { id: "deathtouch", weight: 1, regex: /\bdeathtouch\b/i },
+    { id: "combat_evasion", weight: 1, regex: /\bflying\b|\btrample\b|\bmenace\b|can't be blocked/i },
+    { id: "fight_bite", weight: 1, regex: /target creature you control deals damage|fight target/i },
+    { id: "etb", weight: 1, regex: /enters the battlefield|\betb\b/i },
+    { id: "token", weight: 1, regex: /\btoken\b|create .* token/i },
+    { id: "removal", weight: 1, regex: /destroy target|exile target|sacrifice target|counter target/i },
+    { id: "tutor", weight: 1, regex: /search your library|surveil|tutor/i },
+    { id: "recursion", weight: 1, regex: /return .* from your graveyard to your hand|flashback|escape/i },
+    { id: "combo_copy", weight: 2, regex: /copy target spell|copy that spell|magecraft|when you cast or copy/i },
+    { id: "combo_lifeloss", weight: 1, regex: /each opponent loses|target opponent loses|opponents lose|lose life/i },
+    { id: "combo_worldgorger", weight: 2, regex: /worldgorger dragon|exile all other permanents you control/i },
+    { id: "combo_chain_smog", weight: 2, regex: /target player discards two cards|that player may copy this spell|you may copy this spell/i }
+  ];
+  const STRATEGY_FEATURE_LABELS = {
+    graveyard: "Graveyard",
+    reanimate: "Reanimate",
+    entomb_line: "Entomb lines",
+    poison_toxic: "Poison/Toxic",
+    proliferate: "Proliferate",
+    discard: "Discard",
+    draw: "Card draw",
+    sacrifice: "Sacrifice",
+    deathtouch: "Deathtouch",
+    combat_evasion: "Combat evasion",
+    fight_bite: "Fight/Bite",
+    etb: "ETB",
+    token: "Tokens",
+    removal: "Removal",
+    tutor: "Tutor",
+    recursion: "Recursion",
+    combo_copy: "Copy spells",
+    combo_lifeloss: "Life loss",
+    combo_worldgorger: "Worldgorger line",
+    combo_chain_smog: "Chain of Smog line"
   };
 
   function applyLanguageButtonState(language) {
@@ -142,6 +211,49 @@ import {
     button.setAttribute("aria-label", text);
   }
 
+  function bindStrategyControls() {
+    const strategyNodes = nodes.strategy;
+    if (!strategyNodes.seedInput || !strategyNodes.runButton) {
+      return;
+    }
+
+    strategyNodes.seedInput.addEventListener("input", () => {
+      state.strategy.seedName = strategyNodes.seedInput.value || "";
+    });
+
+    strategyNodes.seedInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        runStrategyComputation();
+      }
+    });
+
+    strategyNodes.directLimitInput?.addEventListener("change", () => {
+      state.strategy.directLimit = clampInt(strategyNodes.directLimitInput.value, 4, 24, 12);
+    });
+
+    strategyNodes.groupLimitInput?.addEventListener("change", () => {
+      state.strategy.groupLimit = clampInt(strategyNodes.groupLimitInput.value, 3, 12, 6);
+    });
+
+    strategyNodes.runButton.addEventListener("click", () => {
+      runStrategyComputation();
+    });
+  }
+
+  function bindDeckAnalysisControls() {
+    if (!nodes.deckStatsContent) {
+      return;
+    }
+    nodes.deckStatsContent.addEventListener("click", (event) => {
+      const trigger = event.target.closest("[data-action='analyze-deck']");
+      if (!trigger) {
+        return;
+      }
+      runDeckRecommendationAnalysis();
+    });
+  }
+
   function inferDeckSourceType(fileName) {
     const lowerName = String(fileName || "").toLowerCase();
     if (lowerName.endsWith(".db") || lowerName.endsWith(".sqlite") || lowerName.endsWith(".sqlite3")) {
@@ -169,7 +281,7 @@ import {
     renderActiveTabTable();
   }
 
-  function payloadForNamedView(payload, name, fallbackSummary, viewMode = "table") {
+  function payloadForNamedView(payload, name, fallbackSummary, viewMode = "table", uiContext = "") {
     if (!payload) {
       return {
         ok: false,
@@ -181,7 +293,8 @@ import {
       ...payload,
       table: payload.table || name,
       path: payload.path || fallbackSummary,
-      view_mode: viewMode
+      view_mode: viewMode,
+      ui_context: uiContext || ""
     };
   }
 
@@ -245,7 +358,10 @@ import {
     }
     const payload = await getStoredCollection(collectionId);
     state.collectionPayloadById[collectionId] = payload;
-    if (state.activeTab === "collections" && state.selectedCollectionId === collectionId) {
+    if (
+      (state.activeTab === "collections" || state.activeTab === "strategy") &&
+      state.selectedCollectionId === collectionId
+    ) {
       renderActiveTabTable();
     }
   }
@@ -386,7 +502,7 @@ import {
         return;
       }
 
-      renderCollection(payloadForNamedView(payload, meta?.name || "Collection", "collection/store", "cards"));
+      renderCollection(payloadForNamedView(payload, meta?.name || "Collection", "collection/store", "cards", "collections"));
       renderDeckStatsPanel(null);
       return;
     }
@@ -402,17 +518,33 @@ import {
         renderDeckStatsPanel(null);
         return;
       }
-      renderCollection(payloadForNamedView(selected.payload, selected.name, "deck/local", "cards"));
+      renderCollection(payloadForNamedView(selected.payload, selected.name, "deck/local", "cards", "decks"));
       renderDeckStatsPanel(selected);
       return;
     }
 
     if (state.activeTab === "strategy") {
-      renderCollection({
-        ok: false,
-        table: "Strategy",
-        error: "Module Strategy en construction."
-      });
+      const meta = state.collections.find((entry) => entry.id === state.selectedCollectionId);
+      const payload = state.selectedCollectionId
+        ? state.collectionPayloadById[state.selectedCollectionId]
+        : null;
+
+      if (payload && payload.ok === true) {
+        renderCollection(payloadForNamedView(
+          payload,
+          meta?.name || "Collection",
+          "collection/store",
+          "cards",
+          "strategy"
+        ));
+      } else {
+        renderCollection({
+          ok: false,
+          table: "Strategy",
+          error: "Selectionne une collection chargee pour calculer les synergies."
+        });
+      }
+      renderStrategyPanel(payload, meta);
       renderDeckStatsPanel(null);
       return;
     }
@@ -439,6 +571,7 @@ import {
 
     if (!isDeckTab) {
       DECK_STATS_STATE.requestToken += 1;
+      DECK_ANALYSIS_STATE.requestToken += 1;
       content.classList.add("muted");
       content.classList.remove("is-loading");
       content.innerHTML = "Selectionne un deck pour afficher ses statistiques.";
@@ -447,6 +580,7 @@ import {
 
     if (!deckEntry || deckEntry.payload?.ok !== true) {
       DECK_STATS_STATE.requestToken += 1;
+      DECK_ANALYSIS_STATE.requestToken += 1;
       content.classList.add("muted");
       content.classList.remove("is-loading");
       content.innerHTML = "Aucun deck selectionne.";
@@ -460,6 +594,8 @@ import {
     content.classList.remove("muted");
     content.classList.remove("is-loading");
     content.innerHTML = deckStatsMarkup(stats);
+    initializeDeckStatsTabs(content);
+    renderDeckAnalysisState(deckEntry, null);
 
     const needsMetadata = deckEntries.some((entry) => entryNeedsMetadata(entry.row));
     if (!needsMetadata) {
@@ -475,13 +611,1246 @@ import {
         const enrichedStats = computeDeckStats(enrichedEntries);
         content.classList.remove("is-loading");
         content.innerHTML = deckStatsMarkup(enrichedStats);
+        initializeDeckStatsTabs(content);
+        renderDeckAnalysisState(deckEntry, null);
       })
       .catch(() => {
         if (requestToken !== DECK_STATS_STATE.requestToken) {
           return;
         }
         content.classList.remove("is-loading");
+        renderDeckAnalysisState(deckEntry, null);
       });
+  }
+
+  function initializeDeckStatsTabs(container) {
+    if (!container) {
+      return;
+    }
+    container.querySelectorAll("[data-deck-pane-tab]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const pane = String(button.dataset.deckPaneTab || "stats").toLowerCase();
+        setDeckStatsPane(container, pane);
+      });
+    });
+    setDeckStatsPane(container, DECK_ANALYSIS_STATE.activePane || "stats");
+  }
+
+  function setDeckStatsPane(container, paneName) {
+    if (!container) {
+      return;
+    }
+    const pane = paneName === "analysis" ? "analysis" : "stats";
+    DECK_ANALYSIS_STATE.activePane = pane;
+
+    container.querySelectorAll("[data-deck-pane-tab]").forEach((button) => {
+      const isActive = String(button.dataset.deckPaneTab || "").toLowerCase() === pane;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-selected", isActive ? "true" : "false");
+      button.tabIndex = isActive ? 0 : -1;
+    });
+
+    container.querySelectorAll("[data-deck-pane]").forEach((panel) => {
+      const isActive = String(panel.dataset.deckPane || "").toLowerCase() === pane;
+      panel.classList.toggle("is-active", isActive);
+    });
+  }
+
+  function renderDeckAnalysisState(deckEntry, analysisResult) {
+    const runButton = document.getElementById("deck-analyze-btn");
+    const statusNode = document.getElementById("deck-analysis-status");
+    const mechanicsNode = document.getElementById("deck-analysis-mechanics");
+    const upgradeNode = document.getElementById("deck-analysis-upgrade");
+    const variationNode = document.getElementById("deck-analysis-variation");
+    if (!runButton || !statusNode || !mechanicsNode || !upgradeNode || !variationNode) {
+      return;
+    }
+
+    runButton.textContent = "Analyser";
+    runButton.disabled = false;
+
+    const collectionMeta = state.collections.find((entry) => entry.id === state.selectedCollectionId) || null;
+    const collectionPayload = state.selectedCollectionId
+      ? state.collectionPayloadById[state.selectedCollectionId]
+      : null;
+    const hasCollection = Boolean(collectionPayload && collectionPayload.ok === true);
+
+    if (!deckEntry || !deckEntry.payload || deckEntry.payload.ok !== true) {
+      runButton.disabled = true;
+      statusNode.textContent = "Selectionne un deck pour lancer une analyse.";
+      mechanicsNode.innerHTML = "";
+      upgradeNode.innerHTML = '<p class="muted">Aucune proposition.</p>';
+      variationNode.innerHTML = '<p class="muted">Aucune proposition.</p>';
+      return;
+    }
+
+    if (!hasCollection) {
+      runButton.disabled = true;
+      statusNode.textContent = "Selectionne une collection chargee pour proposer des cartes.";
+      mechanicsNode.innerHTML = "";
+      upgradeNode.innerHTML = '<p class="muted">Choisis une collection active.</p>';
+      variationNode.innerHTML = '<p class="muted">Choisis une collection active.</p>';
+      return;
+    }
+
+    if (!analysisResult) {
+      const sourceName = collectionMeta?.name || "collection active";
+      statusNode.textContent = `Pret pour analyse. Source recommandations: ${sourceName}.`;
+      mechanicsNode.innerHTML = "";
+      upgradeNode.innerHTML = '<p class="muted">Clique sur Analyser pour proposer des cartes d amelioration.</p>';
+      variationNode.innerHTML = '<p class="muted">Clique sur Analyser pour proposer des cartes de variation.</p>';
+      return;
+    }
+
+    const mechanicsMarkup = (analysisResult.mechanics || [])
+      .map((item) => `<span class="deck-mechanic-chip">${escapeHtml(item.label)} ${Math.round(item.share * 100)}%</span>`)
+      .join("");
+    mechanicsNode.innerHTML = mechanicsMarkup || '<p class="muted">Aucune mecanique dominante detectee.</p>';
+
+    renderDeckRecommendationCards(
+      upgradeNode,
+      analysisResult.upgrades,
+      "improveScore",
+      "Aucune amelioration pertinente trouvee."
+    );
+    renderDeckRecommendationCards(
+      variationNode,
+      analysisResult.variants,
+      "variationScore",
+      "Aucune variation pertinente trouvee."
+    );
+
+    const sourceName = collectionMeta?.name || "collection active";
+    statusNode.textContent = `Analyse terminee. ${analysisResult.upgrades.length} ameliorations et ${analysisResult.variants.length} variations proposees depuis ${sourceName}.`;
+  }
+
+  function renderDeckRecommendationCards(target, entries, scoreField, emptyMessage) {
+    if (!target) {
+      return;
+    }
+    if (!Array.isArray(entries) || entries.length === 0) {
+      target.innerHTML = `<p class="muted">${escapeHtml(emptyMessage)}</p>`;
+      return;
+    }
+
+    target.innerHTML = "";
+    const fragment = document.createDocumentFragment();
+    entries.forEach((entry, index) => {
+      const scoreValue = Number.isFinite(entry?.[scoreField]) ? entry[scoreField] : 0;
+      const reason = String(entry?.reason || "").trim();
+      const metaLine = reason
+        ? `#${index + 1} | score ${formatDecimal(scoreValue)} | ${reason}`
+        : `#${index + 1} | score ${formatDecimal(scoreValue)}`;
+      fragment.appendChild(createStrategyCardElement(entry.card, metaLine));
+    });
+    target.appendChild(fragment);
+  }
+
+  async function runDeckRecommendationAnalysis() {
+    const runButton = document.getElementById("deck-analyze-btn");
+    const statusNode = document.getElementById("deck-analysis-status");
+    if (!runButton || !statusNode) {
+      return;
+    }
+
+    const deckEntry = state.decks.find((entry) => entry.id === state.selectedDeckId);
+    if (!deckEntry || deckEntry.payload?.ok !== true) {
+      renderDeckAnalysisState(null, null);
+      return;
+    }
+
+    const collectionId = state.selectedCollectionId;
+    const collectionPayload = collectionId ? state.collectionPayloadById[collectionId] : null;
+    if (!collectionPayload || collectionPayload.ok !== true) {
+      renderDeckAnalysisState(deckEntry, null);
+      return;
+    }
+
+    const requestToken = ++DECK_ANALYSIS_STATE.requestToken;
+    setDeckStatsPane(nodes.deckStatsContent, "analysis");
+    runButton.disabled = true;
+    runButton.textContent = "Analyse...";
+    statusNode.textContent = "Analyse du deck en cours...";
+
+    try {
+      let deckEntries = buildDeckEntries(deckEntry.payload);
+      if (!deckEntries.length) {
+        renderDeckAnalysisState(deckEntry, {
+          mechanics: [],
+          upgrades: [],
+          variants: []
+        });
+        return;
+      }
+
+      if (deckEntries.some((entry) => entryNeedsAnalysisMetadata(entry.row))) {
+        const enriched = await enrichDeckEntriesForAnalysis(deckEntries, requestToken);
+        if (!enriched || requestToken !== DECK_ANALYSIS_STATE.requestToken) {
+          return;
+        }
+        deckEntries = enriched;
+      }
+
+      if (requestToken !== DECK_ANALYSIS_STATE.requestToken) {
+        return;
+      }
+
+      const deckRows = deckEntries.map((entry) => ({
+        ...entry.row,
+        quantity: entry.quantity
+      }));
+      const deckModel = buildStrategyModelFromRows(deckRows);
+      const collectionModel = getStrategyModelForCollection(collectionId, collectionPayload);
+
+      const analysis = computeDeckRecommendationAnalysis(deckModel.cards, collectionModel.cards);
+      if (requestToken !== DECK_ANALYSIS_STATE.requestToken) {
+        return;
+      }
+      renderDeckAnalysisState(deckEntry, analysis);
+    } catch (_) {
+      if (requestToken !== DECK_ANALYSIS_STATE.requestToken) {
+        return;
+      }
+      statusNode.textContent = "Analyse impossible pour ce deck.";
+    } finally {
+      if (requestToken === DECK_ANALYSIS_STATE.requestToken) {
+        runButton.disabled = false;
+        runButton.textContent = "Analyser";
+      }
+    }
+  }
+
+  function entryNeedsAnalysisMetadata(row) {
+    const needsBase = entryNeedsMetadata(row);
+    const hasOracle = Boolean(rowValue(row, ["oracle_text", "printed_text", "card_text", "rules_text"]).trim());
+    const hasScryfall = Boolean(rowValue(row, ["scryfall_id", "scry_fall_id"]).trim());
+    return needsBase || !hasOracle || !hasScryfall;
+  }
+
+  async function enrichDeckEntriesForAnalysis(entries, requestToken) {
+    const uniqueNames = Array.from(new Set(
+      entries
+        .map((entry) => String(entry.name || "").trim())
+        .filter(Boolean)
+    )).slice(0, 120);
+
+    const metadataByName = new Map();
+    for (let i = 0; i < uniqueNames.length; i += 8) {
+      if (requestToken !== DECK_ANALYSIS_STATE.requestToken) {
+        return null;
+      }
+      const chunk = uniqueNames.slice(i, i + 8);
+      const chunkData = await Promise.all(chunk.map((name) => fetchDeckCardMetadata(name)));
+      chunk.forEach((name, index) => {
+        if (chunkData[index]) {
+          metadataByName.set(name, chunkData[index]);
+        }
+      });
+    }
+
+    if (requestToken !== DECK_ANALYSIS_STATE.requestToken) {
+      return null;
+    }
+
+    return entries.map((entry) => {
+      const metadata = metadataByName.get(entry.name);
+      if (!metadata) {
+        return entry;
+      }
+
+      const mergedRow = { ...entry.row };
+      if (!rowValue(mergedRow, ["type_line", "type"]) && metadata.type_line) {
+        mergedRow.type_line = metadata.type_line;
+      }
+      if (!rowValue(mergedRow, ["mana_cost", "manacost", "mana"]) && metadata.mana_cost) {
+        mergedRow.mana_cost = metadata.mana_cost;
+      }
+      if (!rowValue(mergedRow, ["color_identity"]) && metadata.color_identity.length > 0) {
+        mergedRow.color_identity = metadata.color_identity.join("");
+      }
+      if (!rowValue(mergedRow, ["colors"]) && metadata.colors.length > 0) {
+        mergedRow.colors = metadata.colors.join("");
+      }
+      if (!rowValue(mergedRow, ["oracle_text", "printed_text", "card_text", "rules_text"]) && metadata.oracle_text) {
+        mergedRow.oracle_text = metadata.oracle_text;
+      }
+      if (!rowValue(mergedRow, ["keywords", "abilities", "keyword"]) && metadata.keywords.length > 0) {
+        mergedRow.keywords = metadata.keywords.join(", ");
+      }
+      if (!rowValue(mergedRow, ["scryfall_id", "scry_fall_id"]) && metadata.scryfall_id) {
+        mergedRow.scryfall_id = metadata.scryfall_id;
+      }
+      if (!rowValue(mergedRow, ["set_code", "set"]) && metadata.set_code) {
+        mergedRow.set_code = metadata.set_code;
+      }
+      if (!rowValue(mergedRow, ["collector_number"]) && metadata.collector_number) {
+        mergedRow.collector_number = metadata.collector_number;
+      }
+
+      return {
+        ...entry,
+        row: mergedRow
+      };
+    });
+  }
+
+  function computeDeckRecommendationAnalysis(deckCards, collectionCards) {
+    const deckPool = Array.isArray(deckCards) ? deckCards.filter((card) => card && card.key) : [];
+    const collectionPool = Array.isArray(collectionCards) ? collectionCards.filter((card) => card && card.key) : [];
+    if (!deckPool.length || !collectionPool.length) {
+      return { mechanics: [], upgrades: [], variants: [] };
+    }
+
+    const featureProfile = {};
+    deckPool.forEach((card) => {
+      const quantity = Math.max(1, Number(card.quantity) || 1);
+      Object.keys(card.features || {}).forEach((featureId) => {
+        const value = Number(card.features[featureId] || 0);
+        if (value <= 0) {
+          return;
+        }
+        featureProfile[featureId] = (featureProfile[featureId] || 0) + (value * quantity);
+      });
+    });
+
+    const totalFeatureWeight = Object.values(featureProfile).reduce((sum, value) => sum + value, 0);
+    const mechanics = Object.keys(featureProfile)
+      .map((featureId) => ({
+        id: featureId,
+        label: strategyFeatureLabel(featureId),
+        value: featureProfile[featureId],
+        share: totalFeatureWeight > 0 ? featureProfile[featureId] / totalFeatureWeight : 0
+      }))
+      .filter((entry) => entry.value > 0)
+      .sort((left, right) => right.value - left.value)
+      .slice(0, 8);
+
+    const deckCore = deckPool
+      .map((card) => {
+        let score = 0;
+        deckPool.forEach((other) => {
+          if (other.key === card.key) {
+            return;
+          }
+          const link = strategySimilarity(card, other);
+          const quantityWeight = Math.min(2, Math.max(1, Number(other.quantity) || 1));
+          score += link.score * quantityWeight;
+        });
+        return { card, score };
+      })
+      .sort((left, right) => {
+        if (Math.abs(right.score - left.score) > 1e-9) {
+          return right.score - left.score;
+        }
+        return left.card.name.localeCompare(right.card.name);
+      });
+
+    const coreAnchors = deckCore.slice(0, Math.min(6, deckCore.length)).map((entry) => entry.card);
+    const deckKeySet = new Set(deckPool.map((card) => card.key));
+    const topMechanicSet = new Set(mechanics.slice(0, 3).map((entry) => entry.id));
+    const profileKeys = new Set(Object.keys(featureProfile));
+
+    const scored = [];
+    collectionPool.forEach((candidate) => {
+      if (deckKeySet.has(candidate.key)) {
+        return;
+      }
+
+      const profileScore = cosineSimilaritySparse(featureProfile, candidate.features || {});
+      let bestLink = { score: 0, anchorName: "" };
+      coreAnchors.forEach((anchorCard) => {
+        const link = strategySimilarity(anchorCard, candidate);
+        if (link.score > bestLink.score) {
+          bestLink = { score: link.score, anchorName: anchorCard.name };
+        }
+      });
+
+      const improveScore = clampScore(profileScore * 0.62 + bestLink.score * 0.38);
+      if (improveScore < 0.08) {
+        return;
+      }
+
+      const candidateFeatures = Object.keys(candidate.features || {})
+        .filter((featureId) => (candidate.features[featureId] || 0) > 0)
+        .sort((left, right) => (candidate.features[right] || 0) - (candidate.features[left] || 0));
+      const dominantFeature = candidateFeatures[0] || "";
+      const offplan = dominantFeature ? !topMechanicSet.has(dominantFeature) : false;
+      const novelty = Math.max(0, 1 - bestLink.score);
+      const variationScore = clampScore(improveScore * 0.68 + novelty * 0.24 + (offplan ? 0.08 : 0));
+
+      const sharedFeatures = candidateFeatures
+        .filter((featureId) => profileKeys.has(featureId))
+        .slice(0, 2)
+        .map((featureId) => strategyFeatureLabel(featureId));
+
+      const reasonParts = [];
+      if (sharedFeatures.length > 0) {
+        reasonParts.push(`match ${sharedFeatures.join(" + ")}`);
+      }
+      if (bestLink.anchorName) {
+        reasonParts.push(`lien ${bestLink.anchorName}`);
+      }
+      if (offplan) {
+        reasonParts.push("angle alternatif");
+      }
+
+      scored.push({
+        card: candidate,
+        improveScore,
+        variationScore,
+        reason: reasonParts.join(" | ")
+      });
+    });
+
+    const upgrades = scored
+      .slice()
+      .sort((left, right) => {
+        if (Math.abs(right.improveScore - left.improveScore) > 1e-9) {
+          return right.improveScore - left.improveScore;
+        }
+        return left.card.name.localeCompare(right.card.name);
+      })
+      .slice(0, 10);
+
+    const usedKeys = new Set(upgrades.map((entry) => entry.card.key));
+    const variants = scored
+      .filter((entry) => !usedKeys.has(entry.card.key))
+      .sort((left, right) => {
+        if (Math.abs(right.variationScore - left.variationScore) > 1e-9) {
+          return right.variationScore - left.variationScore;
+        }
+        return left.card.name.localeCompare(right.card.name);
+      })
+      .slice(0, 10);
+
+    return { mechanics, upgrades, variants };
+  }
+
+  function strategyFeatureLabel(featureId) {
+    const key = String(featureId || "").trim();
+    if (!key) {
+      return "";
+    }
+    if (STRATEGY_FEATURE_LABELS[key]) {
+      return STRATEGY_FEATURE_LABELS[key];
+    }
+    return key
+      .replaceAll("_", " ")
+      .replace(/\b\w/g, (match) => match.toUpperCase());
+  }
+
+  function renderStrategyPanel(payload, collectionMeta) {
+    const strategyNodes = nodes.strategy;
+    if (!strategyNodes.sourceMeta || !strategyNodes.seedInput) {
+      return;
+    }
+
+    const collectionName = collectionMeta?.name || "Collection";
+    if (!payload || payload.ok !== true) {
+      strategyNodes.sourceMeta.textContent = "Selectionne un dossier collection charge pour activer le calcul.";
+      strategyNodes.status.textContent = "Aucune source disponible.";
+      strategyNodes.directList.innerHTML = '<p class="muted">Aucun resultat.</p>';
+      strategyNodes.groupList.innerHTML = '<p class="muted">Aucun resultat.</p>';
+      strategyNodes.seedList.innerHTML = "";
+      return;
+    }
+
+    const model = getStrategyModelForCollection(state.selectedCollectionId, payload);
+    strategyNodes.sourceMeta.textContent = `${collectionName} | ${model.cards.length} cartes analysees`;
+
+    const currentCollectionChanged = state.strategy.lastCollectionId !== state.selectedCollectionId;
+    state.strategy.lastCollectionId = state.selectedCollectionId;
+
+    if (currentCollectionChanged) {
+      state.strategy.seedName = "";
+      strategyNodes.seedInput.value = "";
+      strategyNodes.directList.innerHTML = '<p class="muted">Lance un calcul pour voir les synergies directes.</p>';
+      strategyNodes.groupList.innerHTML = '<p class="muted">Lance un calcul pour voir les groupes de cartes.</p>';
+      strategyNodes.status.textContent = "Choisis une carte seed puis clique sur Calculer.";
+    }
+
+    const directLimit = clampInt(strategyNodes.directLimitInput?.value, 4, 24, 12);
+    const groupLimit = clampInt(strategyNodes.groupLimitInput?.value, 3, 12, 6);
+    state.strategy.directLimit = directLimit;
+    state.strategy.groupLimit = groupLimit;
+
+    if (strategyNodes.directLimitInput) {
+      strategyNodes.directLimitInput.value = String(directLimit);
+    }
+    if (strategyNodes.groupLimitInput) {
+      strategyNodes.groupLimitInput.value = String(groupLimit);
+    }
+
+    const maxOptions = 800;
+    const optionsMarkup = model.cards
+      .slice(0, maxOptions)
+      .map((card) => `<option value="${escapeHtml(card.name)}"></option>`)
+      .join("");
+    strategyNodes.seedList.innerHTML = optionsMarkup;
+  }
+
+  function runStrategyComputation() {
+    const strategyNodes = nodes.strategy;
+    if (!strategyNodes.seedInput || !strategyNodes.status) {
+      return;
+    }
+
+    const collectionId = state.selectedCollectionId;
+    const payload = collectionId ? state.collectionPayloadById[collectionId] : null;
+    if (!payload || payload.ok !== true) {
+      strategyNodes.status.textContent = "Charge d'abord une collection pour calculer les synergies.";
+      return;
+    }
+
+    const model = getStrategyModelForCollection(collectionId, payload);
+    if (!model.cards.length) {
+      strategyNodes.status.textContent = "Collection vide ou cartes non reconnues.";
+      strategyNodes.directList.innerHTML = '<p class="muted">Aucun resultat.</p>';
+      strategyNodes.groupList.innerHTML = '<p class="muted">Aucun resultat.</p>';
+      return;
+    }
+
+    const rawSeed = String(strategyNodes.seedInput.value || state.strategy.seedName || "").trim();
+    if (!rawSeed) {
+      strategyNodes.status.textContent = "Saisis une carte seed (ex: Entomb).";
+      return;
+    }
+
+    const seedCard = resolveSeedCard(rawSeed, model.cards);
+    if (!seedCard) {
+      strategyNodes.status.textContent = `Carte "${rawSeed}" introuvable dans la collection.`;
+      return;
+    }
+
+    state.strategy.seedName = seedCard.name;
+    strategyNodes.seedInput.value = seedCard.name;
+
+    const directLimit = clampInt(strategyNodes.directLimitInput?.value, 4, 24, state.strategy.directLimit);
+    const groupLimit = clampInt(strategyNodes.groupLimitInput?.value, 3, 12, state.strategy.groupLimit);
+    state.strategy.directLimit = directLimit;
+    state.strategy.groupLimit = groupLimit;
+
+    const direct = computeDirectSynergies(seedCard, model.cards, directLimit);
+    const groups = computeSynergyGroups(seedCard, direct, model.cards, groupLimit);
+
+    renderDirectSynergyCards(direct, seedCard.name);
+    renderGroupCards(groups, seedCard.name);
+
+    strategyNodes.status.textContent = `${seedCard.name}: ${direct.length} synergies directes, ${groups.length} groupes construits.`;
+  }
+
+  function getStrategyModelForCollection(collectionId, payload) {
+    const cache = state.strategy.modelCache;
+    const cacheKey = String(collectionId || "__none__");
+    if (cache.has(cacheKey)) {
+      return cache.get(cacheKey);
+    }
+
+    const model = buildStrategyModelFromPayload(payload);
+    cache.set(cacheKey, model);
+    return model;
+  }
+
+  function buildStrategyModelFromPayload(payload) {
+    const rows = normalizeRowsFromPayload(payload);
+    return buildStrategyModelFromRows(rows);
+  }
+
+  function buildStrategyModelFromRows(rows) {
+    const cardsByName = new Map();
+
+    rows.forEach((row) => {
+      const name = rowValue(row, ["name", "card_name", "card", "title"]).trim();
+      if (!name) {
+        return;
+      }
+
+      const key = normalizeStrategyName(name);
+      if (!key) {
+        return;
+      }
+
+      const textBlob = [
+        rowValue(row, ["type_line", "type"]),
+        rowValue(row, ["oracle_text", "printed_text", "card_text", "rules_text", "description"]),
+        rowValue(row, ["keywords", "abilities", "keyword"])
+      ].join(" ");
+      const features = extractStrategyFeatureMap(textBlob);
+      const semantics = extractStrategySemantics(row);
+      const quantity = readCardQuantityFromRow(row);
+
+      if (!cardsByName.has(key)) {
+        cardsByName.set(key, {
+          key,
+          name,
+          row,
+          quantity: quantity > 0 ? quantity : 1,
+          features,
+          semantics,
+          colors: colorCodesForRow(row),
+          scryfallId: rowValue(row, ["scryfall_id", "scry_fall_id"]).trim()
+        });
+        return;
+      }
+
+      const existing = cardsByName.get(key);
+      existing.quantity += quantity > 0 ? quantity : 1;
+      existing.features = mergeFeatureMaps(existing.features, features);
+      existing.semantics = mergeStrategySemantics(existing.semantics, semantics);
+      if (!existing.scryfallId) {
+        existing.scryfallId = rowValue(row, ["scryfall_id", "scry_fall_id"]).trim();
+      }
+    });
+
+    const cards = Array.from(cardsByName.values());
+    applyStrategyIdf(cards);
+    cards.sort((left, right) => left.name.localeCompare(right.name));
+
+    return { cards };
+  }
+
+  function extractStrategyFeatureMap(textBlob) {
+    const source = String(textBlob || "").toLowerCase();
+    const featureMap = {};
+    STRATEGY_FEATURE_PATTERNS.forEach((entry) => {
+      const hits = source.match(entry.regex);
+      if (!hits || hits.length === 0) {
+        return;
+      }
+      featureMap[entry.id] = hits.length * entry.weight;
+    });
+    return featureMap;
+  }
+
+  function extractStrategySemantics(row) {
+    const oracleText = rowValue(
+      row,
+      ["oracle_text", "printed_text", "card_text", "rules_text", "description"]
+    );
+    const keywordText = rowValue(row, ["keywords", "abilities", "keyword"]);
+    const typeText = rowValue(row, ["type_line", "type"]);
+    const source = `${oracleText} ${keywordText} ${typeText}`.toLowerCase();
+
+    return {
+      toxicOut: countPatternHits(source, /\btoxic\b|\binfect\b|combat damage .* poison counter/i),
+      poisonOut: countPatternHits(source, /poison counter|gets? a poison counter/i),
+      proliferateOut: countPatternHits(source, /\bproliferate\b/i),
+      corruptedPayoff: countPatternHits(source, /\bcorrupted\b|if an opponent has three or more poison counters/i),
+      deathtouchFlag: countPatternHits(source, /\bdeathtouch\b/i),
+      combatEvasion: countPatternHits(source, /\bflying\b|\btrample\b|\bmenace\b|can't be blocked/i),
+      biteFightRemoval: countPatternHits(source, /target creature you control deals damage|fight target/i),
+      graveyardSetup: countPatternHits(source, /search your library .*graveyard|put .* from your library .*graveyard|\bmill\b|surveil|dredge|discard/i),
+      reanimate: countPatternHits(source, /return target .*graveyard.*battlefield|return .* from your graveyard to the battlefield|\breanimate\b/i),
+      castFromGraveyard: countPatternHits(source, /cast .* from your graveyard|flashback|escape|jump-start|unearth/i),
+      copySpell: countPatternHits(source, /copy target spell|copy that spell|copy this spell|you may copy this spell/i),
+      magecraftTrigger: countPatternHits(source, /magecraft|whenever you cast or copy an instant or sorcery spell|when you cast or copy/i),
+      lifeDrainOut: countPatternHits(source, /each opponent loses|target opponent loses|opponents lose/i),
+      lifeLossPayoff: countPatternHits(source, /whenever an opponent loses life|if an opponent lost life this turn/i),
+      tokenOut: countPatternHits(source, /create .* token/i),
+      sacOutlet: countPatternHits(source, /sacrifice (another )?(creature|artifact|permanent)/i),
+      diesPayoff: countPatternHits(source, /whenever .* dies|when .* dies/i),
+      etbPayoff: countPatternHits(source, /when .* enters the battlefield|whenever .* enters the battlefield/i),
+      instantSorceryRef: countPatternHits(source, /instant or sorcery/i),
+      discardOut: countPatternHits(source, /\bdiscard\b/i),
+      discardPayoff: countPatternHits(source, /whenever .* discard|if .* discarded/i),
+      worldgorgerLine: countPatternHits(source, /worldgorger dragon|exile all other permanents you control/i)
+    };
+  }
+
+  function mergeStrategySemantics(leftMap, rightMap) {
+    const out = { ...(leftMap || {}) };
+    Object.keys(rightMap || {}).forEach((key) => {
+      out[key] = (out[key] || 0) + (rightMap[key] || 0);
+    });
+    return out;
+  }
+
+  function countPatternHits(text, regex) {
+    const source = String(text || "");
+    if (!source) {
+      return 0;
+    }
+    const flags = regex.flags.includes("g") ? regex.flags : `${regex.flags}g`;
+    const globalRegex = new RegExp(regex.source, flags);
+    const hits = source.match(globalRegex);
+    return hits ? hits.length : 0;
+  }
+
+  function mergeFeatureMaps(leftMap, rightMap) {
+    const out = { ...(leftMap || {}) };
+    Object.keys(rightMap || {}).forEach((key) => {
+      out[key] = (out[key] || 0) + (rightMap[key] || 0);
+    });
+    return out;
+  }
+
+  function applyStrategyIdf(cards) {
+    const n = cards.length;
+    if (!n) {
+      return;
+    }
+
+    const featureDocFreq = {};
+    cards.forEach((card) => {
+      Object.keys(card.features || {}).forEach((featureKey) => {
+        if ((card.features[featureKey] || 0) <= 0) {
+          return;
+        }
+        featureDocFreq[featureKey] = (featureDocFreq[featureKey] || 0) + 1;
+      });
+    });
+
+    const idf = {};
+    Object.keys(featureDocFreq).forEach((key) => {
+      idf[key] = Math.log((n + 1) / (featureDocFreq[key] + 1)) + 1;
+    });
+
+    cards.forEach((card) => {
+      const weighted = {};
+      Object.keys(card.features || {}).forEach((key) => {
+        const value = card.features[key] || 0;
+        if (value <= 0) {
+          return;
+        }
+        weighted[key] = value * (idf[key] || 1);
+      });
+      card.features = weighted;
+    });
+  }
+
+  function resolveSeedCard(rawSeedName, cards) {
+    const normalizedSeed = normalizeStrategyName(rawSeedName);
+    if (!normalizedSeed) {
+      return null;
+    }
+
+    const exact = cards.find((card) => card.key === normalizedSeed);
+    if (exact) {
+      return exact;
+    }
+
+    const startsWith = cards.find((card) => card.key.startsWith(normalizedSeed));
+    if (startsWith) {
+      return startsWith;
+    }
+
+    return cards.find((card) => card.key.includes(normalizedSeed)) || null;
+  }
+
+  function computeDirectSynergies(seedCard, cards, limit) {
+    const results = cards
+      .filter((card) => card.key !== seedCard.key)
+      .map((card) => {
+        const sim = strategySimilarity(seedCard, card);
+        return {
+          card,
+          score: sim.score,
+          featureScore: sim.featureScore,
+          ruleScore: sim.ruleScore,
+          colorScore: sim.colorScore
+        };
+      })
+      .filter((entry) => entry.score > 0.05 && (entry.ruleScore > 0.02 || entry.featureScore > 0.08))
+      .sort((left, right) => {
+        if (Math.abs(right.score - left.score) > 1e-9) {
+          return right.score - left.score;
+        }
+        return left.card.name.localeCompare(right.card.name);
+      });
+
+    return results.slice(0, Math.max(1, limit));
+  }
+
+  function computeSynergyGroups(seedCard, directEntries, allCards, groupLimit) {
+    const anchors = directEntries.slice(0, Math.min(18, directEntries.length));
+    if (anchors.length < 2) {
+      return [];
+    }
+
+    const groups = [];
+    for (let i = 0; i < anchors.length; i += 1) {
+      for (let j = i + 1; j < anchors.length; j += 1) {
+        const left = anchors[i];
+        const right = anchors[j];
+        const pairLink = strategySimilarity(left.card, right.card);
+
+        const packageCards = [seedCard, left.card, right.card];
+        const support = findBestSupportCard(packageCards, allCards);
+        if (support && support.score > 0.18) {
+          packageCards.push(support.card);
+        }
+        const split = splitGroupCoreAndSide(seedCard, packageCards);
+
+        const groupScore = left.score + right.score + pairLink.score * 0.7 + (support ? support.score * 0.35 : 0);
+        groups.push({
+          cards: packageCards,
+          coreCards: split.coreCards,
+          sideCards: split.sideCards,
+          bridgeName: left.score >= right.score ? left.card.name : right.card.name,
+          score: groupScore,
+          lineA: `${seedCard.name} -> ${left.card.name} -> ${right.card.name}`,
+          lineB: support ? `${seedCard.name} -> ${support.card.name} -> ${left.card.name}` : `${seedCard.name} -> ${right.card.name}`
+        });
+      }
+    }
+
+    groups.sort((a, b) => {
+      if (Math.abs(b.score - a.score) > 1e-9) {
+        return b.score - a.score;
+      }
+      return a.bridgeName.localeCompare(b.bridgeName);
+    });
+
+    const deduped = [];
+    const seen = new Set();
+    for (const group of groups) {
+      const key = group.cards
+        .map((card) => card.key)
+        .sort()
+        .join("|");
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      deduped.push(group);
+      if (deduped.length >= Math.max(1, groupLimit)) {
+        break;
+      }
+    }
+
+    return deduped;
+  }
+
+  function splitGroupCoreAndSide(seedCard, rawCards) {
+    const orderedUnique = [];
+    const seen = new Set();
+    (Array.isArray(rawCards) ? rawCards : []).forEach((card) => {
+      if (!card || !card.key || seen.has(card.key)) {
+        return;
+      }
+      seen.add(card.key);
+      orderedUnique.push(card);
+    });
+
+    const seed = orderedUnique.find((card) => card.key === seedCard.key) || seedCard;
+    const others = orderedUnique.filter((card) => card.key !== seed.key);
+    if (!others.length) {
+      return { coreCards: [seed], sideCards: [] };
+    }
+
+    const ranked = others
+      .map((card) => {
+        const seedLink = strategySimilarity(seed, card);
+        let bestPeerRule = 0;
+        others.forEach((peer) => {
+          if (peer.key === card.key) {
+            return;
+          }
+          const peerLink = strategySimilarity(card, peer);
+          if (peerLink.ruleScore > bestPeerRule) {
+            bestPeerRule = peerLink.ruleScore;
+          }
+        });
+        const rank = seedLink.ruleScore * 0.62 + seedLink.score * 0.28 + bestPeerRule * 0.10;
+        return { card, rank, seedRule: seedLink.ruleScore, bestPeerRule };
+      })
+      .sort((a, b) => {
+        if (Math.abs(b.rank - a.rank) > 1e-9) {
+          return b.rank - a.rank;
+        }
+        return a.card.name.localeCompare(b.card.name);
+      });
+
+    const coreCards = [seed];
+    coreCards.push(ranked[0].card);
+
+    if (ranked.length > 1) {
+      const second = ranked[1];
+      if (second.rank >= 0.20 || second.seedRule >= 0.24 || second.bestPeerRule >= 0.24) {
+        coreCards.push(second.card);
+      }
+    }
+
+    const coreKeys = new Set(coreCards.map((card) => card.key));
+    const sideCards = orderedUnique.filter((card) => !coreKeys.has(card.key));
+    return { coreCards, sideCards };
+  }
+
+  function findBestSupportCard(packageCards, allCards) {
+    const excluded = new Set(packageCards.map((card) => card.key));
+    let best = null;
+
+    allCards.forEach((candidate) => {
+      if (excluded.has(candidate.key)) {
+        return;
+      }
+
+      const links = packageCards.map((baseCard) => strategySimilarity(baseCard, candidate).score);
+      const avg = links.reduce((sum, value) => sum + value, 0) / links.length;
+      if (!best || avg > best.score) {
+        best = { card: candidate, score: avg };
+      }
+    });
+
+    return best;
+  }
+
+  function strategySimilarity(cardA, cardB) {
+    const featureScore = cosineSimilaritySparse(cardA.features, cardB.features);
+    const ruleScore = ruleAwareSynergyScore(cardA.semantics, cardB.semantics);
+    const colorScore = colorCompatibilityScore(cardA.colors, cardB.colors);
+    const score = clampScore(featureScore * 0.5 + ruleScore * 0.4 + colorScore * 0.1);
+    return { score, featureScore, ruleScore, colorScore };
+  }
+
+  function ruleAwareSynergyScore(semA, semB) {
+    const ab = directionalRuleSynergy(semA, semB);
+    const ba = directionalRuleSynergy(semB, semA);
+    const shared = sharedRuleSynergy(semA, semB);
+    return clampScore(Math.max(ab, ba) * 0.82 + shared);
+  }
+
+  function directionalRuleSynergy(source, target) {
+    const src = source || {};
+    const dst = target || {};
+
+    let score = 0;
+    score += bounded(src.toxicOut + src.poisonOut) * bounded(dst.proliferateOut) * 0.90;
+    score += bounded(src.proliferateOut) * bounded(dst.toxicOut + dst.poisonOut) * 0.55;
+    score += bounded(src.combatEvasion) * bounded(dst.toxicOut + dst.poisonOut) * 0.35;
+    score += bounded(src.toxicOut + src.poisonOut) * bounded(dst.corruptedPayoff) * 0.60;
+    score += bounded(src.deathtouchFlag) * bounded(dst.biteFightRemoval) * 0.65;
+    score += bounded(src.biteFightRemoval) * bounded(dst.deathtouchFlag) * 0.30;
+    score += bounded(src.graveyardSetup) * bounded(dst.reanimate + dst.castFromGraveyard) * 0.75;
+    score += bounded(src.copySpell) * bounded(dst.magecraftTrigger + dst.instantSorceryRef) * 1.10;
+    score += bounded(src.magecraftTrigger) * bounded(dst.copySpell) * 0.65;
+    score += bounded(src.lifeDrainOut) * bounded(dst.lifeLossPayoff) * 0.80;
+    score += bounded(src.tokenOut) * bounded(dst.sacOutlet) * 0.55;
+    score += bounded(src.sacOutlet) * bounded(dst.diesPayoff) * 0.55;
+    score += bounded(src.reanimate) * bounded(dst.etbPayoff) * 0.45;
+    score += bounded(src.discardOut) * bounded(dst.discardPayoff) * 0.55;
+    score += bounded(src.worldgorgerLine) * bounded(dst.reanimate) * 0.90;
+
+    return clampScore(score);
+  }
+
+  function sharedRuleSynergy(semA, semB) {
+    const a = semA || {};
+    const b = semB || {};
+
+    const graveA = bounded((a.graveyardSetup || 0) + (a.reanimate || 0) + (a.castFromGraveyard || 0));
+    const graveB = bounded((b.graveyardSetup || 0) + (b.reanimate || 0) + (b.castFromGraveyard || 0));
+    const spellA = bounded((a.copySpell || 0) + (a.magecraftTrigger || 0) + (a.instantSorceryRef || 0));
+    const spellB = bounded((b.copySpell || 0) + (b.magecraftTrigger || 0) + (b.instantSorceryRef || 0));
+    const drainA = bounded((a.lifeDrainOut || 0) + (a.lifeLossPayoff || 0));
+    const drainB = bounded((b.lifeDrainOut || 0) + (b.lifeLossPayoff || 0));
+    const toxicA = bounded((a.toxicOut || 0) + (a.poisonOut || 0));
+    const toxicB = bounded((b.toxicOut || 0) + (b.poisonOut || 0));
+    const prolifA = bounded(a.proliferateOut || 0);
+    const prolifB = bounded(b.proliferateOut || 0);
+    const corruptedA = bounded(a.corruptedPayoff || 0);
+    const corruptedB = bounded(b.corruptedPayoff || 0);
+    const biteA = bounded((a.biteFightRemoval || 0) + (a.deathtouchFlag || 0));
+    const biteB = bounded((b.biteFightRemoval || 0) + (b.deathtouchFlag || 0));
+
+    const score = Math.min(graveA, graveB) * 0.25 +
+      Math.min(spellA, spellB) * 0.18 +
+      Math.min(drainA, drainB) * 0.10 +
+      Math.min(toxicA, toxicB) * 0.28 +
+      Math.min(prolifA, prolifB) * 0.24 +
+      Math.min(corruptedA, corruptedB) * 0.14 +
+      Math.min(biteA, biteB) * 0.10;
+
+    return Math.min(0.55, score);
+  }
+
+  function bounded(value) {
+    return value > 0 ? 1 : 0;
+  }
+
+  function clampScore(value) {
+    return Math.min(1, Math.max(0, value));
+  }
+
+  function cosineSimilaritySparse(mapA, mapB) {
+    const keysA = Object.keys(mapA || {});
+    const keysB = Object.keys(mapB || {});
+    if (!keysA.length || !keysB.length) {
+      return 0;
+    }
+
+    let dot = 0;
+    let normA = 0;
+    let normB = 0;
+
+    keysA.forEach((key) => {
+      const value = mapA[key] || 0;
+      normA += value * value;
+      if (mapB[key]) {
+        dot += value * mapB[key];
+      }
+    });
+    keysB.forEach((key) => {
+      const value = mapB[key] || 0;
+      normB += value * value;
+    });
+
+    if (normA <= 0 || normB <= 0) {
+      return 0;
+    }
+    return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+  }
+
+  function colorCompatibilityScore(colorsA, colorsB) {
+    const setA = new Set(Array.isArray(colorsA) ? colorsA : []);
+    const setB = new Set(Array.isArray(colorsB) ? colorsB : []);
+    if (setA.size === 0 || setB.size === 0) {
+      return 0.25;
+    }
+    let intersection = 0;
+    setA.forEach((code) => {
+      if (setB.has(code)) {
+        intersection += 1;
+      }
+    });
+    if (intersection === 0) {
+      return 0;
+    }
+    return intersection / Math.max(setA.size, setB.size);
+  }
+
+  function renderDirectSynergyCards(directEntries, seedName) {
+    const target = nodes.strategy.directList;
+    if (!target) {
+      return;
+    }
+    if (!Array.isArray(directEntries) || directEntries.length === 0) {
+      target.innerHTML = `<p class="muted">Aucune synergie directe calculee pour ${escapeHtml(seedName)}.</p>`;
+      return;
+    }
+
+    target.innerHTML = "";
+    const fragment = document.createDocumentFragment();
+    directEntries.forEach((entry, index) => {
+      fragment.appendChild(
+        createStrategyCardElement(
+          entry.card,
+          `#${index + 1} | score ${formatDecimal(entry.score)} | rules ${formatDecimal(entry.ruleScore || 0)}`
+        )
+      );
+    });
+    target.appendChild(fragment);
+  }
+
+  function renderGroupCards(groups, seedName) {
+    const target = nodes.strategy.groupList;
+    if (!target) {
+      return;
+    }
+    if (!Array.isArray(groups) || groups.length === 0) {
+      target.innerHTML = `<p class="muted">Aucun groupe genere pour ${escapeHtml(seedName)}.</p>`;
+      return;
+    }
+
+    target.innerHTML = "";
+    const fragment = document.createDocumentFragment();
+
+    groups.forEach((group, index) => {
+      const article = document.createElement("article");
+      article.className = "strategy-group";
+
+      const title = document.createElement("p");
+      title.className = "strategy-group-title";
+      title.textContent = `Groupe ${index + 1} | score ${formatDecimal(group.score)}`;
+      article.appendChild(title);
+
+      const packageNames = group.cards.map((card) => card.name);
+      const coreCards = Array.isArray(group.coreCards) && group.coreCards.length > 0
+        ? group.coreCards
+        : group.cards.slice(0, Math.min(2, group.cards.length));
+      const coreKeySet = new Set(coreCards.map((card) => card.key));
+      const sideCards = Array.isArray(group.sideCards)
+        ? group.sideCards
+        : group.cards.filter((card) => !coreKeySet.has(card.key));
+
+      const packageLine = document.createElement("p");
+      packageLine.className = "strategy-group-line";
+      packageLine.innerHTML = `<strong>Package:</strong> ${escapeHtml(packageNames.join(" + "))}`;
+      article.appendChild(packageLine);
+
+      const coreLine = document.createElement("p");
+      coreLine.className = "strategy-group-line";
+      coreLine.innerHTML = `<strong>Core:</strong> ${escapeHtml(coreCards.map((card) => card.name).join(" + "))}`;
+      article.appendChild(coreLine);
+
+      if (sideCards.length > 0) {
+        const sideLine = document.createElement("p");
+        sideLine.className = "strategy-group-line";
+        sideLine.innerHTML = `<strong>Side:</strong> ${escapeHtml(sideCards.map((card) => card.name).join(" + "))}`;
+        article.appendChild(sideLine);
+      }
+
+      const chainALine = document.createElement("p");
+      chainALine.className = "strategy-group-line";
+      chainALine.innerHTML = `<strong>Chaine A:</strong> ${escapeHtml(group.lineA)}`;
+      article.appendChild(chainALine);
+
+      const chainBLine = document.createElement("p");
+      chainBLine.className = "strategy-group-line";
+      chainBLine.innerHTML = `<strong>Chaine B:</strong> ${escapeHtml(group.lineB)}`;
+      article.appendChild(chainBLine);
+
+      const coreSection = document.createElement("div");
+      coreSection.className = "strategy-group-section is-core";
+      const coreSectionTitle = document.createElement("p");
+      coreSectionTitle.className = "strategy-group-section-title";
+      coreSectionTitle.textContent = "Core cards";
+      coreSection.appendChild(coreSectionTitle);
+      const coreGrid = document.createElement("div");
+      coreGrid.className = "strategy-group-cards is-core";
+      coreCards.forEach((card) => {
+        coreGrid.appendChild(createStrategyCardElement(card, "", { compact: true, badge: "CORE", badgeTone: "core" }));
+      });
+      coreSection.appendChild(coreGrid);
+      article.appendChild(coreSection);
+
+      if (sideCards.length > 0) {
+        const sideSection = document.createElement("div");
+        sideSection.className = "strategy-group-section is-side";
+        const sideSectionTitle = document.createElement("p");
+        sideSectionTitle.className = "strategy-group-section-title";
+        sideSectionTitle.textContent = "Side cards";
+        sideSection.appendChild(sideSectionTitle);
+        const sideGrid = document.createElement("div");
+        sideGrid.className = "strategy-group-cards is-side";
+        sideCards.forEach((card) => {
+          sideGrid.appendChild(createStrategyCardElement(card, "", { compact: true, badge: "SIDE", badgeTone: "side" }));
+        });
+        sideSection.appendChild(sideGrid);
+        article.appendChild(sideSection);
+      }
+
+      const chips = document.createElement("div");
+      chips.className = "strategy-chip-row";
+      coreCards.forEach((card) => {
+        const chip = document.createElement("span");
+        chip.className = "strategy-chip is-core";
+        chip.textContent = card.name;
+        chips.appendChild(chip);
+      });
+      sideCards.forEach((card) => {
+        const chip = document.createElement("span");
+        chip.className = "strategy-chip is-side";
+        chip.textContent = card.name;
+        chips.appendChild(chip);
+      });
+      article.appendChild(chips);
+
+      fragment.appendChild(article);
+    });
+
+    target.appendChild(fragment);
+  }
+
+  function createStrategyCardElement(card, metaLine, options = {}) {
+    const compact = Boolean(options.compact);
+    const badge = String(options.badge || "").trim();
+    const badgeTone = String(options.badgeTone || "core").toLowerCase();
+    const cardNode = document.createElement("article");
+    cardNode.className = compact ? "strategy-card is-compact" : "strategy-card";
+
+    const scryfallId = card.scryfallId || "";
+    const imageUrl = scryfallId
+      ? `https://api.scryfall.com/cards/${encodeURIComponent(scryfallId)}?format=image&version=normal`
+      : "";
+    const setCode = rowValue(card.row, ["set_code", "set"]).toUpperCase();
+    const collector = rowValue(card.row, ["collector_number"]);
+    const setLine = [setCode, collector ? `#${collector}` : ""].filter(Boolean).join(" ");
+    const manaCost = rowValue(card.row, ["mana_cost", "manacost", "mana"]);
+
+    const art = document.createElement("div");
+    art.className = "strategy-card-art";
+    if (imageUrl) {
+      const img = document.createElement("img");
+      img.src = imageUrl;
+      img.alt = card.name;
+      img.loading = "lazy";
+      art.appendChild(img);
+    } else {
+      const fallback = document.createElement("span");
+      fallback.className = "strategy-card-fallback";
+      fallback.textContent = card.name;
+      art.appendChild(fallback);
+    }
+    cardNode.appendChild(art);
+
+    const body = document.createElement("div");
+    body.className = "strategy-card-body";
+
+    const nameLine = document.createElement("p");
+    nameLine.className = "strategy-card-name";
+    nameLine.textContent = card.name;
+    body.appendChild(nameLine);
+
+    if (badge) {
+      const badgeNode = document.createElement("span");
+      badgeNode.className = `strategy-card-badge ${badgeTone === "side" ? "is-side" : "is-core"}`;
+      badgeNode.textContent = badge;
+      body.appendChild(badgeNode);
+    }
+
+    if (metaLine) {
+      const rankingLine = document.createElement("p");
+      rankingLine.className = "strategy-card-meta";
+      rankingLine.textContent = metaLine;
+      body.appendChild(rankingLine);
+    }
+
+    const setMetaLine = document.createElement("p");
+    setMetaLine.className = "strategy-card-meta";
+    setMetaLine.textContent = setLine || "No set info";
+    body.appendChild(setMetaLine);
+
+    const manaLine = document.createElement("p");
+    manaLine.className = "strategy-card-mana";
+    renderStrategyManaLine(manaLine, manaCost);
+    body.appendChild(manaLine);
+
+    cardNode.appendChild(body);
+
+    if (card?.row && typeof card.row === "object") {
+      cardNode.classList.add("is-interactive", "data-row");
+      bindRowPreviewEvents(cardNode, card.row);
+    }
+
+    return cardNode;
+  }
+
+  function renderStrategyManaLine(target, manaCostText) {
+    if (!target) {
+      return;
+    }
+    target.innerHTML = "";
+    const rawText = String(manaCostText || "").trim();
+    if (!rawText) {
+      target.textContent = "No mana info";
+      target.classList.add("is-empty");
+      return;
+    }
+    target.classList.remove("is-empty");
+    renderManaCostCell(target, rawText);
+    if (!target.childNodes.length && !String(target.textContent || "").trim()) {
+      target.textContent = rawText;
+    }
+  }
+
+  function normalizeStrategyName(value) {
+    return String(value || "")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
   }
 
   function computeDeckStats(cards) {
@@ -604,53 +1973,85 @@ import {
     const landRatio = stats.totalCards > 0 ? (stats.landCount / stats.totalCards) : 0;
 
     return `
-      <section class="deck-kpi-grid">
-        <article class="deck-kpi-card">
-          <p class="deck-kpi-label">Total cartes</p>
-          <p class="deck-kpi-value">${formatCount(stats.totalCards)}</p>
-        </article>
-        <article class="deck-kpi-card">
-          <p class="deck-kpi-label">Terrains</p>
-          <p class="deck-kpi-value">${formatCount(stats.landCount)}</p>
-        </article>
-        <article class="deck-kpi-card">
-          <p class="deck-kpi-label">Sorts</p>
-          <p class="deck-kpi-value">${formatCount(stats.nonLandCount)}</p>
-        </article>
-        <article class="deck-kpi-card">
-          <p class="deck-kpi-label">Ratio terrains</p>
-          <p class="deck-kpi-value">${formatPercent(landRatio)}</p>
-        </article>
+      <div class="deck-side-tabs" role="tablist" aria-label="Deck panel tabs">
+        <button type="button" class="deck-side-tab is-active" data-deck-pane-tab="stats" role="tab" aria-selected="true">Stats</button>
+        <button type="button" class="deck-side-tab" data-deck-pane-tab="analysis" role="tab" aria-selected="false">Analyse</button>
+      </div>
+
+      <section class="deck-side-pane is-active" data-deck-pane="stats">
+        <section class="deck-kpi-grid">
+          <article class="deck-kpi-card">
+            <p class="deck-kpi-label">Total cartes</p>
+            <p class="deck-kpi-value">${formatCount(stats.totalCards)}</p>
+          </article>
+          <article class="deck-kpi-card">
+            <p class="deck-kpi-label">Terrains</p>
+            <p class="deck-kpi-value">${formatCount(stats.landCount)}</p>
+          </article>
+          <article class="deck-kpi-card">
+            <p class="deck-kpi-label">Sorts</p>
+            <p class="deck-kpi-value">${formatCount(stats.nonLandCount)}</p>
+          </article>
+          <article class="deck-kpi-card">
+            <p class="deck-kpi-label">Ratio terrains</p>
+            <p class="deck-kpi-value">${formatPercent(landRatio)}</p>
+          </article>
+        </section>
+
+        <section class="deck-visual-section">
+          <div class="deck-visual-head">
+            <span class="deck-visual-icon" aria-hidden="true">i</span>
+            <h4 class="deck-visual-title">Mana Sources & Casting Costs</h4>
+          </div>
+          ${renderDualRingChart(stats.manaSourceSegments, stats.castingCostSegments)}
+        </section>
+
+        <section class="deck-visual-section">
+          <div class="deck-visual-head">
+            <span class="deck-visual-icon" aria-hidden="true">i</span>
+            <h4 class="deck-visual-title">Card Type Distribution</h4>
+          </div>
+          ${renderSingleRingChart(stats.typeSegments, "types")}
+        </section>
+
+        <section class="deck-visual-section">
+          <div class="deck-visual-head">
+            <span class="deck-visual-icon" aria-hidden="true">i</span>
+            <h4 class="deck-visual-title">Mana Curve / Color Distribution</h4>
+          </div>
+          <div class="deck-mix-layout">
+            ${renderCurveBars(stats.curveBuckets)}
+            ${renderSingleRingChart(stats.colorSegments, "colors", true)}
+          </div>
+          <p class="deck-stats-note">
+            CMC moyen ${formatDecimal(stats.avgCmc)} | Efficience ${stats.efficiencyScore}/100 | Synergie ${stats.synergyScore}/100
+          </p>
+        </section>
       </section>
 
-      <section class="deck-visual-section">
-        <div class="deck-visual-head">
-          <span class="deck-visual-icon" aria-hidden="true">i</span>
-          <h4 class="deck-visual-title">Mana Sources & Casting Costs</h4>
-        </div>
-        ${renderDualRingChart(stats.manaSourceSegments, stats.castingCostSegments)}
-      </section>
-
-      <section class="deck-visual-section">
-        <div class="deck-visual-head">
-          <span class="deck-visual-icon" aria-hidden="true">i</span>
-          <h4 class="deck-visual-title">Card Type Distribution</h4>
-        </div>
-        ${renderSingleRingChart(stats.typeSegments, "types")}
-      </section>
-
-      <section class="deck-visual-section">
-        <div class="deck-visual-head">
-          <span class="deck-visual-icon" aria-hidden="true">i</span>
-          <h4 class="deck-visual-title">Mana Curve / Color Distribution</h4>
-        </div>
-        <div class="deck-mix-layout">
-          ${renderCurveBars(stats.curveBuckets)}
-          ${renderSingleRingChart(stats.colorSegments, "colors", true)}
-        </div>
-        <p class="deck-stats-note">
-          CMC moyen ${formatDecimal(stats.avgCmc)} | Efficience ${stats.efficiencyScore}/100 | Synergie ${stats.synergyScore}/100
-        </p>
+      <section class="deck-side-pane" data-deck-pane="analysis">
+        <section class="deck-visual-section deck-analysis-section">
+          <div class="deck-analysis-head">
+            <h4 class="deck-visual-title">Deck Analysis</h4>
+            <button type="button" id="deck-analyze-btn" class="deck-analyze-btn" data-action="analyze-deck">Analyser</button>
+          </div>
+          <p id="deck-analysis-status" class="deck-stats-note muted">Choisis une collection puis clique sur Analyser.</p>
+          <div id="deck-analysis-mechanics" class="deck-mechanic-chips"></div>
+          <div class="deck-analysis-grid">
+            <section class="deck-analysis-block">
+              <p class="deck-analysis-title">Ameliorer</p>
+              <div id="deck-analysis-upgrade" class="strategy-card-grid deck-analysis-card-grid">
+                <p class="muted">Clique sur Analyser pour proposer des cartes d amelioration.</p>
+              </div>
+            </section>
+            <section class="deck-analysis-block">
+              <p class="deck-analysis-title">Varier</p>
+              <div id="deck-analysis-variation" class="strategy-card-grid deck-analysis-card-grid">
+                <p class="muted">Clique sur Analyser pour proposer des cartes de variation.</p>
+              </div>
+            </section>
+          </div>
+        </section>
       </section>
     `;
   }
@@ -728,7 +2129,7 @@ import {
         return;
       }
 
-      const explicitName = rowValue(row, ["name", "card_name", "card", "title"]).trim();
+      const explicitName = cleanDeckCardName(rowValue(row, ["name", "card_name", "card", "title"]));
       const resolvedName = explicitName || parsedLine?.name || "";
       if (!resolvedName) {
         return;
@@ -779,18 +2180,18 @@ import {
       if (/^(deck|mainboard)\b/i.test(withoutPrefix)) {
         return { ignore: true };
       }
+      const fallbackName = cleanDeckCardName(withoutPrefix);
+      if (!fallbackName) {
+        return { ignore: true };
+      }
       return {
         quantity: 1,
-        name: withoutPrefix
+        name: fallbackName
       };
     }
 
     const qty = Number.parseInt(withQty[1], 10);
-    let name = withQty[2].trim();
-    name = name
-      .replace(/\s+\([^)]+\)\s+\d+[A-Za-z]?$/u, "")
-      .replace(/\s+\[[^\]]+\]\s*$/u, "")
-      .trim();
+    const name = cleanDeckCardName(withQty[2]);
 
     if (!name || !Number.isFinite(qty) || qty <= 0) {
       return { ignore: true };
@@ -800,6 +2201,24 @@ import {
       quantity: qty,
       name
     };
+  }
+
+  function cleanDeckCardName(rawName) {
+    let name = String(rawName || "").trim();
+    if (!name) {
+      return "";
+    }
+
+    // Remove trailing collector / set chunks often present in exported decklists.
+    // Examples:
+    // "Card Name (MOM) 123", "Card Name (PLST) C18-238", "Card Name [SET]"
+    name = name
+      .replace(/\s+\([^)]+\)\s+[A-Za-z0-9-]+(?:\s*\*?[A-Za-z0-9]+)?\s*$/u, "")
+      .replace(/\s+\[[^\]]+\]\s*$/u, "")
+      .replace(/\s+\*\w+\s*$/u, "")
+      .trim();
+
+    return name;
   }
 
   function entryNeedsMetadata(row) {
@@ -851,6 +2270,21 @@ import {
       }
       if (!rowValue(mergedRow, ["colors"]) && metadata.colors.length > 0) {
         mergedRow.colors = metadata.colors.join("");
+      }
+      if (!rowValue(mergedRow, ["oracle_text", "printed_text", "card_text", "rules_text"]) && metadata.oracle_text) {
+        mergedRow.oracle_text = metadata.oracle_text;
+      }
+      if (!rowValue(mergedRow, ["keywords", "abilities", "keyword"]) && metadata.keywords.length > 0) {
+        mergedRow.keywords = metadata.keywords.join(", ");
+      }
+      if (!rowValue(mergedRow, ["scryfall_id", "scry_fall_id"]) && metadata.scryfall_id) {
+        mergedRow.scryfall_id = metadata.scryfall_id;
+      }
+      if (!rowValue(mergedRow, ["set_code", "set"]) && metadata.set_code) {
+        mergedRow.set_code = metadata.set_code;
+      }
+      if (!rowValue(mergedRow, ["collector_number"]) && metadata.collector_number) {
+        mergedRow.collector_number = metadata.collector_number;
       }
 
       return {
@@ -932,7 +2366,12 @@ import {
       type_line: String(card.type_line || "").trim(),
       mana_cost: mergedMana,
       color_identity: Array.isArray(card.color_identity) ? card.color_identity : [],
-      colors: Array.isArray(card.colors) ? card.colors : []
+      colors: Array.isArray(card.colors) ? card.colors : [],
+      oracle_text: String(card.oracle_text || "").trim(),
+      keywords: Array.isArray(card.keywords) ? card.keywords.map((item) => String(item || "").trim()).filter(Boolean) : [],
+      scryfall_id: String(card.id || "").trim(),
+      set_code: String(card.set || "").trim(),
+      collector_number: String(card.collector_number || "").trim()
     };
   }
 
@@ -945,7 +2384,20 @@ import {
       if (Array.isArray(row) && row.length === 1 && row[0] && typeof row[0] === "object") {
         return row[0];
       }
-      return {};
+      if (Array.isArray(row)) {
+        if (row.length === 1) {
+          return { line: asText(row[0]) };
+        }
+        const out = {};
+        row.forEach((value, index) => {
+          out[`col_${index + 1}`] = value;
+        });
+        return out;
+      }
+      if (row == null) {
+        return {};
+      }
+      return { line: asText(row) };
     });
   }
 
@@ -1355,6 +2807,14 @@ import {
     return Array.from(new Set(found));
   }
 
+  function clampInt(value, min, max, fallback) {
+    const parsed = Number.parseInt(String(value ?? ""), 10);
+    if (!Number.isFinite(parsed)) {
+      return fallback;
+    }
+    return Math.min(max, Math.max(min, parsed));
+  }
+
   function formatDecimal(value) {
     if (!Number.isFinite(value)) {
       return "0.0";
@@ -1488,6 +2948,8 @@ import {
 
     bindCollectionPicker();
     bindDeckPicker();
+    bindStrategyControls();
+    bindDeckAnalysisControls();
     loadDeckStateFromStorage();
 
     nodes.collections.form.addEventListener("submit", async (event) => {
