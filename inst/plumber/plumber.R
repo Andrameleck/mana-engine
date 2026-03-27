@@ -139,6 +139,25 @@ function(q = "", limit = "40") {
   )
 }
 
+#* Search card references from MTGJSON
+#* @param q Card name query (optional).
+#* @param set_code Set code (recommended for set lookups).
+#* @param collector_number Exact collector number (optional).
+#* @param uuid MTGJSON card UUID (direct lookup).
+#* @param limit Max cards to return (1-200).
+#* @serializer unboxedJSON
+#* @get /reference/mtgjson/cards
+function(q = "", set_code = "", collector_number = "", uuid = "", limit = "40") {
+  query_call(
+    "query_mtgjson_cards",
+    q = q,
+    set_code = set_code,
+    collector_number = collector_number,
+    uuid = uuid,
+    limit = limit
+  )
+}
+
 #* UI entrypoint
 #* @serializer contentType list(type="text/html; charset=utf-8")
 #* @get /ui

@@ -27,6 +27,10 @@ import {
     strategy: {
       title: "Strategy",
       subtitle: "Zone reservee au module de strategies."
+    },
+    spellbook: {
+      title: "Spellbook",
+      subtitle: "Interroger Commander Spellbook par nom de carte."
     }
   };
 
@@ -61,6 +65,14 @@ import {
       spellbookCache: new Map(),
       spellbookPromiseCache: new Map(),
       spellbookError: "",
+      runToken: 0
+    },
+    spellbook: {
+      cardName: "",
+      limit: 20,
+      loading: false,
+      error: "",
+      payload: null,
       runToken: 0
     }
   };
@@ -113,6 +125,14 @@ import {
       status: document.getElementById("strategy-status"),
       directList: document.getElementById("strategy-direct-list"),
       groupList: document.getElementById("strategy-group-list")
+    },
+    spellbook: {
+      form: document.getElementById("spellbook-form"),
+      cardInput: document.getElementById("spellbook-card-input"),
+      limitInput: document.getElementById("spellbook-limit-input"),
+      runButton: document.getElementById("spellbook-run-btn"),
+      status: document.getElementById("spellbook-status"),
+      results: document.getElementById("spellbook-results")
     }
   };
 
@@ -356,6 +376,34 @@ import {
     });
   }
 
+  function bindSpellbookControls() {
+    const spellbookNodes = nodes.spellbook;
+    if (!spellbookNodes.form || !spellbookNodes.cardInput || !spellbookNodes.status || !spellbookNodes.results) {
+      return;
+    }
+
+    const safeLimit = clampInt(spellbookNodes.limitInput?.value, 1, 100, state.spellbook.limit);
+    state.spellbook.limit = safeLimit;
+    if (spellbookNodes.limitInput) {
+      spellbookNodes.limitInput.value = String(safeLimit);
+    }
+
+    spellbookNodes.cardInput.addEventListener("input", () => {
+      state.spellbook.cardName = String(spellbookNodes.cardInput.value || "").trim();
+    });
+
+    spellbookNodes.limitInput?.addEventListener("change", () => {
+      const value = clampInt(spellbookNodes.limitInput.value, 1, 100, state.spellbook.limit);
+      state.spellbook.limit = value;
+      spellbookNodes.limitInput.value = String(value);
+    });
+
+    spellbookNodes.form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      runSpellbookLookup();
+    });
+  }
+
   function inferDeckSourceType(fileName) {
     const lowerName = String(fileName || "").toLowerCase();
     if (lowerName.endsWith(".db") || lowerName.endsWith(".sqlite") || lowerName.endsWith(".sqlite3")) {
@@ -580,8 +628,17 @@ import {
     }
   }
 
+  function setWorkspaceLowerHidden(hidden) {
+    const lower = nodes.workspaceLower;
+    if (!lower) {
+      return;
+    }
+    lower.classList.toggle("is-hidden", hidden === true);
+  }
+
   function renderActiveTabTable() {
     if (state.activeTab === "collections") {
+      setWorkspaceLowerHidden(false);
       if (!state.selectedCollectionId) {
         renderCollection({
           ok: false,
@@ -610,6 +667,7 @@ import {
     }
 
     if (state.activeTab === "decks") {
+      setWorkspaceLowerHidden(false);
       const selected = state.decks.find((entry) => entry.id === state.selectedDeckId);
       if (!selected) {
         renderCollection({
@@ -626,6 +684,7 @@ import {
     }
 
     if (state.activeTab === "strategy") {
+      setWorkspaceLowerHidden(false);
       const meta = state.collections.find((entry) => entry.id === state.selectedCollectionId);
       const payload = state.selectedCollectionId
         ? state.collectionPayloadById[state.selectedCollectionId]
@@ -651,6 +710,14 @@ import {
       return;
     }
 
+    if (state.activeTab === "spellbook") {
+      setWorkspaceLowerHidden(true);
+      renderDeckStatsPanel(null);
+      renderSpellbookPanel();
+      return;
+    }
+
+    setWorkspaceLowerHidden(false);
     renderCollection({
       ok: false,
       table: "Collections",
@@ -1209,6 +1276,474 @@ import {
       .map((card) => `<option value="${escapeHtml(card.name)}"></option>`)
       .join("");
     strategyNodes.seedList.innerHTML = optionsMarkup;
+  }
+
+  function renderSpellbookPanel() {
+    const spellbookNodes = nodes.spellbook;
+    if (!spellbookNodes.cardInput || !spellbookNodes.status || !spellbookNodes.results) {
+      return;
+    }
+
+    spellbookNodes.cardInput.value = state.spellbook.cardName || "";
+    if (spellbookNodes.limitInput) {
+      spellbookNodes.limitInput.value = String(clampInt(state.spellbook.limit, 1, 100, 20));
+    }
+
+    if (state.spellbook.loading) {
+      spellbookNodes.status.textContent = `Recherche Spellbook en cours pour "${state.spellbook.cardName}"...`;
+      return;
+    }
+
+    if (state.spellbook.error) {
+      spellbookNodes.status.textContent = `Erreur: ${state.spellbook.error}`;
+      return;
+    }
+
+    const variants = Array.isArray(state.spellbook.payload?.results) ? state.spellbook.payload.results : [];
+    if (!state.spellbook.cardName) {
+      spellbookNodes.status.textContent = "Saisis une carte pour interroger Commander Spellbook.";
+      spellbookNodes.results.innerHTML = '<p class="muted">Aucun resultat.</p>';
+      return;
+    }
+
+    spellbookNodes.status.textContent = `${variants.length} variant(s) retournee(s) pour "${state.spellbook.cardName}".`;
+    spellbookNodes.results.innerHTML = renderSpellbookVariants(variants);
+  }
+
+  async function runSpellbookLookup() {
+    const spellbookNodes = nodes.spellbook;
+    if (!spellbookNodes.cardInput || !spellbookNodes.status || !spellbookNodes.results) {
+      return;
+    }
+
+    const cardName = String(spellbookNodes.cardInput.value || "").trim();
+    const limitValue = clampInt(spellbookNodes.limitInput?.value, 1, 100, state.spellbook.limit);
+    state.spellbook.cardName = cardName;
+    state.spellbook.limit = limitValue;
+
+    if (spellbookNodes.limitInput) {
+      spellbookNodes.limitInput.value = String(limitValue);
+    }
+
+    if (!cardName) {
+      state.spellbook.error = "";
+      state.spellbook.payload = null;
+      spellbookNodes.status.textContent = "Saisis un nom de carte.";
+      spellbookNodes.results.innerHTML = '<p class="muted">Aucun resultat.</p>';
+      return;
+    }
+
+    const runToken = ++state.spellbook.runToken;
+    state.spellbook.loading = true;
+    state.spellbook.error = "";
+    spellbookNodes.status.textContent = `Recherche Spellbook en cours pour "${cardName}"...`;
+    spellbookNodes.results.innerHTML = '<p class="muted">Chargement...</p>';
+
+    try {
+      const payload = await fetchSpellbookVariants(cardName, limitValue);
+      if (runToken !== state.spellbook.runToken) {
+        return;
+      }
+
+      if (!payload || payload.ok !== true) {
+        state.spellbook.payload = null;
+        state.spellbook.error = String(payload?.error || "Spellbook indisponible");
+        spellbookNodes.status.textContent = `Erreur: ${state.spellbook.error}`;
+        spellbookNodes.results.innerHTML = '<p class="muted">Aucun resultat.</p>';
+        return;
+      }
+
+      state.spellbook.payload = payload;
+      state.spellbook.error = "";
+      const variants = Array.isArray(payload.results) ? payload.results : [];
+      spellbookNodes.status.textContent = `${variants.length} variant(s) retournee(s) pour "${cardName}".`;
+      spellbookNodes.results.innerHTML = renderSpellbookVariants(variants);
+    } catch (error) {
+      if (runToken !== state.spellbook.runToken) {
+        return;
+      }
+      state.spellbook.payload = null;
+      state.spellbook.error = String(error?.message || error || "Spellbook indisponible");
+      spellbookNodes.status.textContent = `Erreur: ${state.spellbook.error}`;
+      spellbookNodes.results.innerHTML = '<p class="muted">Aucun resultat.</p>';
+    } finally {
+      if (runToken === state.spellbook.runToken) {
+        state.spellbook.loading = false;
+      }
+    }
+  }
+
+  function renderSpellbookVariants(variants) {
+    const safeVariants = Array.isArray(variants) ? variants : [];
+    if (safeVariants.length === 0) {
+      return '<p class="muted">Aucun combo trouve.</p>';
+    }
+
+    return safeVariants.map((variant, index) => {
+      const status = String(variant?.status || "").trim() || "UNKNOWN";
+      const variantId = String(variant?.id || "").trim() || String(index + 1);
+      const statusClass = status === "OK" ? "is-ok" : "is-other";
+      const popularity = Number(variant?.popularity);
+      const popularityText = Number.isFinite(popularity) ? popularity.toLocaleString("fr-FR") : "-";
+      const cards = spellbookEntryNames(variant?.uses, ["card", "name"]);
+      const requires = spellbookEntryNames(variant?.requires, ["feature", "name"]);
+      const produces = spellbookEntryNames(variant?.produces, ["feature", "name"]);
+      const description = spellbookNormalizeText(spellbookDescription(variant));
+      const steps = spellbookStepList(description);
+      const explicitText = spellbookExplicitText(cards, requires, produces, description);
+      const stepsMarkup = spellbookActionTreeMarkup(cards, steps);
+      const cardsMarkup = spellbookCardRibbonMarkup(cards);
+      const detailMarkup = spellbookDetailsMarkup(steps, description);
+
+      return `
+        <article class="spellbook-variant-card">
+          <div class="spellbook-variant-head">
+            <h4>Variant ${escapeHtml(String(index + 1))}</h4>
+            <div class="spellbook-head-badges">
+              <span class="spellbook-head-badge ${statusClass}">${escapeHtml(status)}</span>
+              <span class="spellbook-head-badge">Popularite ${escapeHtml(popularityText)}</span>
+              <span class="spellbook-head-badge">ID ${escapeHtml(variantId)}</span>
+            </div>
+          </div>
+          <div class="spellbook-variant-content">
+            <section class="spellbook-summary-row">
+              <p class="spellbook-column-title">Resume rapide</p>
+              <p class="spellbook-explicit-text">${escapeHtml(explicitText)}</p>
+            </section>
+            <section class="spellbook-card-ribbon-wrap">
+              <p class="spellbook-column-title">Cartes du combo</p>
+              ${cardsMarkup}
+            </section>
+            <section class="spellbook-action-block">
+              <p class="spellbook-column-title">Arbre d'actions</p>
+              ${stepsMarkup}
+            </section>
+            ${detailMarkup}
+          </div>
+        </article>
+      `;
+    }).join("");
+  }
+
+  function spellbookExplicitText(cards, requires, produces, description) {
+    const cardPart = cards.length > 0
+      ? `${cards.length} cartes, moteur centre sur ${cards[0]}.`
+      : "Nombre de cartes non precise.";
+    const requiresPart = requires.length > 0
+      ? `Prerequis: ${requires[0]}${requires.length > 1 ? " +" : ""}.`
+      : "Sans prerequis explicite.";
+    const producesPart = produces.length > 0
+      ? `Sortie principale: ${produces[0]}${produces.length > 1 ? " +" : ""}.`
+      : "Sortie non detaillee.";
+    return [cardPart, requiresPart, producesPart].join(" ");
+  }
+
+  function spellbookNormalizeText(value) {
+    return String(value || "").replace(/\s+/g, " ").trim();
+  }
+
+  function spellbookStepList(value) {
+    const text = spellbookNormalizeText(value);
+    if (!text) {
+      return [];
+    }
+
+    const seed = text
+      .replace(/\b(?:conditions?|resultats?|results?|details?|description)\s*:/gi, ". ")
+      .replace(/\s*[|]\s*/g, ". ");
+
+    const candidates = seed
+      .split(/(?<=[.!?])\s+|\s*;\s+/g)
+      .map((step) => step.replace(/^\d+[\).\-\s]*/, "").trim())
+      .map((step) => step.replace(/\s+/g, " "))
+      .filter((step) => step.length >= 14);
+
+    const seen = new Set();
+    const deduped = [];
+    candidates.forEach((step) => {
+      const key = normalizeStrategyName(step).replace(/[^a-z0-9]+/g, " ").trim();
+      if (!key || key.length < 12) {
+        return;
+      }
+      if (seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      deduped.push(step);
+    });
+
+    return deduped.slice(0, 16);
+  }
+
+  function spellbookCardRibbonMarkup(cards) {
+    const safeCards = Array.isArray(cards)
+      ? cards.map((item) => String(item || "").trim()).filter(Boolean)
+      : [];
+    if (safeCards.length === 0) {
+      return '<p class="muted">Cartes non precisees.</p>';
+    }
+
+    const maxCards = 12;
+    const visible = safeCards.slice(0, maxCards);
+    const hidden = Math.max(0, safeCards.length - visible.length);
+
+    return `
+      <div class="spellbook-card-ribbon">
+        ${visible.map((cardName) => `
+          <article class="spellbook-card-mini">
+            <img
+              class="spellbook-card-mini-image"
+              src="${escapeHtml(spellbookCardImageUrl(cardName))}"
+              alt="${escapeHtml(cardName)}"
+              loading="lazy"
+              decoding="async"
+            >
+            <p class="spellbook-card-mini-name">${escapeHtml(cardName)}</p>
+          </article>
+        `).join("")}
+        ${hidden > 0 ? `<div class="spellbook-card-mini spellbook-card-mini-more">+${escapeHtml(String(hidden))}</div>` : ""}
+      </div>
+    `;
+  }
+
+  function spellbookActionListMarkup(cards, steps) {
+    const safeCards = Array.isArray(cards)
+      ? cards.map((item) => String(item || "").trim()).filter(Boolean)
+      : [];
+    const safeSteps = Array.isArray(steps)
+      ? steps.map((step) => spellbookNormalizeText(step)).filter(Boolean)
+      : [];
+    if (safeSteps.length === 0) {
+      return '<p class="muted spellbook-empty">Aucune sequence structurée disponible.</p>';
+    }
+
+    return `
+      <ol class="spellbook-action-list">
+        ${safeSteps.slice(0, 10).map((step, stepIndex) => {
+          const stepCards = spellbookStepCards(step, safeCards);
+          const stepKind = spellbookStepKind(step);
+          const stepKindLabel = spellbookStepKindLabel(stepKind);
+          const preview = spellbookStepPreview(step);
+          const tooltip = escapeHtml(step);
+          const chips = stepCards.length > 0
+            ? stepCards.map((cardName) => `<span class="spellbook-action-chip" data-tooltip="${tooltip}">${escapeHtml(cardName)}</span>`).join("")
+            : `<span class="spellbook-action-chip is-generic" data-tooltip="${tooltip}">${escapeHtml(stepKindLabel)}</span>`;
+
+          return `
+            <li class="spellbook-action-item is-${escapeHtml(stepKind)}">
+              <span class="spellbook-action-dot"></span>
+              <div class="spellbook-action-main">
+                <p class="spellbook-action-headline">
+                  <span class="spellbook-action-step">Etape ${escapeHtml(String(stepIndex + 1))}</span>
+                  <span class="spellbook-action-kind-tag">${escapeHtml(stepKindLabel)}</span>
+                </p>
+                <p class="spellbook-action-text">${escapeHtml(preview)}</p>
+                <div class="spellbook-action-chip-row">${chips}</div>
+              </div>
+            </li>
+          `;
+        }).join("")}
+      </ol>
+    `;
+  }
+
+  function spellbookActionTreeMarkup(cards, steps) {
+    const safeCards = Array.isArray(cards)
+      ? cards.map((item) => String(item || "").trim()).filter(Boolean)
+      : [];
+    const safeSteps = Array.isArray(steps)
+      ? steps.map((step) => spellbookNormalizeText(step)).filter(Boolean)
+      : [];
+
+    if (safeSteps.length === 0) {
+      return '<p class="muted spellbook-empty">Aucune sequence structurée disponible.</p>';
+    }
+
+    const visibleSteps = safeSteps.slice(0, 8);
+
+    return `
+      <div class="spellbook-flow" style="--flow-count:${escapeHtml(String(visibleSteps.length))}">
+        ${visibleSteps.map((step, stepIndex) => {
+          const stepCards = spellbookStepCards(step, safeCards);
+          const stepKind = spellbookStepKind(step);
+          const stepKindLabel = spellbookStepKindLabel(stepKind);
+          const preview = spellbookStepPreview(step, 68);
+          const tooltip = escapeHtml(step);
+          const cardsMarkup = stepCards.length > 0
+            ? stepCards.map((cardName) => `
+              <span class="spellbook-action-card" data-tooltip="${tooltip}">${escapeHtml(cardName)}</span>
+            `).join("")
+            : `<span class="spellbook-action-card is-generic" data-tooltip="${tooltip}">${escapeHtml(stepKindLabel)}</span>`;
+
+          return `
+            <article class="spellbook-flow-node is-${escapeHtml(stepKind)}" title="${tooltip}">
+              <div class="spellbook-flow-head">
+                <span class="spellbook-flow-index">${escapeHtml(String(stepIndex + 1))}</span>
+                <span class="spellbook-flow-kind">${escapeHtml(stepKindLabel)}</span>
+              </div>
+              <p class="spellbook-flow-preview">${escapeHtml(preview)}</p>
+              <div class="spellbook-action-cards">${cardsMarkup}</div>
+            </article>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
+
+  function spellbookStepCards(step, cards) {
+    const normalizedStep = normalizeStrategyName(step);
+    if (!normalizedStep) {
+      return [];
+    }
+
+    const matches = [];
+    (Array.isArray(cards) ? cards : []).forEach((cardName) => {
+      const normalizedCard = normalizeStrategyName(cardName);
+      if (!normalizedCard) {
+        return;
+      }
+      if (normalizedStep.includes(normalizedCard)) {
+        matches.push(String(cardName || "").trim());
+      }
+    });
+
+    return Array.from(new Set(matches)).slice(0, 3);
+  }
+
+  function spellbookStepKind(step) {
+    const text = normalizeStrategyName(step);
+    if (!text) {
+      return "generic";
+    }
+    if (/\b(cast|play)\b/.test(text)) {
+      return "cast";
+    }
+    if (/\b(tutor|search)\b/.test(text)) {
+      return "tutor";
+    }
+    if (/\b(sacrifice)\b/.test(text)) {
+      return "sacrifice";
+    }
+    if (/\b(return|reanimate|unearth)\b/.test(text)) {
+      return "recursion";
+    }
+    if (/\b(create|token|copy)\b/.test(text)) {
+      return "token";
+    }
+    if (/\b(resolve|trigger|pay)\b/.test(text)) {
+      return "trigger";
+    }
+    return "generic";
+  }
+
+  function spellbookStepKindLabel(kind) {
+    const key = String(kind || "").trim();
+    if (key === "cast") {
+      return "Cast";
+    }
+    if (key === "tutor") {
+      return "Tutor";
+    }
+    if (key === "sacrifice") {
+      return "Sacrifice";
+    }
+    if (key === "recursion") {
+      return "Recursion";
+    }
+    if (key === "token") {
+      return "Token";
+    }
+    if (key === "trigger") {
+      return "Trigger";
+    }
+    return "Action";
+  }
+
+  function spellbookStepPreview(step, maxLength = 88) {
+    const text = spellbookNormalizeText(step);
+    if (!text) {
+      return "Action";
+    }
+    const safeMax = Number.isFinite(Number(maxLength)) ? Math.max(24, Number(maxLength)) : 88;
+    const compact = text.length > safeMax ? `${text.slice(0, safeMax).trimEnd()}...` : text;
+    return compact;
+  }
+
+  function spellbookDetailsMarkup(steps, description) {
+    const safeSteps = Array.isArray(steps)
+      ? steps.map((step) => spellbookNormalizeText(step)).filter(Boolean)
+      : [];
+    if (safeSteps.length > 0) {
+      return `
+        <details class="spellbook-details">
+          <summary>Voir les details complets</summary>
+          <ol class="spellbook-detail-list">
+            ${safeSteps.slice(0, 18).map((step) => `<li>${escapeHtml(step)}</li>`).join("")}
+          </ol>
+        </details>
+      `;
+    }
+
+    const text = spellbookNormalizeText(description);
+    if (!text) {
+      return '<p class="muted spellbook-empty">Aucun detail supplementaire.</p>';
+    }
+    const compact = text.length > 900 ? `${text.slice(0, 900).trimEnd()}...` : text;
+    return `
+      <details class="spellbook-details">
+        <summary>Voir les details complets</summary>
+        <p>${escapeHtml(compact)}</p>
+      </details>
+    `;
+  }
+
+  function spellbookCardImageUrl(cardName) {
+    const name = String(cardName || "").trim();
+    if (!name) {
+      return "";
+    }
+    const params = new URLSearchParams({
+      exact: name,
+      format: "image",
+      version: "normal"
+    });
+    return `https://api.scryfall.com/cards/named?${params.toString()}`;
+  }
+
+  function spellbookEntryNames(entries, objectPath) {
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return [];
+    }
+
+    const names = [];
+    entries.forEach((entry) => {
+      const nested = entry && objectPath && objectPath.length >= 2
+        ? entry?.[objectPath[0]]?.[objectPath[1]]
+        : "";
+      const direct = entry?.name;
+      const raw = String(nested || direct || "").trim();
+      if (raw) {
+        names.push(raw);
+      }
+    });
+
+    return Array.from(new Set(names));
+  }
+
+  function spellbookDescription(variant) {
+    const options = [
+      variant?.description,
+      variant?.notes,
+      variant?.result,
+      variant?.mana_needed
+    ];
+    for (const value of options) {
+      const text = String(value || "").trim();
+      if (text) {
+        return text;
+      }
+    }
+    return "";
   }
 
   function runStrategyComputation() {
@@ -3876,6 +4411,7 @@ import {
     bindCollectionPicker();
     bindDeckPicker();
     bindStrategyControls();
+    bindSpellbookControls();
     bindDeckAnalysisControls();
     loadDeckStateFromStorage();
 
