@@ -46,6 +46,16 @@ const CARD_VIEW_SORT_KEYS = {
   SET_ASC: "set-asc"
 };
 
+const CARD_COLOR_FILTER_CODES = ["W", "U", "B", "R", "G", "C"];
+const CARD_COLOR_FILTER_LABELS = {
+  W: "Blanc",
+  U: "Bleu",
+  B: "Noir",
+  R: "Rouge",
+  G: "Vert",
+  C: "Incolore"
+};
+
 const CARD_VIEW_DEFAULT_PAGE_SIZE = 48;
 const ENABLE_TILE_MANA_API_HYDRATION = false;
 
@@ -61,6 +71,7 @@ const UI_STATE = {
   viewMode: "table",
   searchQuery: "",
   sortKey: CARD_VIEW_SORT_KEYS.NAME_ASC,
+  colorFilter: createEmptyColorFilter(),
   activeViewKey: "",
   viewStateByKey: new Map()
 };
@@ -154,6 +165,40 @@ function viewStateKeyFromPayload(payload) {
   return `${context}::${identity}`;
 }
 
+function createEmptyColorFilter() {
+  const filter = {};
+  CARD_COLOR_FILTER_CODES.forEach((code) => {
+    filter[code] = false;
+  });
+  return filter;
+}
+
+function normalizeColorFilterState(raw) {
+  const filter = createEmptyColorFilter();
+  if (Array.isArray(raw)) {
+    raw.forEach((entry) => {
+      const code = String(entry || "").trim().toUpperCase();
+      if (CARD_COLOR_FILTER_CODES.includes(code)) {
+        filter[code] = true;
+      }
+    });
+    return filter;
+  }
+  if (raw && typeof raw === "object") {
+    CARD_COLOR_FILTER_CODES.forEach((code) => {
+      filter[code] = raw[code] === true;
+    });
+  }
+  return filter;
+}
+
+function getActiveColorFilterCodes(filterMap = UI_STATE.colorFilter) {
+  const source = filterMap && typeof filterMap === "object"
+    ? filterMap
+    : createEmptyColorFilter();
+  return CARD_COLOR_FILTER_CODES.filter((code) => source[code] === true);
+}
+
 function hydrateViewStateForPayload(payload) {
   const key = viewStateKeyFromPayload(payload);
   UI_STATE.activeViewKey = key;
@@ -161,9 +206,11 @@ function hydrateViewStateForPayload(payload) {
   if (!UI_STATE.viewStateByKey.has(key)) {
     UI_STATE.searchQuery = "";
     UI_STATE.sortKey = CARD_VIEW_SORT_KEYS.NAME_ASC;
+    UI_STATE.colorFilter = createEmptyColorFilter();
     UI_STATE.viewStateByKey.set(key, {
       searchQuery: UI_STATE.searchQuery,
-      sortKey: UI_STATE.sortKey
+      sortKey: UI_STATE.sortKey,
+      colorFilter: []
     });
     return;
   }
@@ -171,6 +218,9 @@ function hydrateViewStateForPayload(payload) {
   const saved = UI_STATE.viewStateByKey.get(key) || {};
   UI_STATE.searchQuery = String(saved.searchQuery || "");
   UI_STATE.sortKey = String(saved.sortKey || CARD_VIEW_SORT_KEYS.NAME_ASC);
+  UI_STATE.colorFilter = normalizeColorFilterState(
+    saved.colorFilter ?? saved.colorFilters ?? saved.selectedColors
+  );
 }
 
 function persistCurrentViewState() {
@@ -181,7 +231,8 @@ function persistCurrentViewState() {
 
   UI_STATE.viewStateByKey.set(key, {
     searchQuery: UI_STATE.searchQuery,
-    sortKey: UI_STATE.sortKey
+    sortKey: UI_STATE.sortKey,
+    colorFilter: getActiveColorFilterCodes(UI_STATE.colorFilter)
   });
 }
 
@@ -370,7 +421,7 @@ function isCardLikeRow(rowData) {
 }
 
 function renderCardsToolbar(filteredCount, totalCount, options = {}) {
-  void options;
+  const deckContext = options?.deckContext === true;
   const toolbar = document.createElement("div");
   toolbar.classList.add("collection-browser-toolbar");
   toolbar.innerHTML = `
@@ -404,6 +455,49 @@ function renderCardsToolbar(filteredCount, totalCount, options = {}) {
       persistCurrentViewState();
       renderCardsPage(1);
     });
+  }
+
+  if (!deckContext) {
+    const colorFilters = document.createElement("div");
+    colorFilters.classList.add("collection-toolbar-color-filters");
+    colorFilters.setAttribute("role", "group");
+    colorFilters.setAttribute("aria-label", "Filtre couleur");
+
+    CARD_COLOR_FILTER_CODES.forEach((code) => {
+      const toggle = document.createElement("label");
+      toggle.classList.add("collection-color-filter-toggle");
+      toggle.title = `Couleur: ${CARD_COLOR_FILTER_LABELS[code] || code}`;
+
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = code;
+      input.checked = UI_STATE.colorFilter[code] === true;
+
+      const symbol = createManaSymbol(code);
+      symbol.classList.add("collection-color-filter-symbol");
+      symbol.setAttribute("aria-hidden", "true");
+
+      const text = document.createElement("span");
+      text.classList.add("visually-hidden");
+      text.textContent = CARD_COLOR_FILTER_LABELS[code] || code;
+
+      const syncToggle = () => {
+        toggle.classList.toggle("is-active", input.checked === true);
+      };
+      syncToggle();
+
+      input.addEventListener("change", () => {
+        UI_STATE.colorFilter[code] = input.checked === true;
+        syncToggle();
+        persistCurrentViewState();
+        renderCardsPage(1);
+      });
+
+      toggle.append(input, symbol, text);
+      colorFilters.appendChild(toggle);
+    });
+
+    toolbar.appendChild(colorFilters);
   }
 
   return toolbar;
@@ -631,6 +725,11 @@ function resetCardPreviewPlaceholder() {
 }
 
 function bindRowPreviewEvents(rowElement, rowData) {
+  const isDeckContext = String(UI_STATE.activeViewKey || "").startsWith("decks::");
+  if (isDeckContext) {
+    return;
+  }
+
   rowElement.addEventListener("mouseenter", () => {
     if (PREVIEW_STATE.locked && PREVIEW_STATE.activeElement !== rowElement) {
       return;
@@ -659,6 +758,10 @@ function bindRowPreviewEvents(rowElement, rowData) {
 }
 
 function showCardPreview(rowData, rowElement, forceLock) {
+  if (String(UI_STATE.activeViewKey || "").startsWith("decks::")) {
+    return;
+  }
+
   cancelPreviewHide();
   if (forceLock) {
     PREVIEW_STATE.locked = true;
@@ -938,6 +1041,7 @@ function formatCellValue(value) {
 function applyCardFiltersAndSorting(rows) {
   const sourceRows = Array.isArray(rows) ? rows : [];
   const query = String(UI_STATE.searchQuery || "").trim().toLowerCase();
+  const activeColorCodes = getActiveColorFilterCodes(UI_STATE.colorFilter);
 
   let filteredRows = sourceRows;
   if (query) {
@@ -957,6 +1061,10 @@ function applyCardFiltersAndSorting(rows) {
         .join(" ");
       return lookup.includes(query);
     });
+  }
+
+  if (activeColorCodes.length > 0) {
+    filteredRows = filteredRows.filter((rowData) => rowMatchesColorFilter(rowData, activeColorCodes));
   }
 
   const sortedRows = [...filteredRows];
@@ -988,6 +1096,108 @@ function applyCardFiltersAndSorting(rows) {
     formatMainCardTitle(left).localeCompare(formatMainCardTitle(right), "fr", { sensitivity: "base" })
   ));
   return sortedRows;
+}
+
+function rowMatchesColorFilter(rowData, activeColorCodes) {
+  const selected = Array.isArray(activeColorCodes) ? activeColorCodes : [];
+  if (selected.length === 0) {
+    return true;
+  }
+
+  const rowColors = readCardRowColors(rowData);
+  return selected.some((code) => {
+    if (code === "C") {
+      return rowColors.length === 0 || rowColors.includes("C");
+    }
+    return rowColors.includes(code);
+  });
+}
+
+function readCardRowColors(rowData) {
+  const fromColors = parseColorCodesFromValue(readCellValue(rowData, "colors"));
+  if (fromColors.length > 0) {
+    return fromColors;
+  }
+
+  const manaCost = formatCellValue(readCellValue(rowData, "mana_cost")).trim();
+  if (manaCost) {
+    const manaColors = extractManaSymbols(manaCost)
+      .flatMap((symbol) => parseColorCodesFromManaSymbol(symbol))
+      .filter((value, index, source) => source.indexOf(value) === index);
+    if (manaColors.length > 0) {
+      return manaColors;
+    }
+  }
+
+  const fromIdentity = parseColorCodesFromValue(readCellValue(rowData, "color_identity"));
+  if (fromIdentity.length > 0) {
+    return fromIdentity;
+  }
+
+  return [];
+}
+
+function parseColorCodesFromValue(value) {
+  if (value == null) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    const merged = value.flatMap((entry) => parseColorCodesFromValue(entry));
+    return merged.filter((item, index, source) => source.indexOf(item) === index);
+  }
+
+  const raw = String(value || "").trim().toUpperCase();
+  if (!raw) {
+    return [];
+  }
+  if (raw === "COLORLESS") {
+    return ["C"];
+  }
+
+  const tokens = raw
+    .replace(/[\[\]{}()"]/g, " ")
+    .replace(/'/g, " ")
+    .replace(/[;|]/g, ",")
+    .split(/[\s,]+/)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+
+  const found = [];
+  tokens.forEach((token) => {
+    if (CARD_COLOR_FILTER_CODES.includes(token)) {
+      found.push(token);
+      return;
+    }
+    if (token === "COLORLESS" || token === "COL") {
+      found.push("C");
+      return;
+    }
+    if (/^[WUBRGC]+$/.test(token)) {
+      token.split("").forEach((char) => {
+        found.push(char);
+      });
+      return;
+    }
+    if (/^[WUBRGC]\/[WUBRGC]$/.test(token)) {
+      token.split("/").forEach((char) => {
+        found.push(char);
+      });
+    }
+  });
+
+  return found
+    .filter((code) => CARD_COLOR_FILTER_CODES.includes(code))
+    .filter((code, index, source) => source.indexOf(code) === index);
+}
+
+function parseColorCodesFromManaSymbol(symbol) {
+  const normalized = String(symbol || "").trim().toUpperCase();
+  if (!normalized) {
+    return [];
+  }
+  return CARD_COLOR_FILTER_CODES
+    .filter((code) => normalized.includes(code))
+    .filter((code, index, source) => source.indexOf(code) === index);
 }
 
 function readCardQuantity(rowData) {

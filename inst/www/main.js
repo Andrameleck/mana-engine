@@ -319,6 +319,14 @@ import {
       const selected = nodes.decks.fileInput.files && nodes.decks.fileInput.files[0];
       setDeckPickButtonLabel(selected ? `Deck: ${selected.name}` : defaultPickLabel);
       nodes.decks.pickFileButton.classList.toggle("has-file", Boolean(selected));
+      if (!selected) {
+        return;
+      }
+      if (nodes.decks.form && typeof nodes.decks.form.requestSubmit === "function") {
+        nodes.decks.form.requestSubmit();
+      } else if (nodes.decks.form) {
+        nodes.decks.form.dispatchEvent(new Event("submit", { cancelable: true }));
+      }
     });
   }
 
@@ -448,6 +456,20 @@ import {
       return "csv";
     }
     return "text";
+  }
+
+  function inferDeckNameFromFile(fileName) {
+    const rawName = String(fileName || "").trim();
+    if (!rawName) {
+      return "";
+    }
+    const normalized = rawName.replace(/\\/g, "/");
+    const baseName = normalized.includes("/") ? normalized.split("/").pop() : normalized;
+    const withoutExt = String(baseName || "").replace(/\.[^./\\]+$/, "").trim();
+    if (!withoutExt) {
+      return "";
+    }
+    return withoutExt.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
   }
 
   function inferCollectionSourceType(fileName) {
@@ -664,20 +686,27 @@ import {
       const deckName = escapeHtml(entry.name);
       const deckId = escapeHtml(entry.id);
       const glyph = escapeHtml(deckGlyph(entry.name, index + 1));
+      const sourceType = String(entry.payload?.source_type || "").toLowerCase();
+      const sourceLabel = sourceType === "db"
+        ? "DB"
+        : (sourceType === "csv" ? "CSV" : "TXT");
       return `
-        <article class="deck-icon-item ${activeClass}" data-entity-id="${deckId}">
-          <button type="button" class="deck-icon-open" data-action="select" aria-label="Ouvrir ${deckName}" title="Ouvrir ${deckName}">
-            <span class="deck-icon-glyph">${glyph}</span>
+        <article class="deck-entry-item ${activeClass}" data-entity-id="${deckId}">
+          <button type="button" class="deck-entry-open" data-action="select" aria-label="Ouvrir ${deckName}" title="Ouvrir ${deckName}">
+            <span class="deck-entry-glyph" aria-hidden="true">${glyph}</span>
+            <span class="deck-entry-main">
+              <span class="deck-entry-name">${deckName}</span>
+              <span class="deck-entry-meta">${escapeHtml(String(rowCount))} lignes</span>
+            </span>
+            <span class="deck-entry-source">${sourceLabel}</span>
           </button>
-          <button type="button" class="deck-icon-delete" data-action="delete" aria-label="Supprimer ${deckName}" title="Supprimer ${deckName}">
-            <svg viewBox="0 0 24 24" class="deck-icon-delete-svg" aria-hidden="true">
+          <button type="button" class="deck-entry-delete" data-action="delete" aria-label="Supprimer ${deckName}" title="Supprimer ${deckName}">
+            <svg viewBox="0 0 24 24" class="deck-entry-delete-svg" aria-hidden="true">
               <path d="M6 7h12"></path>
               <path d="M9 7V5h6v2"></path>
               <path d="M8 7l1 12h6l1-12"></path>
             </svg>
           </button>
-          <p class="deck-icon-name">${deckName}</p>
-          <p class="deck-icon-meta">${escapeHtml(String(rowCount))} lignes</p>
         </article>
       `;
     }).join("");
@@ -5494,7 +5523,8 @@ import {
         return;
       }
       const rawName = nodes.decks.nameInput.value.trim();
-      const deckName = rawName || `Deck ${state.decks.length + 1}`;
+      const inferredName = inferDeckNameFromFile(selected.name);
+      const deckName = rawName || inferredName || `Deck ${state.decks.length + 1}`;
       const entry = {
         id: uniqueId("deck"),
         name: deckName,

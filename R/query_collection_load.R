@@ -102,9 +102,11 @@ query_collection_load_db <- function(db_path, table_name) {
         ))
       }
 
-      quoted_table <- DBI::dbQuoteIdentifier(con, selected_table)
-      sql <- sprintf("SELECT * FROM %s", as.character(quoted_table))
-      rows <- DBI::dbGetQuery(con, sql)
+      rows <- query_collection_load_db_rows(
+        con = con,
+        selected_table = selected_table,
+        tables = tables
+      )
 
       list(
         ok = TRUE,
@@ -124,6 +126,115 @@ query_collection_load_db <- function(db_path, table_name) {
   )
 
   db_payload
+}
+
+query_collection_load_db_rows <- function(con, selected_table, tables) {
+  quoted_table <- DBI::dbQuoteIdentifier(con, selected_table)
+  base_sql <- sprintf("SELECT * FROM %s", as.character(quoted_table))
+
+  selected_lower <- tolower(trimws(as.character(selected_table)))
+  if (!identical(selected_lower, "collection")) {
+    return(DBI::dbGetQuery(con, base_sql))
+  }
+
+  cards_table <- query_collection_find_cards_table_name(tables)
+  if (!nzchar(cards_table)) {
+    return(DBI::dbGetQuery(con, base_sql))
+  }
+
+  collection_fields <- as.character(DBI::dbListFields(con, selected_table))
+  if (length(collection_fields) == 0L) {
+    return(DBI::dbGetQuery(con, base_sql))
+  }
+
+  collection_fields_lower <- tolower(collection_fields)
+  scryfall_index <- match("scryfall_id", collection_fields_lower)
+  if (is.na(scryfall_index)) {
+    return(DBI::dbGetQuery(con, base_sql))
+  }
+
+  enrichment_columns <- c("mana_cost", "colors", "color_identity", "type_line", "oracle_text")
+  missing_columns <- enrichment_columns[!enrichment_columns %in% collection_fields_lower]
+  if (length(missing_columns) == 0L) {
+    return(DBI::dbGetQuery(con, base_sql))
+  }
+
+  scryfall_column <- collection_fields[[scryfall_index]]
+  query_collection_load_collection_rows_with_cards(
+    con = con,
+    collection_table = selected_table,
+    cards_table = cards_table,
+    scryfall_column = scryfall_column,
+    columns_to_add = missing_columns
+  )
+}
+
+query_collection_find_cards_table_name <- function(tables) {
+  table_values <- as.character(tables)
+  if (length(table_values) == 0L) {
+    return("")
+  }
+  lower_tables <- tolower(table_values)
+  cards_index <- match("cards", lower_tables)
+  if (is.na(cards_index)) {
+    return("")
+  }
+  table_values[[cards_index]]
+}
+
+query_collection_load_collection_rows_with_cards <- function(con,
+                                                             collection_table,
+                                                             cards_table,
+                                                             scryfall_column,
+                                                             columns_to_add) {
+  collection_quoted <- as.character(DBI::dbQuoteIdentifier(con, collection_table))
+  cards_quoted <- as.character(DBI::dbQuoteIdentifier(con, cards_table))
+  scryfall_quoted <- as.character(DBI::dbQuoteIdentifier(con, scryfall_column))
+
+  add_select <- paste(
+    vapply(
+      columns_to_add,
+      function(col) {
+        sprintf("COALESCE(card_data.%s, '') AS %s", col, col)
+      },
+      character(1)
+    ),
+    collapse = ",\n       "
+  )
+
+  add_agg <- paste(
+    vapply(
+      columns_to_add,
+      function(col) {
+        sprintf("MAX(COALESCE(%s, '')) AS %s", col, col)
+      },
+      character(1)
+    ),
+    collapse = ",\n         "
+  )
+
+  sql <- sprintf(
+    paste(
+      "SELECT c.*,",
+      "       %s",
+      "FROM %s AS c",
+      "LEFT JOIN (",
+      "  SELECT lower(COALESCE(scryfall_id, '')) AS sid,",
+      "         %s",
+      "  FROM %s",
+      "  WHERE COALESCE(scryfall_id, '') <> ''",
+      "  GROUP BY lower(COALESCE(scryfall_id, ''))",
+      ") AS card_data",
+      "ON card_data.sid = lower(COALESCE(c.%s, ''))"
+    ),
+    add_select,
+    collection_quoted,
+    add_agg,
+    cards_quoted,
+    scryfall_quoted
+  )
+
+  DBI::dbGetQuery(con, sql)
 }
 
 query_collection_resolve_table_name <- function(tables, table_name) {
