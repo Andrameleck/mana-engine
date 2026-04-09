@@ -4,13 +4,9 @@ query_collection_db_import <- function(req,
                                        source_table = "",
                                        filename = "",
                                        dedupe = "true") {
-  has_db_deps <- requireNamespace("DBI", quietly = TRUE) &&
-    requireNamespace("RSQLite", quietly = TRUE)
-  if (!isTRUE(has_db_deps)) {
-    return(list(
-      ok = FALSE,
-      error = "database dependencies missing (DBI/RSQLite)"
-    ))
+  deps <- query_api_require_db()
+  if (!isTRUE(deps)) {
+    return(deps)
   }
 
   resolved <- query_collection_db_resolve_target_path(db_path)
@@ -108,13 +104,9 @@ query_collection_db_add_card <- function(db_path = "",
                                          altered = "false",
                                          condition = "near_mint",
                                          dedupe = "true") {
-  has_db_deps <- requireNamespace("DBI", quietly = TRUE) &&
-    requireNamespace("RSQLite", quietly = TRUE)
-  if (!isTRUE(has_db_deps)) {
-    return(list(
-      ok = FALSE,
-      error = "database dependencies missing (DBI/RSQLite)"
-    ))
+  deps <- query_api_require_db()
+  if (!isTRUE(deps)) {
+    return(deps)
   }
 
   resolved <- query_collection_db_resolve_target_path(db_path)
@@ -209,13 +201,9 @@ query_collection_db_delete_card <- function(db_path = "",
                                             foil = "",
                                             language = "",
                                             delete_all = "false") {
-  has_db_deps <- requireNamespace("DBI", quietly = TRUE) &&
-    requireNamespace("RSQLite", quietly = TRUE)
-  if (!isTRUE(has_db_deps)) {
-    return(list(
-      ok = FALSE,
-      error = "database dependencies missing (DBI/RSQLite)"
-    ))
+  deps <- query_api_require_db()
+  if (!isTRUE(deps)) {
+    return(deps)
   }
 
   resolved <- query_collection_db_resolve_target_path(db_path)
@@ -369,17 +357,7 @@ query_collection_db_resolve_target_path <- function(db_path = "") {
 }
 
 query_collection_db_parse_bool <- function(x, default = FALSE) {
-  value <- tolower(trimws(as.character(x)))
-  if (!nzchar(value)) {
-    return(isTRUE(default))
-  }
-  if (value %in% c("1", "true", "yes", "y", "on")) {
-    return(TRUE)
-  }
-  if (value %in% c("0", "false", "no", "n", "off")) {
-    return(FALSE)
-  }
-  isTRUE(default)
+  query_api_parse_bool(x, default = default)
 }
 
 query_collection_db_parse_numeric <- function(x, default = NA_real_) {

@@ -72,13 +72,9 @@ query_collection_default_db_path <- function() {
 }
 
 query_collection_load_db <- function(db_path, table_name) {
-  has_db_deps <- requireNamespace("DBI", quietly = TRUE) &&
-    requireNamespace("RSQLite", quietly = TRUE)
-  if (!isTRUE(has_db_deps)) {
-    return(list(
-      ok = FALSE,
-      error = "database dependencies missing (DBI/RSQLite)"
-    ))
+  deps <- query_api_require_db()
+  if (!isTRUE(deps)) {
+    return(deps)
   }
 
   con <- NULL

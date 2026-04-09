@@ -35,6 +35,15 @@ query_call <- local({
   }
 })
 
+query_req_scalar <- function(req, key, default = "") {
+  query_call(
+    "query_api_scalar_arg",
+    req = req,
+    key = key,
+    default = default
+  )
+}
+
 #* @apiTitle mtgcodex.api API
 #* @apiDescription API routes delegate to query_* functions in R/
 NULL
@@ -137,23 +146,11 @@ function(collection_id = "") {
 #* @serializer unboxedJSON
 #* @post /collection/db/import
 function(req, res) {
-  scalar_arg <- function(key, default = "") {
-    args <- req$args
-    if (is.null(args) || is.null(args[[key]])) {
-      return(default)
-    }
-    value <- as.character(args[[key]])
-    if (length(value) == 0L) {
-      return(default)
-    }
-    trimws(value[[1]])
-  }
-
-  db_path <- scalar_arg("db_path", "")
-  source_type <- scalar_arg("source_type", "")
-  source_table <- scalar_arg("source_table", "")
-  filename <- scalar_arg("filename", "")
-  dedupe <- scalar_arg("dedupe", "true")
+  db_path <- query_req_scalar(req, "db_path", "")
+  source_type <- query_req_scalar(req, "source_type", "")
+  source_table <- query_req_scalar(req, "source_table", "")
+  filename <- query_req_scalar(req, "filename", "")
+  dedupe <- query_req_scalar(req, "dedupe", "true")
 
   query_call(
     "query_collection_db_import",
