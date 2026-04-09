@@ -16,6 +16,7 @@ env:
   CI_CACHE_DIR: ${{ github.workspace }}/ci
   R_LIBS_USER: ${{ github.workspace }}/ci/lib
   COVERAGE_REPORT: ${{ github.workspace }}/ci/coverage.RDS
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 permissions:
   contents: read
@@ -28,7 +29,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup R
         uses: r-lib/actions/setup-r@v2
@@ -49,21 +50,13 @@ jobs:
             latexmk
           sudo rm -rf /var/lib/apt/lists/*
 
-      - name: Cache R library
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.R_LIBS_USER }}
-          key: ${{ runner.os }}-r-lib-check-${{ hashFiles('DESCRIPTION') }}
-          restore-keys: |
-            ${{ runner.os }}-r-lib-check-
-
       - name: Install R dependencies
-        run: |
-          mkdir -p "$R_LIBS_USER"
-          echo "R_LIBS=$R_LIBS_USER" > .Renviron
-          Rscript -e "options(repos = c(CRAN = Sys.getenv('CRAN_MIRROR'))); if (!requireNamespace('pak', quietly = TRUE)) install.packages('pak')"
-          Rscript -e "pak::pak(c('devtools', 'testthat'))"
-          Rscript -e "pak::local_install_deps(dependencies = TRUE, upgrade = FALSE)"
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: |
+            any::devtools
+            any::testthat
+          dependencies: '"all"'
 
       - name: Run package checks
         env:
@@ -79,27 +72,22 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup R
         uses: r-lib/actions/setup-r@v2
 
-      - name: Cache R library
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.R_LIBS_USER }}
-          key: ${{ runner.os }}-r-lib-coverage-${{ hashFiles('DESCRIPTION') }}
-          restore-keys: |
-            ${{ runner.os }}-r-lib-coverage-
-
       - name: Install R dependencies
-        run: |
-          mkdir -p "$R_LIBS_USER"
-          mkdir -p "$CI_CACHE_DIR"
-          echo "R_LIBS=$R_LIBS_USER" > .Renviron
-          Rscript -e "options(repos = c(CRAN = Sys.getenv('CRAN_MIRROR'))); if (!requireNamespace('pak', quietly = TRUE)) install.packages('pak')"
-          Rscript -e "pak::pak(c('devtools', 'covr', 'DT'))"
-          Rscript -e "pak::local_install_deps(dependencies = TRUE, upgrade = FALSE)"
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: |
+            any::devtools
+            any::covr
+            any::DT
+          dependencies: '"all"'
+
+      - name: Ensure coverage directory exists
+        run: mkdir -p "$CI_CACHE_DIR"
 
       - name: Generate coverage RDS
         run: |
@@ -131,7 +119,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup R
         uses: r-lib/actions/setup-r@v2
@@ -152,22 +140,18 @@ jobs:
             latexmk
           sudo rm -rf /var/lib/apt/lists/*
 
-      - name: Cache R library
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.R_LIBS_USER }}
-          key: ${{ runner.os }}-r-lib-deploy-${{ hashFiles('DESCRIPTION') }}
-          restore-keys: |
-            ${{ runner.os }}-r-lib-deploy-
-
       - name: Install R dependencies
-        run: |
-          mkdir -p "$R_LIBS_USER"
-          mkdir -p "$CI_CACHE_DIR"
-          echo "R_LIBS=$R_LIBS_USER" > .Renviron
-          Rscript -e "options(repos = c(CRAN = Sys.getenv('CRAN_MIRROR'))); if (!requireNamespace('pak', quietly = TRUE)) install.packages('pak')"
-          Rscript -e "pak::pak(c('devtools', 'pkgdown', 'covr', 'DT'))"
-          Rscript -e "pak::local_install_deps(dependencies = TRUE, upgrade = FALSE)"
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: |
+            any::devtools
+            any::pkgdown
+            any::covr
+            any::DT
+          dependencies: '"all"'
+
+      - name: Ensure CI cache directory exists
+        run: mkdir -p "$CI_CACHE_DIR"
 
       - name: Download coverage artifact (optional)
         continue-on-error: true
