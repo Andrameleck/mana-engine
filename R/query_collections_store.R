@@ -1,11 +1,7 @@
 query_collections_import_csv <- function(req, name = "", platform = "auto", filename = "") {
-  has_db_deps <- requireNamespace("DBI", quietly = TRUE) &&
-    requireNamespace("RSQLite", quietly = TRUE)
-  if (!isTRUE(has_db_deps)) {
-    return(list(
-      ok = FALSE,
-      error = "database dependencies missing (DBI/RSQLite)"
-    ))
+  deps <- query_api_require_db()
+  if (!isTRUE(deps)) {
+    return(deps)
   }
 
   file_info <- query_collection_extract_uploaded_file(req, filename = filename)
@@ -135,13 +131,9 @@ query_collections_import_csv <- function(req, name = "", platform = "auto", file
 }
 
 query_collections_list <- function() {
-  has_db_deps <- requireNamespace("DBI", quietly = TRUE) &&
-    requireNamespace("RSQLite", quietly = TRUE)
-  if (!isTRUE(has_db_deps)) {
-    return(list(
-      ok = FALSE,
-      error = "database dependencies missing (DBI/RSQLite)"
-    ))
+  deps <- query_api_require_db()
+  if (!isTRUE(deps)) {
+    return(deps)
   }
 
   store_path <- query_collections_store_path()
@@ -184,13 +176,9 @@ query_collections_list <- function() {
 }
 
 query_collections_get <- function(collection_id = "") {
-  has_db_deps <- requireNamespace("DBI", quietly = TRUE) &&
-    requireNamespace("RSQLite", quietly = TRUE)
-  if (!isTRUE(has_db_deps)) {
-    return(list(
-      ok = FALSE,
-      error = "database dependencies missing (DBI/RSQLite)"
-    ))
+  deps <- query_api_require_db()
+  if (!isTRUE(deps)) {
+    return(deps)
   }
 
   id <- trimws(as.character(collection_id))
@@ -272,13 +260,9 @@ query_collections_get <- function(collection_id = "") {
 }
 
 query_collections_delete <- function(collection_id = "") {
-  has_db_deps <- requireNamespace("DBI", quietly = TRUE) &&
-    requireNamespace("RSQLite", quietly = TRUE)
-  if (!isTRUE(has_db_deps)) {
-    return(list(
-      ok = FALSE,
-      error = "database dependencies missing (DBI/RSQLite)"
-    ))
+  deps <- query_api_require_db()
+  if (!isTRUE(deps)) {
+    return(deps)
   }
 
   id <- trimws(as.character(collection_id))

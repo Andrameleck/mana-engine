@@ -35,6 +35,15 @@ query_call <- local({
   }
 })
 
+query_req_scalar <- function(req, key, default = "") {
+  query_call(
+    "query_api_scalar_arg",
+    req = req,
+    key = key,
+    default = default
+  )
+}
+
 #* @apiTitle mtgcodex.api API
 #* @apiDescription API routes delegate to query_* functions in R/
 NULL
@@ -123,6 +132,163 @@ function(collection_id = "") {
   query_call(
     "query_collections_delete",
     collection_id = collection_id
+  )
+}
+
+#* Import cards into SQLite collection DB (source file can be CSV or DB)
+#* @param db_path Optional target sqlite path (default: package mtg.db).
+#* @param source_type Optional source type: db, csv, text, or auto.
+#* @param source_table Optional source table name when source is db.
+#* @param filename Optional file name when sending application/octet-stream.
+#* @param dedupe Enable deduplication (true/false).
+#* @parser multi
+#* @parser octet
+#* @serializer unboxedJSON
+#* @post /collection/db/import
+function(req, res) {
+  db_path <- query_req_scalar(req, "db_path", "")
+  source_type <- query_req_scalar(req, "source_type", "")
+  source_table <- query_req_scalar(req, "source_table", "")
+  filename <- query_req_scalar(req, "filename", "")
+  dedupe <- query_req_scalar(req, "dedupe", "true")
+
+  query_call(
+    "query_collection_db_import",
+    req = req,
+    db_path = db_path,
+    source_type = source_type,
+    source_table = source_table,
+    filename = filename,
+    dedupe = dedupe
+  )
+}
+
+#* Add one card into SQLite collection DB
+#* @param db_path Optional target sqlite path (default: package mtg.db).
+#* @param name Card name.
+#* @param quantity Quantity (default 1).
+#* @param set_code Set code.
+#* @param set_name Set name.
+#* @param collector_number Collector number.
+#* @param foil Foil/finish (normal or foil).
+#* @param rarity Rarity.
+#* @param language Language code (default en).
+#* @param scryfall_id Scryfall UUID.
+#* @param manabox_id Optional ManaBox ID.
+#* @param purchase_price Optional purchase price.
+#* @param purchase_price_currency Optional currency code (default EUR).
+#* @param misprint Misprint flag.
+#* @param altered Altered flag.
+#* @param condition Card condition.
+#* @param dedupe Enable deduplication (true/false).
+#* @serializer unboxedJSON
+#* @post /collection/db/add_card
+function(db_path = "",
+         name = "",
+         quantity = "1",
+         set_code = "",
+         set_name = "",
+         collector_number = "",
+         foil = "normal",
+         rarity = "",
+         language = "en",
+         scryfall_id = "",
+         manabox_id = "",
+         purchase_price = "",
+         purchase_price_currency = "EUR",
+         misprint = "false",
+         altered = "false",
+         condition = "near_mint",
+         dedupe = "true") {
+  query_call(
+    "query_collection_db_add_card",
+    db_path = db_path,
+    name = name,
+    quantity = quantity,
+    set_code = set_code,
+    set_name = set_name,
+    collector_number = collector_number,
+    foil = foil,
+    rarity = rarity,
+    language = language,
+    scryfall_id = scryfall_id,
+    manabox_id = manabox_id,
+    purchase_price = purchase_price,
+    purchase_price_currency = purchase_price_currency,
+    misprint = misprint,
+    altered = altered,
+    condition = condition,
+    dedupe = dedupe
+  )
+}
+
+#* Delete card(s) from SQLite collection DB
+#* @param db_path Optional target sqlite path (default: package mtg.db).
+#* @param id Optional collection row id.
+#* @param manabox_id Optional ManaBox ID selector.
+#* @param scryfall_id Optional Scryfall ID selector.
+#* @param name Optional card name selector.
+#* @param set_code Optional set code selector.
+#* @param collector_number Optional collector number selector.
+#* @param foil Optional foil selector.
+#* @param language Optional language selector.
+#* @param delete_all Delete all matching rows (true/false).
+#* @serializer unboxedJSON
+#* @delete /collection/db/delete_card
+function(db_path = "",
+         id = "",
+         manabox_id = "",
+         scryfall_id = "",
+         name = "",
+         set_code = "",
+         collector_number = "",
+         foil = "",
+         language = "",
+         delete_all = "false") {
+  query_call(
+    "query_collection_db_delete_card",
+    db_path = db_path,
+    id = id,
+    manabox_id = manabox_id,
+    scryfall_id = scryfall_id,
+    name = name,
+    set_code = set_code,
+    collector_number = collector_number,
+    foil = foil,
+    language = language,
+    delete_all = delete_all
+  )
+}
+
+#* Search combo references from Commander Spellbook
+#* @param q Card seed query.
+#* @param limit Max combo variants to fetch (1-100).
+#* @serializer unboxedJSON
+#* @get /reference/spellbook/variants
+function(q = "", limit = "40") {
+  query_call(
+    "query_spellbook_variants",
+    q = q,
+    limit = limit
+  )
+}
+
+#* Search card references from MTGJSON
+#* @param q Card name query (optional).
+#* @param set_code Set code (recommended for set lookups).
+#* @param collector_number Exact collector number (optional).
+#* @param uuid MTGJSON card UUID (direct lookup).
+#* @param limit Max cards to return (1-200).
+#* @serializer unboxedJSON
+#* @get /reference/mtgjson/cards
+function(q = "", set_code = "", collector_number = "", uuid = "", limit = "40") {
+  query_call(
+    "query_mtgjson_cards",
+    q = q,
+    set_code = set_code,
+    collector_number = collector_number,
+    uuid = uuid,
+    limit = limit
   )
 }
 

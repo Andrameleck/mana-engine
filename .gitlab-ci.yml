@@ -29,8 +29,9 @@ cache:
     - rm -rf /var/lib/apt/lists/*
     - mkdir -p $R_LIBS_USER
     - echo "R_LIBS='$R_LIBS_USER'" > .Renviron
-    - R -q -e 'if (!require(devtools)) install.packages(c("devtools", "remotes", "testthat"))'
-    - R -q -e 'devtools::install_deps(dependencies = TRUE)'
+    - R -q -e 'options(repos = c(CRAN = "https://cloud.r-project.org")); if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")'
+    - R -q -e 'pak::pak(c("devtools", "testthat"))'
+    - R -q -e 'pak::local_install_deps(dependencies = TRUE, upgrade = FALSE)'
 
 check:
   rules:
@@ -55,7 +56,7 @@ cover-gen:
     - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE != "schedule"'
   script:
     - Rscript -e 'devtools::install()'
-    - Rscript -e 'remotes::install_cran(c("covr", "DT"))'
+    - Rscript -e 'pak::pak(c("covr", "DT"))'
     - Rscript -e 'cov <- covr::package_coverage(type = "all", quiet = FALSE);cov;saveRDS(cov, Sys.getenv("COVERAGE_REPORT"))'
   artifacts:
     paths:
@@ -111,7 +112,7 @@ cover-rep:
     - job: cover-gen
       artifacts: true
   script:
-    - R -q -e 'remotes::install_cran(c("covr", "DT"))'
+    - R -q -e 'pak::pak(c("covr", "DT"))'
     - R -q -e 'covr::report(readRDS(Sys.getenv("COVERAGE_REPORT")), "public/coverage.html")'
   artifacts:
     paths:

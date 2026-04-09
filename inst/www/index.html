@@ -4,13 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>mtgcodex.api Workspace</title>
+  <link rel="icon" href="/ui/static/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/ui/static/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/ui/static/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/ui/static/apple-touch-icon.png">
+  <link rel="manifest" href="/ui/static/site.webmanifest">
+  <meta name="theme-color" content="#0a0d13">
   <link rel="stylesheet" href="/ui/static/styles.css">
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-mark" aria-hidden="true">M</div>
+        <div class="brand-mark" aria-hidden="true">
+          <img src="/ui/static/logo.jpg" alt="">
+        </div>
         <p class="eyebrow">MTG</p>
       </div>
 
@@ -38,6 +46,15 @@
             <path d="M4 16l8 4 8-4"></path>
           </svg>
           <span class="visually-hidden">Strategy</span>
+        </button>
+        <button type="button" class="side-tab" data-tab="spellbook" data-label="Spellbook" aria-label="Spellbook" title="Spellbook">
+          <svg viewBox="0 0 24 24" class="side-tab-icon" aria-hidden="true">
+            <path d="M6 4h11a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"></path>
+            <path d="M8 8h8"></path>
+            <path d="M8 12h8"></path>
+            <path d="M8 16h5"></path>
+          </svg>
+          <span class="visually-hidden">Spellbook</span>
         </button>
       </nav>
     </aside>
@@ -67,21 +84,13 @@
               </label>
               <div class="actions collection-actions-inline">
                 <input id="collection-source-file" type="file" class="hidden-file-input">
-                <button type="button" id="collection-pick-file" class="btn-icon-only" aria-label="Choisir CSV" title="Choisir CSV">
+                <button type="button" id="collection-pick-file" class="btn-icon-only" aria-label="Choisir fichier collection" title="Choisir fichier collection">
                   <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
                     <path d="M12 4v11"></path>
                     <path d="M8.5 8.5L12 5l3.5 3.5"></path>
                     <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"></path>
                   </svg>
-                  <span class="visually-hidden">Choisir CSV</span>
-                </button>
-                <button type="submit" class="btn-icon-only" aria-label="Creer le dossier" title="Creer le dossier">
-                  <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
-                    <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h4l1.6 2H18.5A1.5 1.5 0 0 1 20 9.5v8A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z"></path>
-                    <path d="M12 10.5v5"></path>
-                    <path d="M9.5 13h5"></path>
-                  </svg>
-                  <span class="visually-hidden">Creer le dossier</span>
+                  <span class="visually-hidden">Choisir fichier collection</span>
                 </button>
               </div>
             </form>
@@ -100,7 +109,7 @@
         <div class="collection-admin">
           <section class="panel panel-compact">
             <div class="panel-head">
-              <h3>Import deck</h3>
+              <h3>Nouveau deck</h3>
             </div>
             <form id="deck-load-form" class="collection-load-inline">
               <label for="deck-name">
@@ -117,35 +126,114 @@
                   </svg>
                   <span class="visually-hidden">Choisir un fichier deck</span>
                 </button>
-                <button type="submit" class="btn-icon-only" aria-label="Ajouter le deck" title="Ajouter le deck">
-                  <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
-                    <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h4l1.6 2H18.5A1.5 1.5 0 0 1 20 9.5v8A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z"></path>
-                    <path d="M12 10.5v5"></path>
-                    <path d="M9.5 13h5"></path>
-                  </svg>
-                  <span class="visually-hidden">Ajouter le deck</span>
-                </button>
               </div>
             </form>
           </section>
 
           <section class="panel panel-compact deck-list-panel">
             <div class="panel-head">
-              <h3>Decks list</h3>
+              <h3>Decks</h3>
             </div>
-            <div id="decks-list" class="entity-list deck-icon-grid"></div>
+            <div id="decks-list" class="entity-list deck-entry-grid"></div>
           </section>
         </div>
       </section>
 
       <section id="tab-strategy" class="tab-view" aria-labelledby="workspace-title">
-        <section class="panel">
+        <section class="panel strategy-panel">
           <div class="panel-head">
-            <h3>Strategy module</h3>
+            <h3>Synergy Finder</h3>
           </div>
-          <p class="muted">
-            Placeholder ready for future strategy workflows (archetypes, plan templates, matchup notes).
-          </p>
+
+          <div class="strategy-controls">
+            <p id="strategy-source-meta" class="muted">Selectionne un dossier collection pour activer le calcul.</p>
+            <div class="strategy-control-grid">
+              <label for="strategy-seed-input">
+                Carte seed
+                <input id="strategy-seed-input" type="search" placeholder="Entomb">
+                <datalist id="strategy-seed-list"></datalist>
+              </label>
+              <label for="strategy-direct-limit">
+                Top synergies directes
+                <input id="strategy-direct-limit" type="number" min="4" max="24" value="12">
+              </label>
+              <label for="strategy-group-limit">
+                Top groupes
+                <input id="strategy-group-limit" type="number" min="3" max="12" value="6">
+              </label>
+              <label for="strategy-include-known" class="strategy-toggle">
+                Inclure cartes externes (Scryfall)
+                <span class="strategy-toggle-row">
+                  <input id="strategy-include-known" type="checkbox">
+                  <span>Etendre le calcul avec des cartes hors collection</span>
+                </span>
+              </label>
+              <label for="strategy-include-spellbook" class="strategy-toggle">
+                Inclure reference combos (Commander Spellbook)
+                <span class="strategy-toggle-row">
+                  <input id="strategy-include-spellbook" type="checkbox">
+                  <span>Prioriser les cartes presentes dans les combos publics</span>
+                </span>
+              </label>
+              <label class="strategy-mana-filter">
+                Filtre mana (couleurs autorisees)
+                <span class="strategy-mana-filter-row">
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="W"><span>W</span></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="U"><span>U</span></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="B"><span>B</span></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="R"><span>R</span></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="G"><span>G</span></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="C"><span>C</span></label>
+                </span>
+              </label>
+              <div class="actions strategy-actions">
+                <button type="button" id="strategy-run-btn">Calculer</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="strategy-status" class="muted">En attente de calcul.</div>
+
+          <div class="strategy-results-grid">
+            <section class="strategy-result-block">
+              <div class="strategy-result-head">
+                <h4>Synergies directes</h4>
+              </div>
+              <div id="strategy-direct-list" class="strategy-card-grid"></div>
+            </section>
+
+            <section class="strategy-result-block">
+              <div class="strategy-result-head">
+                <h4>Groupes de cartes</h4>
+              </div>
+              <div id="strategy-group-list" class="strategy-group-list"></div>
+            </section>
+          </div>
+        </section>
+      </section>
+
+      <section id="tab-spellbook" class="tab-view" aria-labelledby="workspace-title">
+        <section class="panel spellbook-panel">
+          <div class="panel-head">
+            <h3>Commander Spellbook Lookup</h3>
+          </div>
+
+          <form id="spellbook-form" class="spellbook-form">
+            <label for="spellbook-card-input">
+              Nom de carte
+              <input id="spellbook-card-input" type="search" placeholder="Entomb">
+            </label>
+            <label for="spellbook-limit-input">
+              Limite
+              <input id="spellbook-limit-input" type="number" min="1" max="100" value="20">
+            </label>
+            <div class="actions spellbook-actions">
+              <button type="submit" id="spellbook-run-btn">Rechercher</button>
+            </div>
+          </form>
+
+          <div id="spellbook-status" class="muted">Saisis une carte pour interroger Commander Spellbook.</div>
+          <div id="spellbook-results" class="spellbook-result-list"></div>
         </section>
       </section>
 
@@ -155,12 +243,28 @@
             <h3 id="table-title">Table</h3>
             <div id="load-summary" class="summary muted">No data loaded.</div>
           </div>
-          <div id="table-wrap" class="table-wrap"></div>
-          <div id="table-scrollbar" class="table-scrollbar" aria-hidden="true">
-            <div id="table-scrollbar-inner"></div>
+          <div class="table-panel-body">
+            <div class="table-main">
+              <div id="table-wrap" class="table-wrap"></div>
+              <div id="table-scrollbar" class="table-scrollbar" aria-hidden="true">
+                <div id="table-scrollbar-inner"></div>
+              </div>
+              <div id="table-pager" class="table-pager"></div>
+            </div>
           </div>
-          <div id="table-pager" class="table-pager"></div>
         </section>
+
+        <aside id="card-preview" class="card-preview hidden" aria-live="polite">
+          <div class="card-preview-head">
+            <strong id="card-preview-title">Card</strong>
+            <button type="button" id="card-preview-close" class="card-preview-close" aria-label="Close panel">x</button>
+          </div>
+          <div class="card-preview-body">
+            <img id="card-preview-image" alt="Card preview" loading="lazy">
+            <p id="card-preview-text" class="muted"></p>
+            <dl id="card-preview-meta" class="card-preview-meta"></dl>
+          </div>
+        </aside>
 
         <aside id="deck-stats-panel" class="panel deck-stats-panel is-hidden" aria-live="polite">
           <div class="panel-head">
@@ -174,20 +278,6 @@
     </main>
   </div>
 
-  <aside id="card-preview" class="card-preview hidden" aria-live="polite">
-    <div class="card-preview-head">
-      <strong id="card-preview-title">Card</strong>
-      <button type="button" id="card-preview-close" class="card-preview-close" aria-label="Close panel">x</button>
-    </div>
-    <div class="card-preview-body">
-      <img id="card-preview-image" alt="Card preview" loading="lazy">
-      <p id="card-preview-text" class="muted"></p>
-      <dl id="card-preview-meta" class="card-preview-meta"></dl>
-    </div>
-  </aside>
-
-  <script src="/ui/static/api.js"></script>
-  <script src="/ui/static/ui.js"></script>
-  <script src="/ui/static/main.js"></script>
+  <script type="module" src="/ui/static/main.js"></script>
 </body>
 </html>

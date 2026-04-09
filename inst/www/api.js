@@ -1,89 +1,242 @@
-async function uploadCollection(file, sourceType, tableName) {
-  const params = new URLSearchParams({
-    type: sourceType,
-    table: tableName || ""
+const API_ENDPOINTS = Object.freeze({
+  collectionLoad: "/collection/load",
+  collectionUpload: "/collection/upload",
+  collectionDbImport: "/collection/db/import",
+  collectionDbAddCard: "/collection/db/add_card",
+  collectionDbDeleteCard: "/collection/db/delete_card",
+  collectionsImportCsv: "/collections/import_csv",
+  collections: "/collections",
+  referenceSpellbookVariants: "/reference/spellbook/variants",
+  referenceMtgjsonCards: "/reference/mtgjson/cards"
+});
+
+function toText(value) {
+  if (value == null) {
+    return "";
+  }
+  return String(value);
+}
+
+function toTrimmedText(value) {
+  return toText(value).trim();
+}
+
+function buildSearchParams(query = {}) {
+  const params = new URLSearchParams();
+  Object.entries(query || {}).forEach(([key, value]) => {
+    if (value == null) {
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((entry) => params.append(key, toText(entry)));
+      return;
+    }
+    params.set(key, toText(value));
   });
+  return params;
+}
+
+function appendQuery(endpoint, query = {}) {
+  const params = buildSearchParams(query);
+  const raw = params.toString();
+  if (!raw) {
+    return endpoint;
+  }
+  return `${endpoint}?${raw}`;
+}
+
+function uploadBody(file) {
   const formData = new FormData();
   formData.append("file", file);
+  return formData;
+}
 
-  const response = await fetch(`/collection/upload?${params.toString()}`, {
-    method: "POST",
-    body: formData
-  });
-  const data = await response.json().catch(() => ({}));
+async function apiRequest(endpoint, options = {}) {
+  const {
+    method = "GET",
+    query = {},
+    body = undefined,
+    fallback = {}
+  } = options;
 
-  if (!response.ok && data.ok !== false) {
+  const url = appendQuery(endpoint, query);
+  let response;
+  try {
+    response = await fetch(url, { method, body });
+  } catch (error) {
     return {
       ok: false,
-      error: `HTTP ${response.status}`
+      error: error?.message || String(error),
+      ...fallback
     };
   }
 
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok && data.ok !== false) {
+    return {
+      ok: false,
+      error: `HTTP ${response.status}`,
+      ...fallback
+    };
+  }
   return data;
+}
+
+async function uploadCollection(file, sourceType, tableName) {
+  return apiRequest(API_ENDPOINTS.collectionUpload, {
+    method: "POST",
+    query: {
+      type: toText(sourceType),
+      table: toText(tableName || "")
+    },
+    body: uploadBody(file)
+  });
+}
+
+async function loadCollectionFromDb(dbPath = "", tableName = "collection") {
+  return apiRequest(API_ENDPOINTS.collectionLoad, {
+    method: "GET",
+    query: {
+      type: "db",
+      path: toText(dbPath || ""),
+      table: toText(tableName || "collection")
+    }
+  });
 }
 
 async function importCollectionCsv(file, name, platform) {
-  const params = new URLSearchParams({
-    name: name || "",
-    platform: platform || "auto"
-  });
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const response = await fetch(`/collections/import_csv?${params.toString()}`, {
+  return apiRequest(API_ENDPOINTS.collectionsImportCsv, {
     method: "POST",
-    body: formData
+    query: {
+      name: toText(name || ""),
+      platform: toText(platform || "auto")
+    },
+    body: uploadBody(file)
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok && data.ok !== false) {
-    return {
-      ok: false,
-      error: `HTTP ${response.status}`
-    };
-  }
-  return data;
+}
+
+async function importIntoCollectionDb(file, dbPath = "", sourceType = "", sourceTable = "", dedupe = true) {
+  return apiRequest(API_ENDPOINTS.collectionDbImport, {
+    method: "POST",
+    query: {
+      db_path: toText(dbPath || ""),
+      source_type: toText(sourceType || ""),
+      source_table: toText(sourceTable || ""),
+      dedupe: dedupe ? "true" : "false"
+    },
+    body: uploadBody(file)
+  });
+}
+
+async function addCardToCollectionDb(card = {}, dbPath = "", dedupe = true) {
+  const query = {
+    db_path: toText(dbPath || ""),
+    dedupe: dedupe ? "true" : "false"
+  };
+
+  Object.entries(card || {}).forEach(([key, value]) => {
+    query[key] = toText(value);
+  });
+
+  return apiRequest(API_ENDPOINTS.collectionDbAddCard, {
+    method: "POST",
+    query
+  });
+}
+
+async function deleteCardFromCollectionDb(selector = {}, dbPath = "", deleteAll = false) {
+  const query = {
+    db_path: toText(dbPath || ""),
+    delete_all: deleteAll ? "true" : "false"
+  };
+
+  Object.entries(selector || {}).forEach(([key, value]) => {
+    const text = toTrimmedText(value);
+    if (!text) {
+      return;
+    }
+    query[key] = text;
+  });
+
+  return apiRequest(API_ENDPOINTS.collectionDbDeleteCard, {
+    method: "DELETE",
+    query
+  });
 }
 
 async function listStoredCollections() {
-  const response = await fetch("/collections", {
+  return apiRequest(API_ENDPOINTS.collections, {
     method: "GET"
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok && data.ok !== false) {
-    return {
-      ok: false,
-      error: `HTTP ${response.status}`
-    };
-  }
-  return data;
 }
 
 async function getStoredCollection(collectionId) {
-  const id = encodeURIComponent(String(collectionId || ""));
-  const response = await fetch(`/collections/${id}`, {
+  const id = encodeURIComponent(toText(collectionId || ""));
+  return apiRequest(`${API_ENDPOINTS.collections}/${id}`, {
     method: "GET"
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok && data.ok !== false) {
-    return {
-      ok: false,
-      error: `HTTP ${response.status}`
-    };
-  }
-  return data;
 }
 
 async function deleteStoredCollection(collectionId) {
-  const id = encodeURIComponent(String(collectionId || ""));
-  const response = await fetch(`/collections/${id}`, {
+  const id = encodeURIComponent(toText(collectionId || ""));
+  return apiRequest(`${API_ENDPOINTS.collections}/${id}`, {
     method: "DELETE"
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok && data.ok !== false) {
-    return {
-      ok: false,
-      error: `HTTP ${response.status}`
-    };
-  }
-  return data;
 }
+
+async function fetchSpellbookVariants(query, limit = 40) {
+  return apiRequest(API_ENDPOINTS.referenceSpellbookVariants, {
+    method: "GET",
+    query: {
+      q: toTrimmedText(query),
+      limit: toText(limit || 40)
+    },
+    fallback: { results: [] }
+  });
+}
+
+async function fetchMtgjsonCards({
+  q = "",
+  set_code = "",
+  collector_number = "",
+  uuid = "",
+  limit = 40
+} = {}) {
+  return apiRequest(API_ENDPOINTS.referenceMtgjsonCards, {
+    method: "GET",
+    query: {
+      q: toTrimmedText(q),
+      set_code: toTrimmedText(set_code),
+      collector_number: toTrimmedText(collector_number),
+      uuid: toTrimmedText(uuid),
+      limit: toText(limit || 40)
+    },
+    fallback: { results: [] }
+  });
+}
+
+window.uploadCollection = uploadCollection;
+window.loadCollectionFromDb = loadCollectionFromDb;
+window.importCollectionCsv = importCollectionCsv;
+window.importIntoCollectionDb = importIntoCollectionDb;
+window.addCardToCollectionDb = addCardToCollectionDb;
+window.deleteCardFromCollectionDb = deleteCardFromCollectionDb;
+window.listStoredCollections = listStoredCollections;
+window.getStoredCollection = getStoredCollection;
+window.deleteStoredCollection = deleteStoredCollection;
+window.fetchSpellbookVariants = fetchSpellbookVariants;
+window.fetchMtgjsonCards = fetchMtgjsonCards;
+
+export {
+  uploadCollection,
+  loadCollectionFromDb,
+  importCollectionCsv,
+  importIntoCollectionDb,
+  addCardToCollectionDb,
+  deleteCardFromCollectionDb,
+  listStoredCollections,
+  getStoredCollection,
+  deleteStoredCollection,
+  fetchSpellbookVariants,
+  fetchMtgjsonCards
+};

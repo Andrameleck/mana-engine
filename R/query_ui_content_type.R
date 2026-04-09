@@ -19,6 +19,9 @@ query_ui_content_type <- function(file_name) {
   if (grepl("\\.svg$", lower)) {
     return("image/svg+xml")
   }
+  if (grepl("\\.webp$", lower)) {
+    return("image/webp")
+  }
   if (grepl("\\.png$", lower)) {
     return("image/png")
   }
@@ -33,6 +36,9 @@ query_ui_content_type <- function(file_name) {
   }
   if (grepl("\\.woff$", lower)) {
     return("font/woff")
+  }
+  if (grepl("\\.webmanifest$", lower)) {
+    return("application/manifest+json; charset=utf-8")
   }
 
   "text/plain; charset=utf-8"
