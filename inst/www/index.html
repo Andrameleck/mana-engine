@@ -4,13 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>mtgcodex.api Workspace</title>
+  <link rel="icon" href="/ui/static/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/ui/static/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/ui/static/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/ui/static/apple-touch-icon.png">
+  <link rel="manifest" href="/ui/static/site.webmanifest">
+  <meta name="theme-color" content="#0a0d13">
   <link rel="stylesheet" href="/ui/static/styles.css">
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-mark" aria-hidden="true">M</div>
+        <div class="brand-mark" aria-hidden="true">
+          <img src="/ui/static/logo.jpg" alt="">
+        </div>
         <p class="eyebrow">MTG</p>
       </div>
 
@@ -76,21 +84,13 @@
               </label>
               <div class="actions collection-actions-inline">
                 <input id="collection-source-file" type="file" class="hidden-file-input">
-                <button type="button" id="collection-pick-file" class="btn-icon-only" aria-label="Choisir CSV" title="Choisir CSV">
+                <button type="button" id="collection-pick-file" class="btn-icon-only" aria-label="Choisir fichier collection" title="Choisir fichier collection">
                   <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
                     <path d="M12 4v11"></path>
                     <path d="M8.5 8.5L12 5l3.5 3.5"></path>
                     <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"></path>
                   </svg>
-                  <span class="visually-hidden">Choisir CSV</span>
-                </button>
-                <button type="submit" class="btn-icon-only" aria-label="Creer le dossier" title="Creer le dossier">
-                  <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
-                    <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h4l1.6 2H18.5A1.5 1.5 0 0 1 20 9.5v8A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z"></path>
-                    <path d="M12 10.5v5"></path>
-                    <path d="M9.5 13h5"></path>
-                  </svg>
-                  <span class="visually-hidden">Creer le dossier</span>
+                  <span class="visually-hidden">Choisir fichier collection</span>
                 </button>
               </div>
             </form>
@@ -251,12 +251,28 @@
             <h3 id="table-title">Table</h3>
             <div id="load-summary" class="summary muted">No data loaded.</div>
           </div>
-          <div id="table-wrap" class="table-wrap"></div>
-          <div id="table-scrollbar" class="table-scrollbar" aria-hidden="true">
-            <div id="table-scrollbar-inner"></div>
+          <div class="table-panel-body">
+            <div class="table-main">
+              <div id="table-wrap" class="table-wrap"></div>
+              <div id="table-scrollbar" class="table-scrollbar" aria-hidden="true">
+                <div id="table-scrollbar-inner"></div>
+              </div>
+              <div id="table-pager" class="table-pager"></div>
+            </div>
           </div>
-          <div id="table-pager" class="table-pager"></div>
         </section>
+
+        <aside id="card-preview" class="card-preview hidden" aria-live="polite">
+          <div class="card-preview-head">
+            <strong id="card-preview-title">Card</strong>
+            <button type="button" id="card-preview-close" class="card-preview-close" aria-label="Close panel">x</button>
+          </div>
+          <div class="card-preview-body">
+            <img id="card-preview-image" alt="Card preview" loading="lazy">
+            <p id="card-preview-text" class="muted"></p>
+            <dl id="card-preview-meta" class="card-preview-meta"></dl>
+          </div>
+        </aside>
 
         <aside id="deck-stats-panel" class="panel deck-stats-panel is-hidden" aria-live="polite">
           <div class="panel-head">
@@ -269,18 +285,6 @@
       </div>
     </main>
   </div>
-
-  <aside id="card-preview" class="card-preview hidden" aria-live="polite">
-    <div class="card-preview-head">
-      <strong id="card-preview-title">Card</strong>
-      <button type="button" id="card-preview-close" class="card-preview-close" aria-label="Close panel">x</button>
-    </div>
-    <div class="card-preview-body">
-      <img id="card-preview-image" alt="Card preview" loading="lazy">
-      <p id="card-preview-text" class="muted"></p>
-      <dl id="card-preview-meta" class="card-preview-meta"></dl>
-    </div>
-  </aside>
 
   <script type="module" src="/ui/static/main.js"></script>
 </body>

@@ -47,6 +47,7 @@ const CARD_VIEW_SORT_KEYS = {
 };
 
 const CARD_VIEW_DEFAULT_PAGE_SIZE = 48;
+const ENABLE_TILE_MANA_API_HYDRATION = false;
 
 const UI_STATE = {
   language: loadSavedLanguage(),
@@ -87,6 +88,7 @@ function renderCollection(payload) {
   wrap.classList.remove("is-card-view");
   wrap.classList.remove("is-card-view-deck");
   wrap.removeAttribute("data-table");
+  setPreviewDockMode(false);
   releaseTableScrollbarSync();
 
   if (!payload || payload.ok !== true) {
@@ -193,6 +195,7 @@ function renderTablePage(pageNumber) {
     return;
   }
 
+  setPreviewDockMode(false);
   wrap.innerHTML = "";
   releaseTableScrollbarSync();
   clearCardPreview(true);
@@ -279,6 +282,7 @@ function renderCardsPage(pageNumber) {
   const filteredRows = applyCardFiltersAndSorting(cardRows);
   const totalRows = filteredRows.length;
   const deckContext = isDeckCardsContext();
+  setPreviewDockMode(!deckContext);
   const filteredLiteralCount = deckContext ? sumCardQuantities(filteredRows) : totalRows;
   const totalLiteralCount = deckContext ? sumCardQuantities(cardRows) : cardRows.length;
   let startIndex = 0;
@@ -298,7 +302,9 @@ function renderCardsPage(pageNumber) {
   const browser = document.createElement("section");
   browser.classList.add("collection-browser");
 
-  const toolbar = renderCardsToolbar(filteredLiteralCount, totalLiteralCount);
+  const toolbar = renderCardsToolbar(filteredLiteralCount, totalLiteralCount, {
+    deckContext
+  });
   browser.appendChild(toolbar);
 
   if (pageRows.length === 0) {
@@ -317,6 +323,9 @@ function renderCardsPage(pageNumber) {
   } else {
     const grid = document.createElement("div");
     grid.classList.add("collection-card-grid");
+    if (viewKeyIsCollectionsContext()) {
+      grid.appendChild(createCollectionAddCardTile());
+    }
     pageRows.forEach((rowData) => {
       grid.appendChild(createCollectionCardTile(rowData));
     });
@@ -360,16 +369,12 @@ function isCardLikeRow(rowData) {
   return hasSupportingData;
 }
 
-function renderCardsToolbar(filteredCount, totalCount) {
+function renderCardsToolbar(filteredCount, totalCount, options = {}) {
+  void options;
   const toolbar = document.createElement("div");
   toolbar.classList.add("collection-browser-toolbar");
   toolbar.innerHTML = `
     <div class="collection-toolbar-head">
-      <div class="collection-toolbar-actions">
-        <button type="button" class="collection-action-btn" data-action="quick-import">Actions</button>
-        <button type="button" class="collection-action-btn is-muted" data-action="toggle-preview">Edit</button>
-        <button type="button" class="collection-action-btn is-muted" data-action="focus-search">Share</button>
-      </div>
       <p class="collection-toolbar-count">${filteredCount} / ${totalCount} cartes</p>
     </div>
     <div class="collection-toolbar-filters">
@@ -384,16 +389,11 @@ function renderCardsToolbar(filteredCount, totalCount) {
 
   const searchInput = toolbar.querySelector("#collection-grid-search");
   const sortSelect = toolbar.querySelector("#collection-grid-sort");
-  const quickImportButton = toolbar.querySelector('button[data-action="quick-import"]');
-  const previewButton = toolbar.querySelector('button[data-action="toggle-preview"]');
-  const shareButton = toolbar.querySelector('button[data-action="focus-search"]');
 
   if (searchInput) {
     searchInput.value = UI_STATE.searchQuery;
     searchInput.addEventListener("input", () => {
-      UI_STATE.searchQuery = searchInput.value || "";
-      persistCurrentViewState();
-      renderCardsPage(1);
+      rerenderCardsFromSearchInput(searchInput);
     });
   }
 
@@ -406,29 +406,70 @@ function renderCardsToolbar(filteredCount, totalCount) {
     });
   }
 
-  if (quickImportButton) {
-    quickImportButton.addEventListener("click", () => {
-      const form = document.getElementById("collection-load-form");
-      form?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }
-
-  if (previewButton) {
-    previewButton.addEventListener("click", () => {
-      if (PREVIEW_STATE.activeRow && PREVIEW_STATE.activeElement) {
-        showCardPreview(PREVIEW_STATE.activeRow, PREVIEW_STATE.activeElement, true);
-      }
-    });
-  }
-
-  if (shareButton) {
-    shareButton.addEventListener("click", () => {
-      searchInput?.focus();
-      searchInput?.select();
-    });
-  }
-
   return toolbar;
+}
+
+function rerenderCardsFromSearchInput(inputNode) {
+  const value = String(inputNode?.value || "");
+  const selectionStart = Number.isFinite(inputNode?.selectionStart)
+    ? inputNode.selectionStart
+    : value.length;
+  const selectionEnd = Number.isFinite(inputNode?.selectionEnd)
+    ? inputNode.selectionEnd
+    : selectionStart;
+
+  UI_STATE.searchQuery = value;
+  persistCurrentViewState();
+  renderCardsPage(1);
+
+  window.requestAnimationFrame(() => {
+    const refreshedInput = document.getElementById("collection-grid-search");
+    if (!refreshedInput) {
+      return;
+    }
+    refreshedInput.focus({ preventScroll: true });
+    const max = String(refreshedInput.value || "").length;
+    const start = Math.max(0, Math.min(selectionStart, max));
+    const end = Math.max(start, Math.min(selectionEnd, max));
+    if (typeof refreshedInput.setSelectionRange === "function") {
+      refreshedInput.setSelectionRange(start, end);
+    }
+  });
+}
+
+function viewKeyIsCollectionsContext() {
+  return viewKeySupportsDbActions(String(UI_STATE.activeViewKey || ""));
+}
+
+function viewKeySupportsDbActions(viewKeyValue) {
+  const viewKey = String(viewKeyValue || "").toLowerCase();
+  if (!viewKey.startsWith("collections::")) {
+    return false;
+  }
+  return viewKey.includes(".db") || viewKey.includes("collection/db");
+}
+
+function createCollectionAddCardTile() {
+  const tile = document.createElement("button");
+  tile.type = "button";
+  tile.classList.add("collection-card", "collection-card-add");
+  tile.innerHTML = `
+    <div class="collection-card-art collection-card-add-art" aria-hidden="true">
+      <span class="collection-card-add-plus">+</span>
+    </div>
+    <div class="collection-card-meta">
+      <p class="collection-card-name">Ajouter une carte</p>
+      <p class="collection-card-line">Recherche Scryfall + choix d'edition</p>
+    </div>
+  `;
+  tile.addEventListener("click", () => {
+    window.dispatchEvent(new CustomEvent("mtgcodex:add-card-workflow", {
+      detail: {
+        viewKey: String(UI_STATE.activeViewKey || "")
+      }
+    }));
+  });
+  return tile;
 }
 
 function createCollectionCardTile(rowData) {
@@ -471,6 +512,26 @@ function createCollectionCardTile(rowData) {
   `;
   appendCardTileMana(meta, rowData);
   tile.appendChild(meta);
+
+  if (viewKeyIsCollectionsContext()) {
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.classList.add("collection-card-delete-btn");
+    deleteButton.textContent = "x";
+    deleteButton.setAttribute("aria-label", "Supprimer la carte");
+    deleteButton.title = "Supprimer la carte";
+    deleteButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      window.dispatchEvent(new CustomEvent("mtgcodex:delete-card-row", {
+        detail: {
+          viewKey: String(UI_STATE.activeViewKey || ""),
+          row: rowData || null
+        }
+      }));
+    });
+    tile.appendChild(deleteButton);
+  }
 
   return tile;
 }
@@ -526,6 +587,49 @@ function hideTablePager() {
   pager.innerHTML = "";
 }
 
+function isPreviewDockMode() {
+  const workspaceLower = document.getElementById("workspace-lower");
+  return Boolean(workspaceLower?.classList.contains("has-preview-panel"));
+}
+
+function setPreviewDockMode(enabled) {
+  const workspaceLower = document.getElementById("workspace-lower");
+  const panel = document.getElementById("card-preview");
+  if (!workspaceLower || !panel) {
+    return;
+  }
+
+  workspaceLower.classList.toggle("has-preview-panel", enabled === true);
+  if (enabled === true) {
+    panel.classList.remove("hidden");
+    if (!PREVIEW_STATE.activeRow) {
+      resetCardPreviewPlaceholder();
+    }
+    return;
+  }
+
+  PREVIEW_STATE.locked = false;
+  panel.classList.add("hidden");
+}
+
+function resetCardPreviewPlaceholder() {
+  const title = document.getElementById("card-preview-title");
+  const text = document.getElementById("card-preview-text");
+  const image = document.getElementById("card-preview-image");
+  if (title) {
+    title.textContent = "Carte";
+  }
+  if (text) {
+    text.textContent = "Survole ou selectionne une carte pour afficher les details.";
+  }
+  if (image) {
+    image.removeAttribute("src");
+    image.style.display = "none";
+    image.alt = "Apercu carte";
+  }
+  renderPreviewMeta([]);
+}
+
 function bindRowPreviewEvents(rowElement, rowData) {
   rowElement.addEventListener("mouseenter", () => {
     if (PREVIEW_STATE.locked && PREVIEW_STATE.activeElement !== rowElement) {
@@ -535,6 +639,9 @@ function bindRowPreviewEvents(rowElement, rowData) {
   });
 
   rowElement.addEventListener("mouseleave", () => {
+    if (isPreviewDockMode()) {
+      return;
+    }
     if (!PREVIEW_STATE.locked) {
       schedulePreviewHide();
     }
@@ -573,6 +680,7 @@ function showCardPreview(rowData, rowElement, forceLock) {
   title.textContent = formatMainCardTitle(rowData);
   text.textContent = formatPrimaryText(rowData);
   image.removeAttribute("src");
+  image.style.display = "block";
   image.alt = `Apercu ${title.textContent}`;
   renderPreviewMetaFromRow(rowData);
 
@@ -636,7 +744,12 @@ function clearCardPreview(force) {
   PREVIEW_STATE.activeElement = null;
   const panel = document.getElementById("card-preview");
   if (panel) {
-    panel.classList.add("hidden");
+    if (isPreviewDockMode()) {
+      panel.classList.remove("hidden");
+      resetCardPreviewPlaceholder();
+    } else {
+      panel.classList.add("hidden");
+    }
   }
 }
 
@@ -678,6 +791,9 @@ function initPreviewEvents() {
   });
 
   panel.addEventListener("mouseleave", () => {
+    if (isPreviewDockMode()) {
+      return;
+    }
     if (!PREVIEW_STATE.locked) {
       schedulePreviewHide();
     }
@@ -931,7 +1047,9 @@ function appendCardTileMana(metaNode, rowData) {
     metaNode.appendChild(fallback);
   }
 
-  hydrateCardTileManaFromScryfall(metaNode, rowData);
+  if (ENABLE_TILE_MANA_API_HYDRATION) {
+    hydrateCardTileManaFromScryfall(metaNode, rowData);
+  }
 }
 
 function readRowManaCost(rowData) {
@@ -1039,7 +1157,7 @@ async function resolveCardManaCostFromApi(scryfallId, cardName) {
 function cardImageUrlFromRow(rowData) {
   const scryfallId = formatCellValue(readFirstCellValue(rowData, ["scryfall_id", "scry_fall_id"])).trim();
   if (scryfallId) {
-    return `https://api.scryfall.com/cards/${encodeURIComponent(scryfallId)}?format=image&version=normal`;
+    return `https://api.scryfall.com/cards/${encodeURIComponent(scryfallId)}?format=image&version=small`;
   }
 
   const inferred = inferDeckEntryFromRow(rowData);
@@ -1051,7 +1169,7 @@ function cardImageUrlFromRow(rowData) {
   const params = new URLSearchParams({
     exact: cardName,
     format: "image",
-    version: "normal"
+    version: "small"
   });
 
   const setCode = formatCellValue(readCellValue(rowData, "set_code")).trim();

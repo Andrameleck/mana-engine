@@ -1,6 +1,10 @@
 import {
   uploadCollection,
+  loadCollectionFromDb,
   importCollectionCsv,
+  importIntoCollectionDb,
+  addCardToCollectionDb,
+  deleteCardFromCollectionDb,
   listStoredCollections,
   getStoredCollection,
   deleteStoredCollection,
@@ -39,6 +43,7 @@ import {
     collections: [],
     collectionPayloadById: {},
     selectedCollectionId: null,
+    dbCollectionPayload: null,
     decks: [],
     selectedDeckId: null,
     strategy: {
@@ -79,6 +84,9 @@ import {
 
   const DECK_STORAGE_KEY = "mtgcodex_ui_decks_v1";
   const MAX_STORED_DECKS = 24;
+  const COLLECTION_SOURCE_PREF_KEY = "mtgcodex_ui_collection_source_pref_v1";
+  const COLLECTION_SELECTED_ID_KEY = "mtgcodex_ui_collection_selected_id_v1";
+  const COLLECTION_DB_SOURCES_KEY = "mtgcodex_ui_collection_db_sources_v1";
   const DECK_STATS_STATE = {
     requestToken: 0,
     metadataCache: new Map()
@@ -86,6 +94,25 @@ import {
   const DECK_ANALYSIS_STATE = {
     requestToken: 0,
     activePane: "stats"
+  };
+  const ADD_CARD_MODAL_STATE = {
+    root: null,
+    nameInput: null,
+    qtyInput: null,
+    finishSelect: null,
+    suggestionsWrap: null,
+    printsWrap: null,
+    statusNode: null,
+    addButton: null,
+    importButton: null,
+    cancelButton: null,
+    closeButton: null,
+    suggestions: [],
+    selectedPrintId: "",
+    printsById: new Map(),
+    autocompleteTimer: null,
+    autocompleteSeq: 0,
+    printsSeq: 0
   };
 
   const nodes = {
@@ -241,8 +268,8 @@ import {
   }
 
   function bindCollectionPicker() {
-    nodes.collections.fileInput.accept = ".csv,.txt";
-    const defaultPickLabel = "Choisir CSV";
+    nodes.collections.fileInput.accept = ".csv,.txt,.db,.sqlite,.sqlite3";
+    const defaultPickLabel = "Choisir fichier collection";
     setCollectionPickButtonLabel(defaultPickLabel);
     nodes.collections.pickFileButton.classList.remove("has-file");
     nodes.collections.pickFileButton.addEventListener("click", () => {
@@ -250,8 +277,16 @@ import {
     });
     nodes.collections.fileInput.addEventListener("change", () => {
       const selected = nodes.collections.fileInput.files && nodes.collections.fileInput.files[0];
-      setCollectionPickButtonLabel(selected ? `CSV: ${selected.name}` : defaultPickLabel);
+      setCollectionPickButtonLabel(selected ? `Collection: ${selected.name}` : defaultPickLabel);
       nodes.collections.pickFileButton.classList.toggle("has-file", Boolean(selected));
+      if (!selected) {
+        return;
+      }
+      if (nodes.collections.form && typeof nodes.collections.form.requestSubmit === "function") {
+        nodes.collections.form.requestSubmit();
+      } else if (nodes.collections.form) {
+        nodes.collections.form.dispatchEvent(new Event("submit", { cancelable: true }));
+      }
     });
   }
 
@@ -260,7 +295,7 @@ import {
     if (!button) {
       return;
     }
-    const text = String(label || "Choisir CSV");
+    const text = String(label || "Choisir fichier collection");
     const labelNode = button.querySelector(".btn-label");
     if (labelNode) {
       labelNode.textContent = text;
@@ -415,6 +450,17 @@ import {
     return "text";
   }
 
+  function inferCollectionSourceType(fileName) {
+    const lowerName = String(fileName || "").toLowerCase();
+    if (lowerName.endsWith(".db") || lowerName.endsWith(".sqlite") || lowerName.endsWith(".sqlite3")) {
+      return "db";
+    }
+    if (lowerName.endsWith(".csv")) {
+      return "csv";
+    }
+    return "text";
+  }
+
   function selectTab(tabId) {
     state.activeTab = tabId;
 
@@ -458,9 +504,14 @@ import {
     }
 
     state.collections = Array.isArray(payload.collections) ? payload.collections : [];
-    if (!state.collections.some((entry) => entry.id === state.selectedCollectionId)) {
+    const savedId = getSavedSelectedCollectionId();
+    const savedExists = savedId && state.collections.some((entry) => entry.id === savedId);
+    if (savedExists) {
+      state.selectedCollectionId = savedId;
+    } else if (!state.collections.some((entry) => entry.id === state.selectedCollectionId)) {
       state.selectedCollectionId = state.collections[0]?.id || null;
     }
+    setSavedSelectedCollectionId(state.selectedCollectionId);
     renderCollectionsList("");
     return true;
   }
@@ -476,12 +527,13 @@ import {
       return;
     }
 
-    if (state.collections.length === 0) {
+    const dbEntries = buildDbCollectionListEntries();
+    if (state.collections.length === 0 && dbEntries.length === 0) {
       list.innerHTML = '<p class="muted">Aucun dossier collection pour le moment.</p>';
       return;
     }
 
-    list.innerHTML = state.collections.map((entry) => {
+    const storeMarkup = state.collections.map((entry) => {
       const activeClass = entry.id === state.selectedCollectionId ? "is-active" : "";
       const platform = entry.platform || "auto";
       const createdAt = entry.created_at || "";
@@ -500,6 +552,86 @@ import {
         </article>
       `;
     }).join("");
+
+    const dbMarkup = dbEntries.map((entry) => {
+      const deleteButton = entry.canDelete
+        ? '<button type="button" class="entity-delete" data-action="delete">Supprimer</button>'
+        : "";
+      const activeClass = entry.active ? "is-active" : "";
+      return `
+        <article class="entity-item ${activeClass}" data-entity-kind="db" data-entity-id="${escapeHtml(entry.id)}" data-db-path="${escapeHtml(entry.path)}">
+          <div>
+            <p class="entity-item-name">${escapeHtml(entry.title)}</p>
+            <p class="entity-item-meta">${escapeHtml(entry.meta)}</p>
+          </div>
+          <div class="entity-actions">
+            <button type="button" class="entity-select" data-action="select">Ouvrir</button>
+            ${deleteButton}
+          </div>
+        </article>
+      `;
+    }).join("");
+
+    list.innerHTML = `${dbMarkup}${storeMarkup}`;
+  }
+
+  function buildDbCollectionListEntries() {
+    const pref = getCollectionSourcePreference();
+    const configuredPath = getConfiguredCollectionDbPath();
+    const payloadPath = String(state.dbCollectionPayload?.path || "").trim();
+    const activePath = payloadPath || configuredPath;
+
+    const mergedPaths = [];
+    if (activePath) {
+      mergedPaths.push(activePath);
+    }
+    getSavedDbSources().forEach((savedPath) => {
+      mergedPaths.push(savedPath);
+    });
+
+    const uniquePaths = [];
+    mergedPaths.forEach((candidate) => {
+      const pathValue = String(candidate || "").trim();
+      if (!pathValue) {
+        return;
+      }
+      if (!uniquePaths.some((knownPath) => dbPathEquals(knownPath, pathValue))) {
+        uniquePaths.push(pathValue);
+      }
+    });
+
+    if (uniquePaths.length === 0 && pref !== "db") {
+      return [];
+    }
+
+    if (uniquePaths.length === 0 && pref === "db") {
+      return [{
+        id: "__db_default__",
+        path: "",
+        title: "DB active: mtg.db",
+        meta: `${String(state.dbCollectionPayload?.row_count ?? "-")} lignes | chemin par defaut serveur`,
+        active: true,
+        canDelete: false
+      }];
+    }
+
+    return uniquePaths.map((pathValue, index) => {
+      const fileName = String(pathValue).split(/[\\/]/).pop() || `db-${index + 1}`;
+      const isActive = pref === "db" && dbPathEquals(activePath, pathValue);
+      const rowCount = isActive ? (state.dbCollectionPayload?.row_count ?? "-") : "-";
+      return {
+        id: `__db_${index + 1}`,
+        path: pathValue,
+        title: `DB: ${fileName}`,
+        meta: `${String(rowCount)} lignes | ${pathValue}`,
+        active: isActive,
+        canDelete: true
+      };
+    });
+  }
+
+  function dbPathEquals(leftPath, rightPath) {
+    return String(leftPath || "").trim().toLowerCase() === String(rightPath || "").trim().toLowerCase();
   }
 
   async function loadStoredCollectionIntoTable(collectionId) {
@@ -639,6 +771,15 @@ import {
   function renderActiveTabTable() {
     if (state.activeTab === "collections") {
       setWorkspaceLowerHidden(false);
+      if (getCollectionSourcePreference() === "db") {
+        if (state.dbCollectionPayload && state.dbCollectionPayload.ok === true) {
+          renderCollection(state.dbCollectionPayload);
+        } else {
+          void loadDefaultDbCollectionIntoTable();
+        }
+        renderDeckStatsPanel(null);
+        return;
+      }
       if (!state.selectedCollectionId) {
         renderCollection({
           ok: false,
@@ -4313,11 +4454,47 @@ import {
       if (!id) {
         return;
       }
+      const kind = String(item.getAttribute("data-entity-kind") || "store").toLowerCase();
+      const dbPath = String(item.getAttribute("data-db-path") || "").trim();
 
       const action = button?.dataset.action || "select";
 
+      if (kind === "db") {
+        if (action === "select") {
+          if (dbPath) {
+            const currentPath = String(state.dbCollectionPayload?.path || getConfiguredCollectionDbPath() || "").trim();
+            if (!dbPathEquals(currentPath, dbPath)) {
+              state.dbCollectionPayload = null;
+            }
+            setConfiguredCollectionDbPath(dbPath);
+          }
+          setCollectionSourcePreference("db");
+          renderCollectionsList("");
+          renderActiveTabTable();
+          if (!state.dbCollectionPayload) {
+            await loadDefaultDbCollectionIntoTable(dbPath);
+          }
+          return;
+        }
+        if (action === "delete" && dbPath) {
+          removeSavedDbSource(dbPath);
+          if (dbPathEquals(getConfiguredCollectionDbPath(), dbPath)) {
+            setConfiguredCollectionDbPath("");
+            state.dbCollectionPayload = null;
+            if (getCollectionSourcePreference() === "db") {
+              setCollectionSourcePreference("store");
+            }
+          }
+          renderCollectionsList("");
+          renderActiveTabTable();
+        }
+        return;
+      }
+
       if (action === "select") {
         state.selectedCollectionId = id;
+        setSavedSelectedCollectionId(id);
+        setCollectionSourcePreference("store");
         renderCollectionsList("");
         renderActiveTabTable();
         if (!state.collectionPayloadById[id]) {
@@ -4339,6 +4516,7 @@ import {
 
         delete state.collectionPayloadById[id];
         await refreshCollectionsListFromApi();
+        setSavedSelectedCollectionId(state.selectedCollectionId);
         renderActiveTabTable();
         if (state.selectedCollectionId && !state.collectionPayloadById[state.selectedCollectionId]) {
           await loadStoredCollectionIntoTable(state.selectedCollectionId);
@@ -4382,6 +4560,802 @@ import {
     });
   }
 
+  function readRowField(row, candidates = []) {
+    if (!row || typeof row !== "object") {
+      return "";
+    }
+    const map = {};
+    Object.keys(row).forEach((key) => {
+      map[String(key).toLowerCase()] = row[key];
+    });
+    for (const candidate of candidates) {
+      const value = map[String(candidate).toLowerCase()];
+      if (value == null) {
+        continue;
+      }
+      const text = String(value).trim();
+      if (text) {
+        return text;
+      }
+    }
+    return "";
+  }
+
+  function isDbActionViewKey(viewKeyValue) {
+    const viewKey = String(viewKeyValue || "").toLowerCase();
+    if (!viewKey.startsWith("collections::")) {
+      return false;
+    }
+    return viewKey.includes(".db") || viewKey.includes("collection/db");
+  }
+
+  function getCollectionSourcePreference() {
+    const raw = String(window.localStorage.getItem(COLLECTION_SOURCE_PREF_KEY) || "").trim().toLowerCase();
+    if (raw === "db" || raw === "store") {
+      return raw;
+    }
+    return "store";
+  }
+
+  function setCollectionSourcePreference(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (normalized !== "db" && normalized !== "store") {
+      return;
+    }
+    window.localStorage.setItem(COLLECTION_SOURCE_PREF_KEY, normalized);
+  }
+
+  function getSavedSelectedCollectionId() {
+    return String(window.localStorage.getItem(COLLECTION_SELECTED_ID_KEY) || "").trim();
+  }
+
+  function setSavedSelectedCollectionId(collectionId) {
+    const value = String(collectionId || "").trim();
+    if (value) {
+      window.localStorage.setItem(COLLECTION_SELECTED_ID_KEY, value);
+    } else {
+      window.localStorage.removeItem(COLLECTION_SELECTED_ID_KEY);
+    }
+  }
+
+  function getSavedDbSources() {
+    try {
+      const raw = window.localStorage.getItem(COLLECTION_DB_SOURCES_KEY);
+      if (!raw) {
+        return [];
+      }
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+      const unique = [];
+      parsed.forEach((entry) => {
+        const pathValue = String(entry || "").trim();
+        if (!pathValue) {
+          return;
+        }
+        if (!unique.some((knownPath) => dbPathEquals(knownPath, pathValue))) {
+          unique.push(pathValue);
+        }
+      });
+      return unique;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function setSavedDbSources(paths) {
+    const source = Array.isArray(paths) ? paths : [];
+    const clean = [];
+    source.forEach((entry) => {
+      const pathValue = String(entry || "").trim();
+      if (!pathValue) {
+        return;
+      }
+      if (!clean.some((knownPath) => dbPathEquals(knownPath, pathValue))) {
+        clean.push(pathValue);
+      }
+    });
+    window.localStorage.setItem(COLLECTION_DB_SOURCES_KEY, JSON.stringify(clean.slice(0, 24)));
+  }
+
+  function rememberDbSource(dbPath) {
+    const value = String(dbPath || "").trim();
+    if (!value) {
+      return;
+    }
+    const current = getSavedDbSources();
+    const next = [value, ...current.filter((entry) => !dbPathEquals(entry, value))];
+    setSavedDbSources(next);
+  }
+
+  function removeSavedDbSource(dbPath) {
+    const value = String(dbPath || "").trim();
+    if (!value) {
+      return;
+    }
+    const current = getSavedDbSources();
+    setSavedDbSources(current.filter((entry) => !dbPathEquals(entry, value)));
+  }
+
+  function getConfiguredCollectionDbPath() {
+    return String(window.localStorage.getItem("mtgcodex_collection_db_path") || "").trim();
+  }
+
+  function setConfiguredCollectionDbPath(pathValue) {
+    const value = String(pathValue || "").trim();
+    window.localStorage.setItem("mtgcodex_collection_db_path", value);
+    return value;
+  }
+
+  function pickFileForDbImport() {
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".csv,.db,.sqlite,.sqlite3,.txt";
+      input.style.position = "fixed";
+      input.style.left = "-9999px";
+      document.body.appendChild(input);
+      input.addEventListener("change", () => {
+        const file = input.files && input.files[0] ? input.files[0] : null;
+        input.remove();
+        resolve(file);
+      }, { once: true });
+      input.click();
+    });
+  }
+
+  async function loadDefaultDbCollectionIntoTable(dbPath = "") {
+    const effectiveDbPath = String(dbPath || getConfiguredCollectionDbPath() || "").trim();
+    const payload = await loadCollectionFromDb(effectiveDbPath, "collection");
+    if (!payload || payload.ok !== true) {
+      state.dbCollectionPayload = null;
+      renderCollection({
+        ok: false,
+        table: "mtg.db / collection",
+        error: payload?.error || "Impossible de charger la collection DB"
+      });
+      return false;
+    }
+    const persistedPath = payload.path
+      ? setConfiguredCollectionDbPath(payload.path)
+      : (effectiveDbPath ? setConfiguredCollectionDbPath(effectiveDbPath) : "");
+    if (persistedPath) {
+      rememberDbSource(persistedPath);
+    }
+    const dbViewPayload = payloadForNamedView(
+      payload,
+      "mtg.db / collection",
+      payload.path || "collection/db",
+      "cards",
+      "collections"
+    );
+    state.dbCollectionPayload = dbViewPayload;
+    renderCollection(dbViewPayload);
+    setCollectionSourcePreference("db");
+    renderCollectionsList("");
+    return true;
+  }
+
+  async function runDbImportFlow() {
+    const configuredPath = getConfiguredCollectionDbPath();
+    const chosenPath = window.prompt(
+      "Chemin DB cible (vide = mtg.db par defaut serveur):",
+      configuredPath
+    );
+    if (chosenPath == null) {
+      return { ok: false, canceled: true };
+    }
+    const effectiveDbPath = setConfiguredCollectionDbPath(chosenPath);
+
+    const file = await pickFileForDbImport();
+    if (!file) {
+      return { ok: false, canceled: true };
+    }
+    const sourceType = inferCollectionSourceType(file.name);
+    const out = await importIntoCollectionDb(file, effectiveDbPath, sourceType, "", true);
+    if (!out || out.ok !== true) {
+      return {
+        ok: false,
+        error: out?.error || "Import DB impossible"
+      };
+    }
+
+    await loadDefaultDbCollectionIntoTable(effectiveDbPath);
+    return {
+      ok: true,
+      dbPath: effectiveDbPath
+    };
+  }
+
+  async function handleDeleteCardRowRequest(event) {
+    const detail = event?.detail || {};
+    const viewKey = String(detail.viewKey || "").toLowerCase();
+    if (!isDbActionViewKey(viewKey)) {
+      return;
+    }
+
+    const row = detail.row || null;
+    const id = readRowField(row, ["id"]);
+    const manaboxId = readRowField(row, ["manabox_id", "manabox id"]);
+    const name = readRowField(row, ["name"]);
+    const setCode = readRowField(row, ["set_code", "set"]);
+    const collector = readRowField(row, ["collector_number", "number"]);
+    const scryfallId = readRowField(row, ["scryfall_id", "scry_fall_id"]);
+
+    let selector = {};
+    if (id) {
+      const confirmed = window.confirm(`Supprimer la ligne #${id} (${name || "carte"}) ?`);
+      if (!confirmed) {
+        return;
+      }
+      selector = { id };
+    } else if (manaboxId) {
+      const confirmed = window.confirm(`Supprimer ${name || "cette carte"} (ManaBox ID ${manaboxId}) ?`);
+      if (!confirmed) {
+        return;
+      }
+      selector = { manabox_id: manaboxId };
+    } else if (scryfallId) {
+      const confirmed = window.confirm(`Supprimer ${name || "cette carte"} (${setCode || "set?"} ${collector || ""}) ?`);
+      if (!confirmed) {
+        return;
+      }
+      selector = {
+        scryfall_id: scryfallId,
+        name,
+        set_code: setCode,
+        collector_number: collector
+      };
+    } else {
+      renderCollection({
+        ok: false,
+        table: "mtg.db delete",
+        error: "Impossible d'identifier la carte a supprimer."
+      });
+      return;
+    }
+
+    const out = await deleteCardFromCollectionDb(selector, getConfiguredCollectionDbPath(), false);
+    if (!out || out.ok !== true) {
+      renderCollection({
+        ok: false,
+        table: "mtg.db delete",
+        error: out?.error || "Suppression impossible"
+      });
+      return;
+    }
+    await loadDefaultDbCollectionIntoTable();
+  }
+
+  async function handleDbActionRequest(event) {
+    const detail = event?.detail || {};
+    const action = String(detail.action || "").toLowerCase();
+    const viewKey = String(detail.viewKey || "").toLowerCase();
+    if (!action) {
+      return;
+    }
+    if (!isDbActionViewKey(viewKey)) {
+      renderCollection({
+        ok: false,
+        table: "DB actions",
+        error: "Ces actions sont disponibles depuis la vue collection."
+      });
+      return;
+    }
+
+    if (action === "import") {
+      const out = await runDbImportFlow();
+      if (out?.canceled) {
+        return;
+      }
+      if (!out || out.ok !== true) {
+        renderCollection({
+          ok: false,
+          table: "mtg.db import",
+          error: out?.error || "Import DB impossible"
+        });
+      }
+      return;
+    }
+
+    if (action === "add") {
+      openAddCardModal(detail.row || null);
+      return;
+    }
+
+    if (action === "delete") {
+      const row = detail.row || null;
+      const id = readRowField(row, ["id"]);
+      const manaboxId = readRowField(row, ["manabox_id", "manabox id"]);
+      const name = readRowField(row, ["name"]);
+      const setCode = readRowField(row, ["set_code", "set"]);
+      const collector = readRowField(row, ["collector_number", "number"]);
+      const scryfallId = readRowField(row, ["scryfall_id", "scry_fall_id"]);
+
+      let selector = {};
+      if (id) {
+        const confirmed = window.confirm(`Supprimer la ligne #${id} (${name || "carte"}) ?`);
+        if (!confirmed) {
+          return;
+        }
+        selector = { id };
+      } else if (manaboxId) {
+        const confirmed = window.confirm(`Supprimer ${name || "cette carte"} (ManaBox ID ${manaboxId}) ?`);
+        if (!confirmed) {
+          return;
+        }
+        selector = { manabox_id: manaboxId };
+      } else {
+        const manual = window.prompt("ID de ligne, ManaBox ID ou Scryfall ID a supprimer :", scryfallId || "");
+        if (manual == null || !String(manual).trim()) {
+          return;
+        }
+        const value = String(manual).trim();
+        if (/^[0-9]+$/.test(value)) {
+          if (value.length >= 6) {
+            selector = { manabox_id: value };
+          } else {
+            selector = { id: value };
+          }
+        } else if (/^[0-9a-f-]{20,}$/i.test(value)) {
+          selector = {
+            scryfall_id: value,
+            name,
+            set_code: setCode,
+            collector_number: collector
+          };
+        } else {
+          selector = { manabox_id: value };
+        }
+      }
+
+      const out = await deleteCardFromCollectionDb(selector, getConfiguredCollectionDbPath(), false);
+      if (!out || out.ok !== true) {
+        renderCollection({
+          ok: false,
+          table: "mtg.db delete",
+          error: out?.error || "Suppression impossible"
+        });
+        return;
+      }
+      await loadDefaultDbCollectionIntoTable();
+    }
+  }
+
+  function attachDbActionEvents() {
+    window.addEventListener("mtgcodex:db-action", handleDbActionRequest);
+    window.addEventListener("mtgcodex:add-card-workflow", handleAddCardWorkflowRequest);
+    window.addEventListener("mtgcodex:delete-card-row", handleDeleteCardRowRequest);
+  }
+
+  function handleAddCardWorkflowRequest(event) {
+    const detail = event?.detail || {};
+    const viewKey = String(detail.viewKey || "").toLowerCase();
+    if (!isDbActionViewKey(viewKey)) {
+      renderCollection({
+        ok: false,
+        table: "Add card",
+        error: "Ajout disponible depuis la vue collection."
+      });
+      return;
+    }
+    openAddCardModal(detail.row || null);
+  }
+
+  function ensureAddCardModal() {
+    if (ADD_CARD_MODAL_STATE.root && document.body.contains(ADD_CARD_MODAL_STATE.root)) {
+      return ADD_CARD_MODAL_STATE;
+    }
+
+    const root = document.createElement("div");
+    root.className = "card-add-modal hidden";
+    root.innerHTML = `
+      <div class="card-add-dialog" role="dialog" aria-modal="true" aria-label="Ajouter une carte">
+        <div class="card-add-head">
+          <h3>Ajouter une carte</h3>
+          <button type="button" class="card-add-close" aria-label="Fermer">x</button>
+        </div>
+        <div class="card-add-body">
+          <label class="card-add-field">
+            Nom de carte
+            <input type="search" class="card-add-name" placeholder="Entomb">
+          </label>
+          <div class="card-add-suggestions"></div>
+          <div class="card-add-prints">
+            <p class="muted">Choisis une extension/edition:</p>
+            <div class="card-add-print-list"></div>
+          </div>
+          <div class="card-add-inline">
+            <label class="card-add-field">
+              Finish
+              <select class="card-add-finish">
+                <option value="normal">normal</option>
+                <option value="foil">foil</option>
+              </select>
+            </label>
+            <label class="card-add-field">
+              Quantite
+              <input type="number" class="card-add-qty" min="1" step="1" value="1">
+            </label>
+          </div>
+          <p class="card-add-status muted">Commence par taper un nom de carte.</p>
+        </div>
+        <div class="card-add-actions">
+          <button type="button" class="card-add-import">Importer...</button>
+          <button type="button" class="card-add-cancel">Annuler</button>
+          <button type="button" class="card-add-submit" disabled>Ajouter</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(root);
+
+    ADD_CARD_MODAL_STATE.root = root;
+    ADD_CARD_MODAL_STATE.nameInput = root.querySelector(".card-add-name");
+    ADD_CARD_MODAL_STATE.qtyInput = root.querySelector(".card-add-qty");
+    ADD_CARD_MODAL_STATE.finishSelect = root.querySelector(".card-add-finish");
+    ADD_CARD_MODAL_STATE.suggestionsWrap = root.querySelector(".card-add-suggestions");
+    ADD_CARD_MODAL_STATE.printsWrap = root.querySelector(".card-add-print-list");
+    ADD_CARD_MODAL_STATE.statusNode = root.querySelector(".card-add-status");
+    ADD_CARD_MODAL_STATE.addButton = root.querySelector(".card-add-submit");
+    ADD_CARD_MODAL_STATE.importButton = root.querySelector(".card-add-import");
+    ADD_CARD_MODAL_STATE.cancelButton = root.querySelector(".card-add-cancel");
+    ADD_CARD_MODAL_STATE.closeButton = root.querySelector(".card-add-close");
+
+    ADD_CARD_MODAL_STATE.closeButton?.addEventListener("click", closeAddCardModal);
+    ADD_CARD_MODAL_STATE.cancelButton?.addEventListener("click", closeAddCardModal);
+    root.addEventListener("click", (event) => {
+      if (event.target === root) {
+        closeAddCardModal();
+      }
+    });
+
+    ADD_CARD_MODAL_STATE.nameInput?.addEventListener("input", () => {
+      scheduleAddCardAutocomplete();
+    });
+
+    ADD_CARD_MODAL_STATE.nameInput?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const first = ADD_CARD_MODAL_STATE.suggestions[0];
+        if (first) {
+          ADD_CARD_MODAL_STATE.nameInput.value = first;
+          ADD_CARD_MODAL_STATE.suggestions = [];
+          renderAddCardSuggestions();
+          loadAddCardPrintsByName(first);
+        } else {
+          const typed = String(ADD_CARD_MODAL_STATE.nameInput.value || "").trim();
+          if (typed) {
+            loadAddCardPrintsByName(typed);
+          }
+        }
+      }
+    });
+
+    ADD_CARD_MODAL_STATE.suggestionsWrap?.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-card-name]");
+      if (!button) {
+        return;
+      }
+      const cardName = String(button.dataset.cardName || "").trim();
+      if (!cardName) {
+        return;
+      }
+      ADD_CARD_MODAL_STATE.nameInput.value = cardName;
+      ADD_CARD_MODAL_STATE.suggestions = [];
+      renderAddCardSuggestions();
+      loadAddCardPrintsByName(cardName);
+    });
+
+    ADD_CARD_MODAL_STATE.printsWrap?.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-print-id]");
+      if (!button) {
+        return;
+      }
+      const printId = String(button.dataset.printId || "").trim();
+      if (!printId || !ADD_CARD_MODAL_STATE.printsById.has(printId)) {
+        return;
+      }
+      ADD_CARD_MODAL_STATE.selectedPrintId = printId;
+      renderAddCardPrints();
+      syncAddCardFinishOptions();
+    });
+
+    ADD_CARD_MODAL_STATE.addButton?.addEventListener("click", async () => {
+      await submitAddCardFromModal();
+    });
+
+    ADD_CARD_MODAL_STATE.importButton?.addEventListener("click", async () => {
+      const out = await runDbImportFlow();
+      if (out?.canceled) {
+        return;
+      }
+      if (!out || out.ok !== true) {
+        setAddCardStatus(out?.error || "Import impossible.", true);
+        return;
+      }
+      setAddCardStatus("Import termine.");
+      closeAddCardModal();
+    });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && ADD_CARD_MODAL_STATE.root && !ADD_CARD_MODAL_STATE.root.classList.contains("hidden")) {
+        closeAddCardModal();
+      }
+    });
+
+    return ADD_CARD_MODAL_STATE;
+  }
+
+  function openAddCardModal(seedRow = null) {
+    ensureAddCardModal();
+    ADD_CARD_MODAL_STATE.root.classList.remove("hidden");
+    ADD_CARD_MODAL_STATE.selectedPrintId = "";
+    ADD_CARD_MODAL_STATE.printsById = new Map();
+    ADD_CARD_MODAL_STATE.suggestions = [];
+    renderAddCardSuggestions();
+    renderAddCardPrints();
+    setAddCardStatus("Tape un nom, puis choisis une extension.");
+    ADD_CARD_MODAL_STATE.addButton.disabled = true;
+    ADD_CARD_MODAL_STATE.qtyInput.value = "1";
+
+    const seededName = seedRow ? readRowField(seedRow, ["name"]) : "";
+    if (seededName) {
+      ADD_CARD_MODAL_STATE.nameInput.value = seededName;
+      loadAddCardPrintsByName(seededName);
+    } else {
+      ADD_CARD_MODAL_STATE.nameInput.value = "";
+      ADD_CARD_MODAL_STATE.nameInput.focus();
+      ADD_CARD_MODAL_STATE.nameInput.select();
+    }
+  }
+
+  function closeAddCardModal() {
+    if (!ADD_CARD_MODAL_STATE.root) {
+      return;
+    }
+    ADD_CARD_MODAL_STATE.root.classList.add("hidden");
+  }
+
+  function setAddCardStatus(text, isError = false) {
+    if (!ADD_CARD_MODAL_STATE.statusNode) {
+      return;
+    }
+    ADD_CARD_MODAL_STATE.statusNode.textContent = String(text || "");
+    ADD_CARD_MODAL_STATE.statusNode.classList.toggle("is-error", isError === true);
+  }
+
+  function scheduleAddCardAutocomplete() {
+    if (ADD_CARD_MODAL_STATE.autocompleteTimer) {
+      window.clearTimeout(ADD_CARD_MODAL_STATE.autocompleteTimer);
+    }
+    ADD_CARD_MODAL_STATE.autocompleteTimer = window.setTimeout(() => {
+      runAddCardAutocomplete();
+    }, 220);
+  }
+
+  async function fetchJsonSafe(url) {
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/json"
+      }
+    });
+    if (!response.ok) {
+      return null;
+    }
+    return response.json().catch(() => null);
+  }
+
+  async function runAddCardAutocomplete() {
+    const query = String(ADD_CARD_MODAL_STATE.nameInput?.value || "").trim();
+    if (query.length < 2) {
+      ADD_CARD_MODAL_STATE.suggestions = [];
+      renderAddCardSuggestions();
+      return;
+    }
+
+    const seq = ++ADD_CARD_MODAL_STATE.autocompleteSeq;
+    const payload = await fetchJsonSafe(
+      `https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(query)}`
+    );
+    if (seq !== ADD_CARD_MODAL_STATE.autocompleteSeq) {
+      return;
+    }
+
+    ADD_CARD_MODAL_STATE.suggestions = Array.isArray(payload?.data)
+      ? payload.data.slice(0, 10)
+      : [];
+    renderAddCardSuggestions();
+  }
+
+  function renderAddCardSuggestions() {
+    const wrap = ADD_CARD_MODAL_STATE.suggestionsWrap;
+    if (!wrap) {
+      return;
+    }
+    const items = Array.isArray(ADD_CARD_MODAL_STATE.suggestions)
+      ? ADD_CARD_MODAL_STATE.suggestions
+      : [];
+    if (items.length === 0) {
+      wrap.innerHTML = "";
+      return;
+    }
+    wrap.innerHTML = `
+      <div class="card-add-suggestion-list">
+        ${items.map((item) => (
+          `<button type="button" class="card-add-suggestion" data-card-name="${escapeHtml(String(item))}">${escapeHtml(String(item))}</button>`
+        )).join("")}
+      </div>
+    `;
+  }
+
+  function normalizeScryfallPrint(card) {
+    if (!card || card.object !== "card" || !card.id) {
+      return null;
+    }
+    const setCode = String(card.set || "").toUpperCase();
+    return {
+      id: String(card.id),
+      name: String(card.name || ""),
+      setCode,
+      setName: String(card.set_name || ""),
+      collectorNumber: String(card.collector_number || ""),
+      rarity: String(card.rarity || ""),
+      language: String(card.lang || "en"),
+      releasedAt: String(card.released_at || ""),
+      finishes: Array.isArray(card.finishes) ? card.finishes.slice() : [],
+      iconUrl: setCode ? `https://svgs.scryfall.io/sets/${encodeURIComponent(setCode.toLowerCase())}.svg` : "",
+      imageUrl: card?.image_uris?.small || card?.image_uris?.normal || ""
+    };
+  }
+
+  async function loadAddCardPrintsByName(cardName) {
+    const name = String(cardName || "").trim();
+    if (!name) {
+      ADD_CARD_MODAL_STATE.printsById = new Map();
+      ADD_CARD_MODAL_STATE.selectedPrintId = "";
+      renderAddCardPrints();
+      setAddCardStatus("Entre un nom de carte.");
+      return;
+    }
+
+    const seq = ++ADD_CARD_MODAL_STATE.printsSeq;
+    setAddCardStatus(`Recherche des editions pour "${name}"...`);
+    ADD_CARD_MODAL_STATE.addButton.disabled = true;
+
+    const escapedName = name.replace(/"/g, "\\\"");
+    const query = `!"${escapedName}"`;
+    const payload = await fetchJsonSafe(
+      `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}&unique=prints&order=released&dir=desc`
+    );
+    if (seq !== ADD_CARD_MODAL_STATE.printsSeq) {
+      return;
+    }
+    if (!payload || !Array.isArray(payload.data)) {
+      ADD_CARD_MODAL_STATE.printsById = new Map();
+      ADD_CARD_MODAL_STATE.selectedPrintId = "";
+      renderAddCardPrints();
+      setAddCardStatus("Scryfall indisponible ou aucune edition trouvee.", true);
+      ADD_CARD_MODAL_STATE.addButton.disabled = true;
+      return;
+    }
+
+    const cards = payload.data;
+    const map = new Map();
+    cards.forEach((card) => {
+      const normalized = normalizeScryfallPrint(card);
+      if (!normalized) {
+        return;
+      }
+      if (!map.has(normalized.id)) {
+        map.set(normalized.id, normalized);
+      }
+    });
+
+    ADD_CARD_MODAL_STATE.printsById = map;
+    const first = map.keys().next();
+    ADD_CARD_MODAL_STATE.selectedPrintId = first && !first.done ? String(first.value) : "";
+
+    renderAddCardPrints();
+    syncAddCardFinishOptions();
+    if (map.size === 0) {
+      setAddCardStatus("Aucune edition trouvee.", true);
+      ADD_CARD_MODAL_STATE.addButton.disabled = true;
+    } else {
+      setAddCardStatus(`${map.size} editions trouvees. Choisis une extension.`);
+      ADD_CARD_MODAL_STATE.addButton.disabled = false;
+    }
+  }
+
+  function renderAddCardPrints() {
+    const wrap = ADD_CARD_MODAL_STATE.printsWrap;
+    if (!wrap) {
+      return;
+    }
+    const prints = Array.from(ADD_CARD_MODAL_STATE.printsById.values());
+    if (prints.length === 0) {
+      wrap.innerHTML = '<p class="muted">Aucune edition chargee pour le moment.</p>';
+      return;
+    }
+
+    wrap.innerHTML = prints.map((print) => {
+      const active = print.id === ADD_CARD_MODAL_STATE.selectedPrintId ? "is-active" : "";
+      const subtitle = `${print.setName} (${print.setCode}) #${print.collectorNumber} | ${print.language.toUpperCase()} | ${print.rarity}`;
+      return `
+        <button type="button" class="card-add-print-option ${active}" data-print-id="${escapeHtml(print.id)}">
+          <span class="card-add-print-icon-wrap">
+            ${print.iconUrl ? `<img class="card-add-print-icon" src="${escapeHtml(print.iconUrl)}" alt="${escapeHtml(print.setCode)}">` : `<span class="card-add-print-icon-fallback">${escapeHtml(print.setCode || "?")}</span>`}
+          </span>
+          <span class="card-add-print-meta">
+            <span class="card-add-print-name">${escapeHtml(print.name)}</span>
+            <span class="card-add-print-line">${escapeHtml(subtitle)}</span>
+          </span>
+        </button>
+      `;
+    }).join("");
+  }
+
+  function syncAddCardFinishOptions() {
+    const select = ADD_CARD_MODAL_STATE.finishSelect;
+    if (!select) {
+      return;
+    }
+    const selected = ADD_CARD_MODAL_STATE.printsById.get(ADD_CARD_MODAL_STATE.selectedPrintId);
+    const finishes = Array.isArray(selected?.finishes) ? selected.finishes : [];
+    const hasNormal = finishes.includes("nonfoil") || finishes.length === 0;
+    const hasFoil = finishes.includes("foil");
+    const options = [];
+    if (hasNormal) {
+      options.push("normal");
+    }
+    if (hasFoil) {
+      options.push("foil");
+    }
+    if (options.length === 0) {
+      options.push("normal");
+    }
+    select.innerHTML = options.map((value) => (
+      `<option value="${value}">${value}</option>`
+    )).join("");
+  }
+
+  async function submitAddCardFromModal() {
+    const selected = ADD_CARD_MODAL_STATE.printsById.get(ADD_CARD_MODAL_STATE.selectedPrintId);
+    if (!selected) {
+      setAddCardStatus("Choisis une extension avant d'ajouter.", true);
+      return;
+    }
+
+    const quantityRaw = String(ADD_CARD_MODAL_STATE.qtyInput?.value || "1").trim();
+    const quantityNum = Number.parseInt(quantityRaw, 10);
+    const quantity = Number.isFinite(quantityNum) && quantityNum > 0 ? quantityNum : 1;
+    const finish = String(ADD_CARD_MODAL_STATE.finishSelect?.value || "normal").trim() || "normal";
+
+    ADD_CARD_MODAL_STATE.addButton.disabled = true;
+    setAddCardStatus("Ajout en cours...");
+    const out = await addCardToCollectionDb({
+      name: selected.name,
+      quantity: String(quantity),
+      set_code: selected.setCode,
+      set_name: selected.setName,
+      collector_number: selected.collectorNumber,
+      rarity: selected.rarity,
+      language: selected.language,
+      scryfall_id: selected.id,
+      foil: finish
+    }, getConfiguredCollectionDbPath(), true);
+
+    if (!out || out.ok !== true) {
+      setAddCardStatus(out?.error || "Ajout impossible.", true);
+      ADD_CARD_MODAL_STATE.addButton.disabled = false;
+      return;
+    }
+
+    setAddCardStatus("Carte ajoutee.");
+    closeAddCardModal();
+    await loadDefaultDbCollectionIntoTable();
+  }
+
   function uniqueId(prefix) {
     return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   }
@@ -4410,6 +5384,7 @@ import {
 
     bindCollectionPicker();
     bindDeckPicker();
+    attachDbActionEvents();
     bindStrategyControls();
     bindSpellbookControls();
     bindDeckAnalysisControls();
@@ -4423,40 +5398,76 @@ import {
         renderCollection({
           ok: false,
           table: "Collections",
-          error: "Selectionne un csv."
+          error: "Selectionne un fichier."
         });
         return;
       }
 
-      const payload = await importCollectionCsv(
-        selected,
-        nodes.collections.nameInput.value.trim(),
-        "auto"
-      );
+      const sourceType = inferCollectionSourceType(selected.name);
+      if (sourceType === "db") {
+        const targetDbPath = getConfiguredCollectionDbPath();
+        const out = await importIntoCollectionDb(selected, targetDbPath, "db", "collection", true);
+        if (!out || out.ok !== true) {
+          renderCollection({
+            ok: false,
+            table: "Collections",
+            error: out?.error || "Import DB impossible"
+          });
+          return;
+        }
+        await loadDefaultDbCollectionIntoTable(targetDbPath);
+      } else if (sourceType === "csv") {
+        const payload = await importCollectionCsv(
+          selected,
+          nodes.collections.nameInput.value.trim(),
+          "auto"
+        );
 
-      if (!payload || payload.ok !== true) {
-        renderCollection({
-          ok: false,
-          table: "Collections",
-          error: payload?.error || "Import impossible"
-        });
-        return;
+        if (!payload || payload.ok !== true) {
+          renderCollection({
+            ok: false,
+            table: "Collections",
+            error: payload?.error || "Import impossible"
+          });
+          return;
+        }
+
+        await refreshCollectionsListFromApi();
+        const newId = payload.collection?.id || state.collections[0]?.id || null;
+        if (newId) {
+          state.selectedCollectionId = newId;
+        }
+        setSavedSelectedCollectionId(state.selectedCollectionId);
+        setCollectionSourcePreference("store");
+        renderCollectionsList("");
+        renderActiveTabTable();
+        if (state.selectedCollectionId) {
+          await loadStoredCollectionIntoTable(state.selectedCollectionId);
+        }
+      } else {
+        const payload = await uploadCollection(selected, "text", "");
+        if (!payload || payload.ok !== true) {
+          renderCollection(payload || {
+            ok: false,
+            table: "Collections",
+            error: "Chargement impossible"
+          });
+          return;
+        }
+        renderCollection(payloadForNamedView(
+          payload,
+          selected.name || "Collection",
+          selected.name || "collection/upload",
+          "cards",
+          "collections"
+        ));
+        setCollectionSourcePreference("store");
       }
 
-      await refreshCollectionsListFromApi();
-      const newId = payload.collection?.id || state.collections[0]?.id || null;
-      if (newId) {
-        state.selectedCollectionId = newId;
-      }
       nodes.collections.nameInput.value = "";
       nodes.collections.fileInput.value = "";
-      setCollectionPickButtonLabel("Choisir CSV");
+      setCollectionPickButtonLabel("Choisir fichier collection");
       nodes.collections.pickFileButton.classList.remove("has-file");
-      renderCollectionsList("");
-      renderActiveTabTable();
-      if (state.selectedCollectionId) {
-        await loadStoredCollectionIntoTable(state.selectedCollectionId);
-      }
     });
 
     nodes.decks.form.addEventListener("submit", async (event) => {
@@ -4509,7 +5520,14 @@ import {
     attachDeckListEvents();
 
     await refreshCollectionsListFromApi();
-    if (state.selectedCollectionId) {
+    const sourcePref = getCollectionSourcePreference();
+    if (sourcePref === "db") {
+      const loadedDb = await loadDefaultDbCollectionIntoTable();
+      if (!loadedDb && state.selectedCollectionId) {
+        setCollectionSourcePreference("store");
+        await loadStoredCollectionIntoTable(state.selectedCollectionId);
+      }
+    } else if (state.selectedCollectionId) {
       await loadStoredCollectionIntoTable(state.selectedCollectionId);
     }
     renderDecksList();
