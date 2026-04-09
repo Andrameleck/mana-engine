@@ -1,0 +1,201 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CRAN_MIRROR: https://cloud.r-project.org
+  CI_CACHE_DIR: ${{ github.workspace }}/ci
+  R_LIBS_USER: ${{ github.workspace }}/ci/lib
+  COVERAGE_REPORT: ${{ github.workspace }}/ci/coverage.RDS
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: R Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+
+      - name: Setup Pandoc
+        uses: r-lib/actions/setup-pandoc@v2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            texlive-latex-base \
+            texlive-latex-recommended \
+            texlive-latex-extra \
+            texlive-fonts-recommended \
+            texlive-fonts-extra \
+            texinfo \
+            latexmk
+          sudo rm -rf /var/lib/apt/lists/*
+
+      - name: Cache R library
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.R_LIBS_USER }}
+          key: ${{ runner.os }}-r-lib-check-${{ hashFiles('DESCRIPTION') }}
+          restore-keys: |
+            ${{ runner.os }}-r-lib-check-
+
+      - name: Install R dependencies
+        run: |
+          mkdir -p "$R_LIBS_USER"
+          echo "R_LIBS=$R_LIBS_USER" > .Renviron
+          Rscript -e "options(repos = c(CRAN = Sys.getenv('CRAN_MIRROR'))); if (!requireNamespace('pak', quietly = TRUE)) install.packages('pak')"
+          Rscript -e "pak::pak(c('devtools', 'testthat'))"
+          Rscript -e "pak::local_install_deps(dependencies = TRUE, upgrade = FALSE)"
+
+      - name: Run package checks
+        env:
+          NOT_CRAN: "true"
+        run: Rscript -e "devtools::check(vignettes = TRUE, error_on = 'error')"
+
+  coverage:
+    name: Coverage RDS
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    if: github.event_name == 'push' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || github.ref == 'refs/heads/dev')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+
+      - name: Cache R library
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.R_LIBS_USER }}
+          key: ${{ runner.os }}-r-lib-coverage-${{ hashFiles('DESCRIPTION') }}
+          restore-keys: |
+            ${{ runner.os }}-r-lib-coverage-
+
+      - name: Install R dependencies
+        run: |
+          mkdir -p "$R_LIBS_USER"
+          mkdir -p "$CI_CACHE_DIR"
+          echo "R_LIBS=$R_LIBS_USER" > .Renviron
+          Rscript -e "options(repos = c(CRAN = Sys.getenv('CRAN_MIRROR'))); if (!requireNamespace('pak', quietly = TRUE)) install.packages('pak')"
+          Rscript -e "pak::pak(c('devtools', 'covr', 'DT'))"
+          Rscript -e "pak::local_install_deps(dependencies = TRUE, upgrade = FALSE)"
+
+      - name: Generate coverage RDS
+        run: |
+          Rscript -e "devtools::install()"
+          Rscript -e "cov <- covr::package_coverage(type = 'all', quiet = FALSE); print(cov); saveRDS(cov, Sys.getenv('COVERAGE_REPORT'))"
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-rds
+          path: ${{ env.COVERAGE_REPORT }}
+          if-no-files-found: ignore
+
+  deploy-pages:
+    name: Build And Deploy Pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs:
+      - check
+      - coverage
+    if: always() && needs.check.result == 'success' && github.event_name == 'push' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || github.ref == 'refs/heads/dev')
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+
+      - name: Setup Pandoc
+        uses: r-lib/actions/setup-pandoc@v2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            texlive-latex-base \
+            texlive-latex-recommended \
+            texlive-latex-extra \
+            texlive-fonts-recommended \
+            texlive-fonts-extra \
+            texinfo \
+            latexmk
+          sudo rm -rf /var/lib/apt/lists/*
+
+      - name: Cache R library
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.R_LIBS_USER }}
+          key: ${{ runner.os }}-r-lib-deploy-${{ hashFiles('DESCRIPTION') }}
+          restore-keys: |
+            ${{ runner.os }}-r-lib-deploy-
+
+      - name: Install R dependencies
+        run: |
+          mkdir -p "$R_LIBS_USER"
+          mkdir -p "$CI_CACHE_DIR"
+          echo "R_LIBS=$R_LIBS_USER" > .Renviron
+          Rscript -e "options(repos = c(CRAN = Sys.getenv('CRAN_MIRROR'))); if (!requireNamespace('pak', quietly = TRUE)) install.packages('pak')"
+          Rscript -e "pak::pak(c('devtools', 'pkgdown', 'covr', 'DT'))"
+          Rscript -e "pak::local_install_deps(dependencies = TRUE, upgrade = FALSE)"
+
+      - name: Download coverage artifact (optional)
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-rds
+          path: ${{ env.CI_CACHE_DIR }}
+
+      - name: Build pkgdown site, manual and coverage HTML
+        run: |
+          Rscript -e "pkgdown::build_site()"
+          mkdir -p public/user-manual
+          R CMD Rd2pdf . --output=public/user-manual/mtgcodex.api_api-manual.pdf
+
+          if [ -f "$COVERAGE_REPORT" ]; then
+            Rscript -e "covr::report(readRDS(Sys.getenv('COVERAGE_REPORT')), 'public/coverage.html')"
+          else
+            echo "Coverage artifact not found. Skipping coverage HTML report."
+          fi
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
