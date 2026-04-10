@@ -2617,9 +2617,11 @@ import {
         const spellbookBoost = Math.max(0, spellbookRaw);
         const externalBoost = Math.min(0.45, spellbookBoost * 0.55);
         const score = clampScore(sim.score + externalBoost);
+        const scoreParts = buildStrategyScoreParts(card, sim.score, 0, externalBoost);
         return {
           card,
           score,
+          scoreParts,
           featureScore: sim.featureScore,
           ruleScore: sim.ruleScore,
           colorScore: sim.colorScore,
@@ -2670,12 +2672,18 @@ import {
         const split = splitGroupCoreAndSide(seedCard, packageCards);
 
         const groupScore = left.score + right.score + pairLink.score * 0.7 + (support ? support.score * 0.35 : 0);
+        const groupScoreParts = sumStrategyScoreParts([
+          left.scoreParts,
+          right.scoreParts,
+          support ? buildStrategyScoreParts(support.card, support.score * 0.35, 0, 0) : null
+        ]);
         groups.push({
           cards: packageCards,
           coreCards: split.coreCards,
           sideCards: split.sideCards,
           bridgeName: left.score >= right.score ? left.card.name : right.card.name,
           score: groupScore,
+          scoreParts: groupScoreParts,
           lineA: `${seedCard.name} -> ${left.card.name} -> ${right.card.name}`,
           lineB: support ? `${seedCard.name} -> ${support.card.name} -> ${left.card.name}` : `${seedCard.name} -> ${right.card.name}`
         });
@@ -2754,6 +2762,10 @@ import {
       const popularityFactor = Math.min(1, Math.log10(popularity + 1) / 4);
       const avgDirectScore = partnerKeys.reduce((sum, item) => sum + item.score, 0) / partnerKeys.length;
       const groupScore = clampScore(avgDirectScore * 0.8 + popularityFactor * 0.2);
+      const groupScoreParts = sumStrategyScoreParts([
+        ...partnerKeys.map((item) => directByKey.get(item.key)?.scoreParts || null),
+        { collection: 0, scryfall: 0, spellbook: popularityFactor * 0.2 }
+      ]);
 
       const orderedNames = partnerKeys
         .map((item) => cardsByKey.get(item.key)?.name)
@@ -2772,6 +2784,7 @@ import {
         sideCards: split.sideCards,
         bridgeName,
         score: groupScore,
+        scoreParts: groupScoreParts,
         lineA,
         lineB
       });
@@ -3087,7 +3100,8 @@ import {
       fragment.appendChild(
         createStrategyCardElement(
           entry.card,
-          `#${index + 1} | score ${formatDecimal(entry.score)} | rules ${formatDecimal(entry.ruleScore || 0)}${comboPart}${spellbookPart}`
+          `#${index + 1} | score ${formatDecimal(entry.score)} | rules ${formatDecimal(entry.ruleScore || 0)}${comboPart}${spellbookPart}`,
+          { scoreParts: entry.scoreParts }
         )
       );
     });
@@ -3115,6 +3129,11 @@ import {
       title.className = "strategy-group-title";
       title.textContent = `Groupe ${index + 1} | score ${formatDecimal(group.score)}`;
       article.appendChild(title);
+
+      const scoreBar = createStrategyScoreBar(group.scoreParts);
+      if (scoreBar) {
+        article.appendChild(scoreBar);
+      }
 
       const packageNames = group.cards.map((card) => card.name);
       const coreCards = Array.isArray(group.coreCards) && group.coreCards.length > 0
@@ -3268,6 +3287,11 @@ import {
       body.appendChild(rankingLine);
     }
 
+    const scoreBar = createStrategyScoreBar(options.scoreParts);
+    if (scoreBar) {
+      body.appendChild(scoreBar);
+    }
+
     const setMetaLine = document.createElement("p");
     setMetaLine.className = "strategy-card-meta";
     setMetaLine.textContent = setLine || "No set info";
@@ -3286,6 +3310,95 @@ import {
     }
 
     return cardNode;
+  }
+
+  function buildStrategyScoreParts(card, internalScore = 0, scryfallBoost = 0, spellbookBoost = 0) {
+    const sourceType = String(card?.source || "collection").toLowerCase();
+    const internal = Math.max(0, Number(internalScore) || 0);
+    const scryfall = Math.max(0, Number(scryfallBoost) || 0);
+    const spellbook = Math.max(0, Number(spellbookBoost) || 0);
+    if (sourceType === "scryfall") {
+      return {
+        collection: 0,
+        scryfall: internal + scryfall,
+        spellbook
+      };
+    }
+    return {
+      collection: internal,
+      scryfall,
+      spellbook
+    };
+  }
+
+  function sumStrategyScoreParts(partsList) {
+    const total = { collection: 0, scryfall: 0, spellbook: 0 };
+    (Array.isArray(partsList) ? partsList : []).forEach((parts) => {
+      if (!parts || typeof parts !== "object") {
+        return;
+      }
+      total.collection += Math.max(0, Number(parts.collection) || 0);
+      total.scryfall += Math.max(0, Number(parts.scryfall) || 0);
+      total.spellbook += Math.max(0, Number(parts.spellbook) || 0);
+    });
+    return total;
+  }
+
+  function createStrategyScoreBar(parts) {
+    const safe = {
+      collection: Math.max(0, Number(parts?.collection) || 0),
+      scryfall: Math.max(0, Number(parts?.scryfall) || 0),
+      spellbook: Math.max(0, Number(parts?.spellbook) || 0)
+    };
+    const total = safe.collection + safe.scryfall + safe.spellbook;
+    if (total <= 0) {
+      return null;
+    }
+
+    const wrap = document.createElement("div");
+    wrap.className = "strategy-score-wrap";
+
+    const bar = document.createElement("div");
+    bar.className = "strategy-score-bar";
+
+    const segments = [
+      {
+        key: "collection",
+        label: "Collection",
+        value: safe.collection,
+        className: "is-collection"
+      },
+      {
+        key: "scryfall",
+        label: "Scryfall",
+        value: safe.scryfall,
+        className: "is-scryfall"
+      },
+      {
+        key: "spellbook",
+        label: "Spellbook",
+        value: safe.spellbook,
+        className: "is-spellbook"
+      }
+    ].filter((segment) => segment.value > 0);
+
+    segments.forEach((segment) => {
+      const node = document.createElement("span");
+      node.className = `strategy-score-segment ${segment.className}`;
+      node.style.width = `${(segment.value / total) * 100}%`;
+      node.title = `${segment.label}: ${formatDecimal(segment.value)} (${Math.round((segment.value / total) * 100)}%)`;
+      bar.appendChild(node);
+    });
+
+    const legend = document.createElement("div");
+    legend.className = "strategy-score-legend";
+    legend.textContent = segments
+      .map((segment) => `${segment.label} ${Math.round((segment.value / total) * 100)}%`)
+      .join(" | ");
+
+    wrap.appendChild(bar);
+    wrap.appendChild(legend);
+    return wrap;
   }
 
   function renderStrategyManaLine(target, manaCostText) {

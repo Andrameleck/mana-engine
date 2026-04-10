@@ -1201,6 +1201,45 @@ body {
   color: var(--muted);
 }
 
+.strategy-score-wrap {
+  display: grid;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.strategy-score-bar {
+  display: flex;
+  width: 100%;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(120, 140, 170, 0.14);
+  border: 1px solid rgba(120, 140, 170, 0.18);
+}
+
+.strategy-score-segment {
+  display: block;
+  height: 100%;
+}
+
+.strategy-score-segment.is-collection {
+  background: linear-gradient(90deg, #4dd48a 0%, #2fa86b 100%);
+}
+
+.strategy-score-segment.is-scryfall {
+  background: linear-gradient(90deg, #ffbf5e 0%, #f08a2f 100%);
+}
+
+.strategy-score-segment.is-spellbook {
+  background: linear-gradient(90deg, #7e8bff 0%, #bc6cff 100%);
+}
+
+.strategy-score-legend {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
 .strategy-card-badge {
   display: inline-flex;
   align-items: center;
