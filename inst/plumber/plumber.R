@@ -294,10 +294,10 @@ function(q = "", set_code = "", collector_number = "", uuid = "", limit = "40") 
 
 #* Search LotusNoir public posts (WordPress search endpoint)
 #* @param q Search query.
-#* @param limit Max posts to fetch (1-20).
+#* @param limit Max posts to fetch (1-120).
 #* @serializer unboxedJSON
 #* @get /reference/lotusnoir/posts
-function(q = "", limit = "20") {
+function(q = "", limit = "120") {
   query_call(
     "query_lotusnoir_posts",
     q = q,

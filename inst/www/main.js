@@ -3063,7 +3063,7 @@ import {
       return [];
     }
 
-    const payload = await fetchLotusNoirPostsApi(safeSearch, 20);
+    const payload = await fetchLotusNoirPostsApi(safeSearch, 120);
     if (!payload || payload.ok === false) {
       return [];
     }

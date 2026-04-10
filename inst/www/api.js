@@ -198,12 +198,12 @@ async function fetchSpellbookVariants(query, limit = 40) {
   });
 }
 
-async function fetchLotusNoirPosts(query, limit = 20) {
+async function fetchLotusNoirPosts(query, limit = 120) {
   return apiRequest(API_ENDPOINTS.referenceLotusNoirPosts, {
     method: "GET",
     query: {
       q: toTrimmedText(query),
-      limit: toText(limit || 20)
+      limit: toText(limit || 120)
     },
     fallback: { results: [] }
   });
