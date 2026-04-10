@@ -44,6 +44,27 @@ query_req_scalar <- function(req, key, default = "") {
   )
 }
 
+query_req_client_id <- function(req) {
+  from_query <- query_req_scalar(req, "client_id", "")
+  if (nzchar(from_query)) {
+    return(from_query)
+  }
+
+  from_header <- trimws(as.character(req$HTTP_X_MTGCODEX_CLIENT_ID %||% ""))
+  if (nzchar(from_header)) {
+    return(from_header)
+  }
+
+  "anon"
+}
+
+`%||%` <- function(left, right) {
+  if (is.null(left) || length(left) == 0L) {
+    return(right)
+  }
+  left
+}
+
 #* @apiTitle mtgcodex.api API
 #* @apiDescription API routes delegate to query_* functions in R/
 NULL
@@ -97,30 +118,33 @@ function(req, res, type = "", table = "", filename = "") {
 #* @serializer unboxedJSON
 #* @post /collections/import_csv
 function(req, res, name = "", platform = "auto", filename = "") {
+  client_id <- query_req_client_id(req)
   query_call(
     "query_collections_import_csv",
     req = req,
     name = name,
     platform = platform,
-    filename = filename
+    filename = filename,
+    client_id = client_id
   )
 }
 
 #* List stored collections
 #* @serializer unboxedJSON
 #* @get /collections
-function() {
-  query_call("query_collections_list")
+function(req) {
+  query_call("query_collections_list", client_id = query_req_client_id(req))
 }
 
 #* Get one stored collection content
 #* @param collection_id Collection identifier.
 #* @serializer unboxedJSON
 #* @get /collections/<collection_id>
-function(collection_id = "") {
+function(req, collection_id = "") {
   query_call(
     "query_collections_get",
-    collection_id = collection_id
+    collection_id = collection_id,
+    client_id = query_req_client_id(req)
   )
 }
 
@@ -128,10 +152,11 @@ function(collection_id = "") {
 #* @param collection_id Collection identifier.
 #* @serializer unboxedJSON
 #* @delete /collections/<collection_id>
-function(collection_id = "") {
+function(req, collection_id = "") {
   query_call(
     "query_collections_delete",
-    collection_id = collection_id
+    collection_id = collection_id,
+    client_id = query_req_client_id(req)
   )
 }
 

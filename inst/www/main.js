@@ -1083,7 +1083,9 @@ import {
         renderCollection({
           ok: false,
           table: "Strategy",
-          error: "Selectionne une collection chargee pour calculer les synergies."
+          error: currentUiLanguage() === "fr"
+            ? "Mode sans collection: utilise une seed libre, puis calcul via Scryfall."
+            : "No-collection mode: use a free seed, then compute via Scryfall."
         });
       }
       renderStrategyPanel(payload, meta);
@@ -1595,20 +1597,17 @@ import {
       return;
     }
 
+    const hasCollectionPayload = Boolean(payload && payload.ok === true);
     const collectionName = collectionMeta?.name || "Collection";
-    if (!payload || payload.ok !== true) {
-      strategyNodes.sourceMeta.textContent = t("strategy_source_unavailable");
-      strategyNodes.status.textContent = currentUiLanguage() === "fr" ? "Aucune source disponible." : "No source available.";
-      strategyNodes.directList.innerHTML = `<p class="muted">${escapeHtml(t("strategy_no_result"))}</p>`;
-      strategyNodes.groupList.innerHTML = `<p class="muted">${escapeHtml(t("strategy_no_result"))}</p>`;
-      strategyNodes.seedList.innerHTML = "";
-      resetStrategyCardPreview();
-      return;
-    }
-
-    const model = getStrategyModelForCollection(state.selectedCollectionId, payload);
+    const model = hasCollectionPayload
+      ? getStrategyModelForCollection(state.selectedCollectionId, payload)
+      : { cards: [] };
     const includeKnown = isStrategyIncludeKnownEnabled();
-    if (includeKnown) {
+    if (!hasCollectionPayload) {
+      strategyNodes.sourceMeta.textContent = currentUiLanguage() === "fr"
+        ? "Mode seed libre: Scryfall uniquement (aucune collection chargee)."
+        : "Free-seed mode: Scryfall only (no loaded collection).";
+    } else if (includeKnown) {
       const knownCount = Array.isArray(state.strategy.knownCardsModel?.cards)
         ? state.strategy.knownCardsModel.cards.length
         : 0;
@@ -1643,7 +1642,11 @@ import {
       }
       strategyNodes.directList.innerHTML = `<p class="muted">${escapeHtml(t("strategy_run_hint_direct"))}</p>`;
       strategyNodes.groupList.innerHTML = `<p class="muted">${escapeHtml(t("strategy_run_hint_group"))}</p>`;
-      strategyNodes.status.textContent = t("strategy_choose_seed");
+      strategyNodes.status.textContent = hasCollectionPayload
+        ? t("strategy_choose_seed")
+        : (currentUiLanguage() === "fr"
+            ? "Saisis une carte seed puis clique sur Calculer (mode sans collection)."
+            : "Type a seed card then click Compute (no-collection mode).");
       resetStrategyCardPreview();
     }
     if (strategyNodes.seedBInput && !currentCollectionChanged) {
@@ -2480,12 +2483,9 @@ import {
 
     const collectionId = state.selectedCollectionId;
     const payload = collectionId ? state.collectionPayloadById[collectionId] : null;
-    if (!payload || payload.ok !== true) {
-      strategyNodes.status.textContent = "Charge d'abord une collection pour calculer les synergies.";
-      return;
-    }
-
-    const model = getStrategyModelForCollection(collectionId, payload);
+    const model = payload && payload.ok === true
+      ? getStrategyModelForCollection(collectionId, payload)
+      : { cards: [] };
     const includeKnown = isStrategyIncludeKnownEnabled();
     executeStrategyComputation(
       strategyNodes,
@@ -2515,7 +2515,7 @@ import {
     if (runToken !== state.strategy.runToken) {
       return;
     }
-    if (!model.cards.length) {
+    if (!model.cards.length && !includeKnown) {
       strategyNodes.status.textContent = currentUiLanguage() === "fr"
         ? "Collection vide ou cartes non reconnues."
         : "Empty collection or unrecognized cards.";
@@ -2529,6 +2529,12 @@ import {
         ? "Saisis une carte seed (ex: Entomb)."
         : "Type a seed card (e.g. Entomb).";
       return;
+    }
+
+    if (!model.cards.length && includeKnown) {
+      strategyNodes.status.textContent = currentUiLanguage() === "fr"
+        ? "Aucune collection active: recherche Scryfall uniquement..."
+        : "No active collection: using Scryfall-only lookup...";
     }
 
     const strategyLanguage = normalizeStrategyLanguage(getCollectionLanguage());

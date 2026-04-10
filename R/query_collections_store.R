@@ -1,4 +1,4 @@
-query_collections_import_csv <- function(req, name = "", platform = "auto", filename = "") {
+query_collections_import_csv <- function(req, name = "", platform = "auto", filename = "", client_id = "") {
   deps <- query_api_require_db()
   if (!isTRUE(deps)) {
     return(deps)
@@ -38,6 +38,7 @@ query_collections_import_csv <- function(req, name = "", platform = "auto", file
   }
 
   collection_name <- trimws(as.character(name))
+  owner_id <- query_collections_normalize_client_id(client_id)
   if (!nzchar(collection_name)) {
     collection_name <- tools::file_path_sans_ext(basename(file_info$name))
   }
@@ -60,11 +61,12 @@ query_collections_import_csv <- function(req, name = "", platform = "auto", file
         con,
         paste(
           "INSERT INTO collections",
-          "(collection_id, name, platform, source_file, created_at, row_count)",
-          "VALUES (?, ?, ?, ?, ?, ?)"
+          "(collection_id, owner_id, name, platform, source_file, created_at, row_count)",
+          "VALUES (?, ?, ?, ?, ?, ?, ?)"
         ),
         params = list(
           collection_id,
+          owner_id,
           collection_name,
           platform_value,
           file_info$name,
@@ -130,7 +132,7 @@ query_collections_import_csv <- function(req, name = "", platform = "auto", file
   out
 }
 
-query_collections_list <- function() {
+query_collections_list <- function(client_id = "") {
   deps <- query_api_require_db()
   if (!isTRUE(deps)) {
     return(deps)
@@ -145,6 +147,7 @@ query_collections_list <- function() {
     ))
   }
 
+  owner_id <- query_collections_normalize_client_id(client_id)
   con <- NULL
   out <- tryCatch(
     {
@@ -152,10 +155,12 @@ query_collections_list <- function() {
       rows <- DBI::dbGetQuery(
         con,
         paste(
-          "SELECT collection_id AS id, name, platform, source_file, created_at, row_count",
+          "SELECT collection_id AS id, owner_id, name, platform, source_file, created_at, row_count",
           "FROM collections",
+          "WHERE owner_id = ?",
           "ORDER BY datetime(created_at) DESC, name ASC"
-        )
+        ),
+        params = list(owner_id)
       )
 
       list(
@@ -175,7 +180,7 @@ query_collections_list <- function() {
   out
 }
 
-query_collections_get <- function(collection_id = "") {
+query_collections_get <- function(collection_id = "", client_id = "") {
   deps <- query_api_require_db()
   if (!isTRUE(deps)) {
     return(deps)
@@ -189,6 +194,7 @@ query_collections_get <- function(collection_id = "") {
     ))
   }
 
+  owner_id <- query_collections_normalize_client_id(client_id)
   store_path <- query_collections_store_path()
   if (!file.exists(store_path)) {
     return(list(
@@ -206,10 +212,10 @@ query_collections_get <- function(collection_id = "") {
       meta <- DBI::dbGetQuery(
         con,
         paste(
-          "SELECT collection_id, name, platform, source_file, created_at, row_count",
-          "FROM collections WHERE collection_id = ?"
+          "SELECT collection_id, owner_id, name, platform, source_file, created_at, row_count",
+          "FROM collections WHERE collection_id = ? AND owner_id = ?"
         ),
-        params = list(id)
+        params = list(id, owner_id)
       )
       if (nrow(meta) == 0L) {
         return(list(
@@ -259,7 +265,7 @@ query_collections_get <- function(collection_id = "") {
   out
 }
 
-query_collections_delete <- function(collection_id = "") {
+query_collections_delete <- function(collection_id = "", client_id = "") {
   deps <- query_api_require_db()
   if (!isTRUE(deps)) {
     return(deps)
@@ -273,6 +279,7 @@ query_collections_delete <- function(collection_id = "") {
     ))
   }
 
+  owner_id <- query_collections_normalize_client_id(client_id)
   store_path <- query_collections_store_path()
   if (!file.exists(store_path)) {
     return(list(ok = TRUE, deleted = FALSE))
@@ -286,14 +293,18 @@ query_collections_delete <- function(collection_id = "") {
 
       deleted_cards <- DBI::dbExecute(
         con,
-        "DELETE FROM collection_cards WHERE collection_id = ?",
-        params = list(id)
+        paste(
+          "DELETE FROM collection_cards",
+          "WHERE collection_id = ?",
+          "AND collection_id IN (SELECT collection_id FROM collections WHERE collection_id = ? AND owner_id = ?)"
+        ),
+        params = list(id, id, owner_id)
       )
 
       deleted_collections <- DBI::dbExecute(
         con,
-        "DELETE FROM collections WHERE collection_id = ?",
-        params = list(id)
+        "DELETE FROM collections WHERE collection_id = ? AND owner_id = ?",
+        params = list(id, owner_id)
       )
 
       DBI::dbCommit(con)
@@ -339,6 +350,7 @@ query_collections_ensure_schema <- function(con) {
     paste(
       "CREATE TABLE IF NOT EXISTS collections (",
       "collection_id TEXT PRIMARY KEY,",
+      "owner_id TEXT NOT NULL DEFAULT 'anon',",
       "name TEXT NOT NULL,",
       "platform TEXT NOT NULL,",
       "source_file TEXT NOT NULL,",
@@ -375,6 +387,11 @@ query_collections_ensure_schema <- function(con) {
   DBI::dbExecute(
     con,
     "CREATE INDEX IF NOT EXISTS idx_collection_cards_collection_id ON collection_cards(collection_id)"
+  )
+  query_collections_ensure_column(con, "collections", "owner_id", "TEXT NOT NULL DEFAULT 'anon'")
+  DBI::dbExecute(
+    con,
+    "CREATE INDEX IF NOT EXISTS idx_collections_owner_id ON collections(owner_id)"
   )
   DBI::dbExecute(
     con,
@@ -684,6 +701,20 @@ query_collections_clean_text <- function(x, fallback = "") {
     return(fallback)
   }
   value
+}
+
+query_collections_normalize_client_id <- function(client_id = "") {
+  raw <- trimws(as.character(client_id))
+  if (!nzchar(raw)) {
+    return("anon")
+  }
+  sanitized <- gsub("[^a-zA-Z0-9._-]", "-", raw)
+  sanitized <- gsub("-+", "-", sanitized)
+  sanitized <- gsub("(^-+|-+$)", "", sanitized)
+  if (!nzchar(sanitized)) {
+    return("anon")
+  }
+  substring(sanitized, 1L, 96L)
 }
 
 query_collections_ensure_column <- function(con, table_name, column_name, column_type) {

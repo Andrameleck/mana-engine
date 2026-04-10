@@ -47,6 +47,26 @@ function appendQuery(endpoint, query = {}) {
   return `${endpoint}?${raw}`;
 }
 
+function getClientId() {
+  const storageKey = "mtgcodex_client_id_v1";
+  try {
+    const saved = window.localStorage.getItem(storageKey);
+    if (saved && String(saved).trim()) {
+      return String(saved).trim();
+    }
+  } catch (_) {
+    // ignore localStorage access errors
+  }
+
+  const generated = `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  try {
+    window.localStorage.setItem(storageKey, generated);
+  } catch (_) {
+    // ignore localStorage access errors
+  }
+  return generated;
+}
+
 function uploadBody(file) {
   const formData = new FormData();
   formData.append("file", file);
@@ -111,6 +131,7 @@ async function importCollectionCsv(file, name, platform) {
   return apiRequest(API_ENDPOINTS.collectionsImportCsv, {
     method: "POST",
     query: {
+      client_id: getClientId(),
       name: toText(name || ""),
       platform: toText(platform || "auto")
     },
@@ -169,21 +190,30 @@ async function deleteCardFromCollectionDb(selector = {}, dbPath = "", deleteAll 
 
 async function listStoredCollections() {
   return apiRequest(API_ENDPOINTS.collections, {
-    method: "GET"
+    method: "GET",
+    query: {
+      client_id: getClientId()
+    }
   });
 }
 
 async function getStoredCollection(collectionId) {
   const id = encodeURIComponent(toText(collectionId || ""));
   return apiRequest(`${API_ENDPOINTS.collections}/${id}`, {
-    method: "GET"
+    method: "GET",
+    query: {
+      client_id: getClientId()
+    }
   });
 }
 
 async function deleteStoredCollection(collectionId) {
   const id = encodeURIComponent(toText(collectionId || ""));
   return apiRequest(`${API_ENDPOINTS.collections}/${id}`, {
-    method: "DELETE"
+    method: "DELETE",
+    query: {
+      client_id: getClientId()
+    }
   });
 }
 
