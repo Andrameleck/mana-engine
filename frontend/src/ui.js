@@ -73,8 +73,55 @@ const PREVIEW_STATE = {
   cache: new Map()
 };
 
+const UI_I18N = {
+  en: {
+    no_data: "No data",
+    no_column: "No column to display.",
+    no_match: "No card matches your search.",
+    main_deck: "Main Deck",
+    sideboard: "Sideboard",
+    cards: "Cards",
+    rows: "Rows",
+    page: "page",
+    card: "Card",
+    preview_hint: "Hover or select a card to show details.",
+    card_preview_alt: "Card preview",
+    no_oracle: "No oracle text available.",
+    cm_price_loading: "Cardmarket: loading...",
+    cm_price_na: "Cardmarket: n/a",
+    cm_price_label: "Cardmarket:",
+    no_set_info: "No set info",
+    no_data_loaded: "No data loaded."
+  },
+  fr: {
+    no_data: "Aucune donnee",
+    no_column: "Aucune colonne a afficher.",
+    no_match: "Aucune carte ne correspond a ta recherche.",
+    main_deck: "Main Deck",
+    sideboard: "Sideboard",
+    cards: "Cartes",
+    rows: "Lignes",
+    page: "page",
+    card: "Carte",
+    preview_hint: "Survole ou selectionne une carte pour afficher les details.",
+    card_preview_alt: "Apercu carte",
+    no_oracle: "Aucun texte oracle disponible.",
+    cm_price_loading: "Cardmarket: chargement...",
+    cm_price_na: "Cardmarket: n/d",
+    cm_price_label: "Cardmarket:",
+    no_set_info: "Aucune info d'edition",
+    no_data_loaded: "Aucune donnee chargee."
+  }
+};
+
+function uiText(key) {
+  const lang = UI_STATE.language === "fr" ? "fr" : "en";
+  return UI_I18N[lang]?.[key] || UI_I18N.fr?.[key] || key;
+}
+
 let releaseScrollbarSync = null;
 const TILE_MANA_CACHE = new Map();
+const TILE_PRICE_CACHE = new Map();
 
 initPreviewEvents();
 
@@ -87,6 +134,7 @@ function renderCollection(payload) {
   wrap.classList.remove("is-card-view");
   wrap.classList.remove("is-card-view-deck");
   wrap.removeAttribute("data-table");
+  setPreviewDockMode(false);
   releaseTableScrollbarSync();
 
   if (!payload || payload.ok !== true) {
@@ -94,7 +142,7 @@ function renderCollection(payload) {
       ? ` Tables disponibles: ${payload.available_tables.join(", ")}`
       : "";
     title.textContent = payload?.table || "Table";
-    wrap.innerHTML = `<p class="muted">${payload?.error || "No data"}${dbHints}</p>`;
+    wrap.innerHTML = `<p class="muted">${payload?.error || uiText("no_data")}${dbHints}</p>`;
     summary.textContent = payload?.path || "";
     clearCardPreview(true);
     hideBottomScrollbar();
@@ -128,7 +176,7 @@ function renderCollection(payload) {
   UI_STATE.currentPage = 1;
 
   if (UI_STATE.columns.length === 0) {
-    wrap.innerHTML = '<p class="muted">Aucune colonne a afficher.</p>';
+    wrap.innerHTML = `<p class="muted">${uiText("no_column")}</p>`;
     clearCardPreview(true);
     hideBottomScrollbar();
     hideTablePager();
@@ -196,6 +244,7 @@ function renderTablePage(pageNumber) {
   wrap.innerHTML = "";
   releaseTableScrollbarSync();
   clearCardPreview(true);
+  setPreviewDockMode(false);
 
   const totalRows = UI_STATE.rows.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / UI_STATE.pageSize));
@@ -279,6 +328,7 @@ function renderCardsPage(pageNumber) {
   const filteredRows = applyCardFiltersAndSorting(cardRows);
   const totalRows = filteredRows.length;
   const deckContext = isDeckCardsContext();
+  setPreviewDockMode(!deckContext);
   const filteredLiteralCount = deckContext ? sumCardQuantities(filteredRows) : totalRows;
   const totalLiteralCount = deckContext ? sumCardQuantities(cardRows) : cardRows.length;
   let startIndex = 0;
@@ -304,15 +354,15 @@ function renderCardsPage(pageNumber) {
   if (pageRows.length === 0) {
     const grid = document.createElement("div");
     grid.classList.add("collection-card-grid");
-    grid.innerHTML = '<div class="collection-empty-state muted">Aucune carte ne correspond a ta recherche.</div>';
+    grid.innerHTML = `<div class="collection-empty-state muted">${uiText("no_match")}</div>`;
     browser.appendChild(grid);
   } else if (deckContext) {
     const grouped = splitDeckRowsByZone(pageRows);
     if (grouped.main.length > 0) {
-      browser.appendChild(createDeckCardSection("Main Deck", grouped.main, "main"));
+      browser.appendChild(createDeckCardSection(uiText("main_deck"), grouped.main, "main"));
     }
     if (grouped.side.length > 0) {
-      browser.appendChild(createDeckCardSection("Sideboard", grouped.side, "side"));
+      browser.appendChild(createDeckCardSection(uiText("sideboard"), grouped.side, "side"));
     }
   } else {
     const grid = document.createElement("div");
@@ -470,9 +520,123 @@ function createCollectionCardTile(rowData) {
     <p class="collection-card-line">${escapeHtml(formatCardTileSubtitle(rowData))}</p>
   `;
   appendCardTileMana(meta, rowData);
+  appendCardTileMarketPrice(meta, rowData, quantity);
   tile.appendChild(meta);
 
   return tile;
+}
+
+function appendCardTileMarketPrice(metaNode, rowData, quantity) {
+  if (!metaNode) {
+    return;
+  }
+
+  const priceLine = document.createElement("p");
+  priceLine.classList.add("collection-card-price", "muted");
+  priceLine.textContent = uiText("cm_price_loading");
+  metaNode.appendChild(priceLine);
+
+  hydrateCardTileMarketPrice(priceLine, rowData, quantity);
+}
+
+function hydrateCardTileMarketPrice(targetNode, rowData, quantity) {
+  resolveCardMarketPriceEur(rowData)
+    .then((priceValue) => {
+      if (!targetNode) {
+        return;
+      }
+
+      if (!Number.isFinite(priceValue) || priceValue <= 0) {
+        targetNode.textContent = uiText("cm_price_na");
+        return;
+      }
+
+      const formatter = new Intl.NumberFormat(UI_STATE.language === "fr" ? "fr-FR" : "en-US", {
+        style: "currency",
+        currency: "EUR",
+        maximumFractionDigits: 2
+      });
+      const eachPrice = formatter.format(priceValue);
+      const qty = Number.isFinite(Number(quantity)) ? Math.max(1, Number(quantity)) : 1;
+      if (qty > 1) {
+        const totalPrice = formatter.format(priceValue * qty);
+        targetNode.textContent = `${uiText("cm_price_label")} ${eachPrice} | x${qty} = ${totalPrice}`;
+      } else {
+        targetNode.textContent = `${uiText("cm_price_label")} ${eachPrice}`;
+      }
+      targetNode.title = "Source: Cardmarket (via Scryfall prices.eur)";
+    })
+    .catch(() => {
+      if (targetNode) {
+        targetNode.textContent = uiText("cm_price_na");
+      }
+    });
+}
+
+function resolveCardMarketPriceEur(rowData) {
+  const scryfallId = formatCellValue(readFirstCellValue(rowData, ["scryfall_id", "scry_fall_id"])).trim();
+  const inferred = inferDeckEntryFromRow(rowData);
+  const cardName = formatCellValue(readCellValue(rowData, "name")).trim() || inferred.name;
+  const cacheKey = scryfallId ? `id:${scryfallId}` : `name:${cardName.toLowerCase()}`;
+
+  if (!cacheKey || cacheKey === "name:") {
+    return Promise.resolve(null);
+  }
+
+  const cached = TILE_PRICE_CACHE.get(cacheKey);
+  if (cached != null) {
+    return Promise.resolve(cached);
+  }
+
+  const task = resolveCardMarketPriceFromApi(scryfallId, cardName)
+    .then((value) => {
+      const normalized = Number.isFinite(value) && value > 0 ? value : null;
+      TILE_PRICE_CACHE.set(cacheKey, normalized);
+      return normalized;
+    })
+    .catch(() => {
+      TILE_PRICE_CACHE.set(cacheKey, null);
+      return null;
+    });
+
+  TILE_PRICE_CACHE.set(cacheKey, task);
+  return task;
+}
+
+async function resolveCardMarketPriceFromApi(scryfallId, cardName) {
+  if (scryfallId) {
+    const byId = await fetchJson(`https://api.scryfall.com/cards/${encodeURIComponent(scryfallId)}`);
+    const byIdPrice = extractCardMarketEur(byId);
+    if (byIdPrice != null) {
+      return byIdPrice;
+    }
+  }
+
+  if (cardName) {
+    const byName = await fetchCardByName(cardName, "en");
+    const byNamePrice = extractCardMarketEur(byName);
+    if (byNamePrice != null) {
+      return byNamePrice;
+    }
+  }
+
+  return null;
+}
+
+function extractCardMarketEur(card) {
+  const prices = card?.prices && typeof card.prices === "object" ? card.prices : null;
+  if (!prices) {
+    return null;
+  }
+
+  const candidates = [prices.eur, prices.eur_foil, prices.eur_etched];
+  for (const raw of candidates) {
+    const value = Number.parseFloat(String(raw || "").trim());
+    if (Number.isFinite(value) && value > 0) {
+      return value;
+    }
+  }
+  return null;
 }
 
 function renderTablePager(totalRows, startIndex, pageLength) {
@@ -489,12 +653,12 @@ function renderTablePager(totalRows, startIndex, pageLength) {
   const totalPages = Math.max(1, Math.ceil(totalRows / UI_STATE.pageSize));
   const start = startIndex + 1;
   const end = startIndex + pageLength;
-  const dataLabel = UI_STATE.viewMode === "cards" ? "Cartes" : "Lignes";
+  const dataLabel = UI_STATE.viewMode === "cards" ? uiText("cards") : uiText("rows");
   const onPageChange = UI_STATE.viewMode === "cards" ? renderCardsPage : renderTablePage;
 
   pager.classList.add("is-visible");
   pager.innerHTML = `
-    <div class="table-pager-info">${dataLabel} ${start}-${end} / ${totalRows} (page ${UI_STATE.currentPage}/${totalPages})</div>
+    <div class="table-pager-info">${dataLabel} ${start}-${end} / ${totalRows} (${uiText("page")} ${UI_STATE.currentPage}/${totalPages})</div>
     <div class="table-pager-actions">
       <button type="button" data-page="prev">Prev</button>
       <button type="button" data-page="next">Next</button>
@@ -526,6 +690,49 @@ function hideTablePager() {
   pager.innerHTML = "";
 }
 
+function isPreviewDockMode() {
+  const workspaceLower = document.getElementById("workspace-lower");
+  return Boolean(workspaceLower?.classList.contains("has-preview-panel"));
+}
+
+function setPreviewDockMode(enabled) {
+  const workspaceLower = document.getElementById("workspace-lower");
+  const panel = document.getElementById("card-preview");
+  if (!workspaceLower || !panel) {
+    return;
+  }
+
+  workspaceLower.classList.toggle("has-preview-panel", enabled === true);
+  if (enabled === true) {
+    panel.classList.remove("hidden");
+    if (!PREVIEW_STATE.activeRow) {
+      resetCardPreviewPlaceholder();
+    }
+    return;
+  }
+
+  PREVIEW_STATE.locked = false;
+  panel.classList.add("hidden");
+}
+
+function resetCardPreviewPlaceholder() {
+  const title = document.getElementById("card-preview-title");
+  const text = document.getElementById("card-preview-text");
+  const image = document.getElementById("card-preview-image");
+  if (title) {
+    title.textContent = uiText("card");
+  }
+  if (text) {
+    text.textContent = uiText("preview_hint");
+  }
+  if (image) {
+    image.removeAttribute("src");
+    image.style.display = "none";
+    image.alt = uiText("card_preview_alt");
+  }
+  renderPreviewMeta([]);
+}
+
 function bindRowPreviewEvents(rowElement, rowData) {
   rowElement.addEventListener("mouseenter", () => {
     if (PREVIEW_STATE.locked && PREVIEW_STATE.activeElement !== rowElement) {
@@ -535,6 +742,9 @@ function bindRowPreviewEvents(rowElement, rowData) {
   });
 
   rowElement.addEventListener("mouseleave", () => {
+    if (isPreviewDockMode()) {
+      return;
+    }
     if (!PREVIEW_STATE.locked) {
       schedulePreviewHide();
     }
@@ -573,6 +783,7 @@ function showCardPreview(rowData, rowElement, forceLock) {
   title.textContent = formatMainCardTitle(rowData);
   text.textContent = formatPrimaryText(rowData);
   image.removeAttribute("src");
+  image.style.display = "block";
   image.alt = `Apercu ${title.textContent}`;
   renderPreviewMetaFromRow(rowData);
 
@@ -636,7 +847,12 @@ function clearCardPreview(force) {
   PREVIEW_STATE.activeElement = null;
   const panel = document.getElementById("card-preview");
   if (panel) {
-    panel.classList.add("hidden");
+    if (isPreviewDockMode()) {
+      panel.classList.remove("hidden");
+      resetCardPreviewPlaceholder();
+    } else {
+      panel.classList.add("hidden");
+    }
   }
 }
 
@@ -678,6 +894,9 @@ function initPreviewEvents() {
   });
 
   panel.addEventListener("mouseleave", () => {
+    if (isPreviewDockMode()) {
+      return;
+    }
     if (!PREVIEW_STATE.locked) {
       schedulePreviewHide();
     }
@@ -1039,7 +1258,7 @@ async function resolveCardManaCostFromApi(scryfallId, cardName) {
 function cardImageUrlFromRow(rowData) {
   const scryfallId = formatCellValue(readFirstCellValue(rowData, ["scryfall_id", "scry_fall_id"])).trim();
   if (scryfallId) {
-    return `https://api.scryfall.com/cards/${encodeURIComponent(scryfallId)}?format=image&version=normal`;
+    return `https://api.scryfall.com/cards/${encodeURIComponent(scryfallId)}?format=image&version=art_crop`;
   }
 
   const inferred = inferDeckEntryFromRow(rowData);
@@ -1051,17 +1270,12 @@ function cardImageUrlFromRow(rowData) {
   const params = new URLSearchParams({
     exact: cardName,
     format: "image",
-    version: "normal"
+    version: "art_crop"
   });
 
   const setCode = formatCellValue(readCellValue(rowData, "set_code")).trim();
   if (/^[a-z0-9]{2,6}$/i.test(setCode)) {
     params.set("set", setCode.toLowerCase());
-  }
-
-  const language = formatCellValue(readFirstCellValue(rowData, ["language", "lang"])).trim();
-  if (/^[a-z]{2}$/.test(language.toLowerCase())) {
-    params.set("lang", language.toLowerCase());
   }
 
   return `https://api.scryfall.com/cards/named?${params.toString()}`;
@@ -1248,9 +1462,11 @@ function formatMainCardTitle(rowData) {
 }
 
 function inferDeckEntryFromRow(rowData) {
-  const explicitName = formatCellValue(readCellValue(rowData, "name")).trim();
+  const explicitName = formatCellValue(
+    readFirstCellValue(rowData, ["name", "card_name", "card", "cardname", "printed_name", "card_title"])
+  ).trim();
   const explicitQty = Number.parseInt(
-    String(readFirstCellValue(rowData, ["quantity", "qty", "count", "owned"]) || "").trim(),
+    String(readFirstCellValue(rowData, ["quantity", "qty", "count", "owned", "qte", "amount"]) || "").trim(),
     10
   );
   if (explicitName) {
@@ -1260,7 +1476,9 @@ function inferDeckEntryFromRow(rowData) {
     };
   }
 
-  const rawLine = formatCellValue(readFirstCellValue(rowData, ["line", "card_line", "raw", "entry"])).trim();
+  const rawLine = formatCellValue(
+    readFirstCellValue(rowData, ["line", "card_line", "raw", "entry", "deck_line", "deck_entry"])
+  ).trim();
   if (!rawLine) {
     return { name: "", quantity: 0 };
   }
@@ -1420,7 +1638,7 @@ function createDeckCardSection(title, rows, zone) {
 }
 
 function formatPrimaryText(rowData) {
-  return formatCellValue(readCellValue(rowData, "oracle_text")) || "Aucun texte oracle disponible.";
+  return formatCellValue(readCellValue(rowData, "oracle_text")) || uiText("no_oracle");
 }
 
 function renderPreviewMetaFromRow(rowData) {

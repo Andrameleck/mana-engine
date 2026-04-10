@@ -15,6 +15,148 @@ import {
 } from "./ui.js";
 
 (function bootstrap() {
+  const UI_TEXT = {
+    en: {
+      tabs_collections: "Collections",
+      tabs_decks: "Decks",
+      tabs_strategy: "Strategy",
+      tabs_spellbook: "Spellbook",
+      subtitle_collections: "Create and manage multiple collection folders.",
+      subtitle_decks: "Import and browse multiple decks.",
+      subtitle_strategy: "Workspace for synergy and combo exploration.",
+      subtitle_spellbook: "Query Commander Spellbook by card name.",
+      pick_csv: "Choose CSV",
+      pick_deck_file: "Choose deck file",
+      open: "Open",
+      delete: "Delete",
+      folder: "Folder",
+      rows: "rows",
+      decks_empty: "No deck yet.",
+      collections_empty: "No collection folder yet.",
+      load_collections_error: "Unable to load folders.",
+      table_no_data: "No data loaded.",
+      table_no_data_available: "No data",
+      strategy_waiting: "Waiting for computation.",
+      strategy_no_result: "No result.",
+      strategy_run_hint_direct: "Run a computation to see direct synergies.",
+      strategy_run_hint_group: "Run a computation to see card groups.",
+      strategy_choose_seed: "Choose a seed card then click Compute.",
+      strategy_source_unavailable: "Select a loaded collection folder to enable computation.",
+      strategy_seed_placeholder: "Seed card (ex: Entomb).",
+      strategy_preview_hint: "Hover or select a synergy card to display details.",
+      strategy_preview_oracle_fallback: "No Oracle text available.",
+      spellbook_hint: "Type a card name to query Commander Spellbook.",
+      spellbook_none: "No result.",
+      spellbook_card_label: "Card name",
+      spellbook_limit_label: "Limit",
+      spellbook_search: "Search",
+      compute: "Compute",
+      strategy_seed_label: "Seed card",
+      strategy_direct_limit_label: "Top direct synergies",
+      strategy_group_limit_label: "Top groups",
+      strategy_include_spellbook_label: "Include combo references (Commander Spellbook)",
+      strategy_include_spellbook_hint: "Prioritize cards present in public combos",
+      strategy_mana_filter_label: "Mana filter (allowed colors)",
+      direct_synergies: "Direct synergies",
+      card_groups: "Card groups",
+      collection_name_label: "Folder name",
+      deck_name_label: "Deck name",
+      new_collection_folder: "New collection folder",
+      collections_folders: "Collection folders",
+      import_deck: "Import deck",
+      decks_list: "Deck list",
+      source_meta_waiting: "Select a collection folder to enable computation.",
+      create_folder: "Create folder",
+      add_deck: "Add deck"
+    },
+    fr: {
+      tabs_collections: "Collections",
+      tabs_decks: "Decks",
+      tabs_strategy: "Strategy",
+      tabs_spellbook: "Spellbook",
+      subtitle_collections: "Creer et gerer plusieurs dossiers de collection.",
+      subtitle_decks: "Importer et visualiser plusieurs decks.",
+      subtitle_strategy: "Zone reservee au module de strategies.",
+      subtitle_spellbook: "Interroger Commander Spellbook par nom de carte.",
+      pick_csv: "Choisir CSV",
+      pick_deck_file: "Choisir un fichier deck",
+      open: "Ouvrir",
+      delete: "Supprimer",
+      folder: "Dossier",
+      rows: "lignes",
+      decks_empty: "Aucun deck pour le moment.",
+      collections_empty: "Aucun dossier collection pour le moment.",
+      load_collections_error: "Impossible de charger les dossiers.",
+      table_no_data: "Aucune donnee chargee.",
+      table_no_data_available: "Aucune donnee",
+      strategy_waiting: "En attente de calcul.",
+      strategy_no_result: "Aucun resultat.",
+      strategy_run_hint_direct: "Lance un calcul pour voir les synergies directes.",
+      strategy_run_hint_group: "Lance un calcul pour voir les groupes de cartes.",
+      strategy_choose_seed: "Choisis une carte seed puis clique sur Calculer.",
+      strategy_source_unavailable: "Selectionne un dossier collection charge pour activer le calcul.",
+      strategy_seed_placeholder: "Carte seed (ex: Entomb).",
+      strategy_preview_hint: "Survole ou selectionne une carte de synergie pour afficher ses details.",
+      strategy_preview_oracle_fallback: "Aucun texte Oracle disponible.",
+      spellbook_hint: "Saisis une carte pour interroger Commander Spellbook.",
+      spellbook_none: "Aucun resultat.",
+      spellbook_card_label: "Nom de carte",
+      spellbook_limit_label: "Limite",
+      spellbook_search: "Rechercher",
+      compute: "Calculer",
+      strategy_seed_label: "Carte seed",
+      strategy_direct_limit_label: "Top synergies directes",
+      strategy_group_limit_label: "Top groupes",
+      strategy_include_spellbook_label: "Inclure reference combos (Commander Spellbook)",
+      strategy_include_spellbook_hint: "Prioriser les cartes presentes dans les combos publics",
+      strategy_mana_filter_label: "Filtre mana (couleurs autorisees)",
+      direct_synergies: "Synergies directes",
+      card_groups: "Groupes de cartes",
+      collection_name_label: "Nom du dossier",
+      deck_name_label: "Nom du deck",
+      new_collection_folder: "Nouveau dossier collection",
+      collections_folders: "Dossiers collections",
+      import_deck: "Import deck",
+      decks_list: "Decks list",
+      source_meta_waiting: "Selectionne un dossier collection pour activer le calcul.",
+      create_folder: "Creer le dossier",
+      add_deck: "Ajouter le deck"
+    }
+  };
+
+  function currentUiLanguage() {
+    return getCollectionLanguage() === "fr" ? "fr" : "en";
+  }
+
+  function t(key) {
+    const lang = currentUiLanguage();
+    return UI_TEXT[lang]?.[key] || UI_TEXT.fr?.[key] || key;
+  }
+
+  function tabMetaFor(tabId) {
+    return {
+      collections: {
+        title: t("tabs_collections"),
+        subtitle: t("subtitle_collections")
+      },
+      decks: {
+        title: t("tabs_decks"),
+        subtitle: t("subtitle_decks")
+      },
+      strategy: {
+        title: t("tabs_strategy"),
+        subtitle: t("subtitle_strategy")
+      },
+      spellbook: {
+        title: t("tabs_spellbook"),
+        subtitle: t("subtitle_spellbook")
+      }
+    }[tabId] || {
+      title: t("tabs_collections"),
+      subtitle: t("subtitle_collections")
+    };
+  }
+
   const TAB_META = {
     collections: {
       title: "Collections",
@@ -55,8 +197,8 @@ import {
       },
       modelCache: new Map(),
       lastCollectionId: null,
-      includeKnownCards: false,
-      includeSpellbookCombos: false,
+      includeKnownCards: true,
+      includeSpellbookCombos: true,
       knownCardsModel: null,
       knownCardsModelKey: "",
       knownCardsModelPromise: null,
@@ -64,6 +206,10 @@ import {
       knownCardsError: "",
       spellbookCache: new Map(),
       spellbookPromiseCache: new Map(),
+      namedCardCache: new Map(),
+      namedCardPromiseCache: new Map(),
+      seedAutocompleteCache: new Map(),
+      seedAutocompleteToken: 0,
       spellbookError: "",
       runToken: 0
     },
@@ -86,6 +232,11 @@ import {
   const DECK_ANALYSIS_STATE = {
     requestToken: 0,
     activePane: "stats"
+  };
+  const STRATEGY_PREVIEW_STATE = {
+    activeElement: null,
+    requestToken: 0,
+    cache: new Map()
   };
 
   const nodes = {
@@ -118,13 +269,16 @@ import {
       seedList: document.getElementById("strategy-seed-list"),
       directLimitInput: document.getElementById("strategy-direct-limit"),
       groupLimitInput: document.getElementById("strategy-group-limit"),
-      includeKnownInput: document.getElementById("strategy-include-known"),
       includeSpellbookInput: document.getElementById("strategy-include-spellbook"),
       manaFilterInputs: Array.from(document.querySelectorAll("input[data-strategy-mana]")),
       runButton: document.getElementById("strategy-run-btn"),
       status: document.getElementById("strategy-status"),
       directList: document.getElementById("strategy-direct-list"),
-      groupList: document.getElementById("strategy-group-list")
+      groupList: document.getElementById("strategy-group-list"),
+      previewTitle: document.getElementById("strategy-card-preview-title"),
+      previewText: document.getElementById("strategy-card-preview-text"),
+      previewImage: document.getElementById("strategy-card-preview-image"),
+      previewMeta: document.getElementById("strategy-card-preview-meta")
     },
     spellbook: {
       form: document.getElementById("spellbook-form"),
@@ -225,24 +379,83 @@ import {
     nodes.langFrButton.classList.toggle("is-active", language === "fr");
   }
 
+  function applyStaticUiTranslations() {
+    document.documentElement.setAttribute("lang", currentUiLanguage());
+
+    const tabLabels = {
+      collections: t("tabs_collections"),
+      decks: t("tabs_decks"),
+      strategy: t("tabs_strategy"),
+      spellbook: t("tabs_spellbook")
+    };
+    nodes.tabButtons.forEach((button) => {
+      const tabId = String(button?.dataset?.tab || "");
+      const label = tabLabels[tabId] || tabLabels.collections;
+      button.setAttribute("aria-label", label);
+      button.setAttribute("title", label);
+      const hidden = button.querySelector(".visually-hidden");
+      if (hidden) {
+        hidden.textContent = label;
+      }
+    });
+
+    const setText = (selector, text) => {
+      const node = document.querySelector(selector);
+      if (node) {
+        node.textContent = text;
+      }
+    };
+    const setPlaceholder = (selector, text) => {
+      const node = document.querySelector(selector);
+      if (node) {
+        node.setAttribute("placeholder", text);
+      }
+    };
+
+    setText("#tab-collections .panel-head h3", t("new_collection_folder"));
+    setText("#tab-collections .panel.panel-compact:nth-of-type(2) .panel-head h3", t("collections_folders"));
+    setText("#tab-decks .panel-head h3", t("import_deck"));
+    setText("#tab-decks .deck-list-panel .panel-head h3", t("decks_list"));
+    setText("#tab-strategy .panel-head h3", "Synergy Finder");
+    setText("#tab-strategy #strategy-status", t("strategy_waiting"));
+    setText("#strategy-seed-label", t("strategy_seed_label"));
+    setText("#strategy-direct-limit-label", t("strategy_direct_limit_label"));
+    setText("#strategy-group-limit-label", t("strategy_group_limit_label"));
+    setText("#strategy-include-spellbook-label", t("strategy_include_spellbook_label"));
+    setText("#strategy-include-spellbook-hint", t("strategy_include_spellbook_hint"));
+    setText("#strategy-mana-filter-label", t("strategy_mana_filter_label"));
+    setText("#tab-strategy .strategy-result-block:nth-of-type(1) .strategy-result-head h4", t("direct_synergies"));
+    setText("#tab-strategy .strategy-result-block:nth-of-type(2) .strategy-result-head h4", t("card_groups"));
+    setText("#tab-spellbook .panel-head h3", "Commander Spellbook Lookup");
+    setText("#spellbook-run-btn", t("spellbook_search"));
+    setText("#strategy-run-btn", t("compute"));
+    setText("#strategy-source-meta", t("source_meta_waiting"));
+    setText("#strategy-card-preview-text", t("strategy_preview_hint"));
+    setText("#spellbook-status", t("spellbook_hint"));
+
+    setPlaceholder("#strategy-seed-input", "Entomb");
+    setPlaceholder("#spellbook-card-input", "Entomb");
+
+    const tableSummary = document.getElementById("load-summary");
+    if (tableSummary && (!tableSummary.textContent || tableSummary.textContent === "No data loaded." || tableSummary.textContent === "Aucune donnee chargee.")) {
+      tableSummary.textContent = t("table_no_data");
+    }
+  }
+
   function onLanguageSelect(language) {
     setCollectionLanguage(language);
     applyLanguageButtonState(language);
+    applyStaticUiTranslations();
     resetStrategyKnownCardsCache();
-    if (state.activeTab === "collections" && state.selectedCollectionId) {
-      loadStoredCollectionIntoTable(state.selectedCollectionId);
-    }
-    if (state.activeTab === "strategy") {
-      const collectionId = state.selectedCollectionId;
-      const payload = collectionId ? state.collectionPayloadById[collectionId] : null;
-      const meta = state.collections.find((entry) => entry.id === collectionId);
-      renderStrategyPanel(payload, meta);
-    }
+    renderCollectionsList("");
+    renderDecksList();
+    selectTab(state.activeTab);
+    renderSpellbookPanel();
   }
 
   function bindCollectionPicker() {
     nodes.collections.fileInput.accept = ".csv,.txt";
-    const defaultPickLabel = "Choisir CSV";
+    const defaultPickLabel = t("pick_csv");
     setCollectionPickButtonLabel(defaultPickLabel);
     nodes.collections.pickFileButton.classList.remove("has-file");
     nodes.collections.pickFileButton.addEventListener("click", () => {
@@ -260,7 +473,7 @@ import {
     if (!button) {
       return;
     }
-    const text = String(label || "Choisir CSV");
+    const text = String(label || t("pick_csv"));
     const labelNode = button.querySelector(".btn-label");
     if (labelNode) {
       labelNode.textContent = text;
@@ -274,7 +487,7 @@ import {
 
   function bindDeckPicker() {
     nodes.decks.fileInput.accept = ".txt,.text,.tsv,.csv,.db,.sqlite,.sqlite3";
-    const defaultPickLabel = "Choisir un fichier deck";
+    const defaultPickLabel = t("pick_deck_file");
     setDeckPickButtonLabel(defaultPickLabel);
     nodes.decks.pickFileButton.classList.remove("has-file");
     nodes.decks.pickFileButton.addEventListener("click", () => {
@@ -292,7 +505,7 @@ import {
     if (!button) {
       return;
     }
-    const text = String(label || "Choisir un fichier deck");
+    const text = String(label || t("pick_deck_file"));
     button.title = text;
     button.setAttribute("aria-label", text);
   }
@@ -303,17 +516,10 @@ import {
       return;
     }
 
-    if (strategyNodes.includeKnownInput) {
-      strategyNodes.includeKnownInput.checked = isStrategyIncludeKnownEnabled();
-      strategyNodes.includeKnownInput.addEventListener("change", () => {
-        state.strategy.includeKnownCards = strategyNodes.includeKnownInput.checked === true;
-        resetStrategyKnownCardsCache();
-        const collectionId = state.selectedCollectionId;
-        const payload = collectionId ? state.collectionPayloadById[collectionId] : null;
-        const meta = state.collections.find((entry) => entry.id === collectionId);
-        renderStrategyPanel(payload, meta);
-      });
+    if (strategyNodes.seedList) {
+      strategyNodes.seedInput.setAttribute("list", "strategy-seed-list");
     }
+
     if (strategyNodes.includeSpellbookInput) {
       strategyNodes.includeSpellbookInput.checked = isStrategyIncludeSpellbookEnabled();
       strategyNodes.includeSpellbookInput.addEventListener("change", () => {
@@ -340,7 +546,9 @@ import {
     }
 
     strategyNodes.seedInput.addEventListener("input", () => {
-      state.strategy.seedName = strategyNodes.seedInput.value || "";
+      const query = String(strategyNodes.seedInput.value || "").trim();
+      state.strategy.seedName = query;
+      updateStrategySeedAutocomplete(query);
     });
 
     strategyNodes.seedInput.addEventListener("keydown", (event) => {
@@ -425,7 +633,7 @@ import {
       view.classList.toggle("is-active", view.id === `tab-${tabId}`);
     });
 
-    const meta = TAB_META[tabId] || TAB_META.collections;
+    const meta = tabMetaFor(tabId);
     nodes.workspaceTitle.textContent = meta.title;
     nodes.workspaceSubtitle.textContent = meta.subtitle;
     renderActiveTabTable();
@@ -453,7 +661,7 @@ import {
     if (!payload || payload.ok !== true) {
       state.collections = [];
       state.selectedCollectionId = null;
-      renderCollectionsList(payload?.error || "Impossible de charger les dossiers.");
+      renderCollectionsList(payload?.error || t("load_collections_error"));
       return false;
     }
 
@@ -477,7 +685,7 @@ import {
     }
 
     if (state.collections.length === 0) {
-      list.innerHTML = '<p class="muted">Aucun dossier collection pour le moment.</p>';
+      list.innerHTML = `<p class="muted">${escapeHtml(t("collections_empty"))}</p>`;
       return;
     }
 
@@ -490,12 +698,12 @@ import {
       return `
         <article class="entity-item ${activeClass}" data-entity-id="${escapeHtml(entry.id)}">
           <div>
-            <p class="entity-item-name">Dossier: ${escapeHtml(entry.name || entry.id)}</p>
-            <p class="entity-item-meta">${escapeHtml(platform)} | ${escapeHtml(String(rowCount))} lignes | ${escapeHtml(createdAt)}</p>
+            <p class="entity-item-name">${escapeHtml(t("folder"))}: ${escapeHtml(entry.name || entry.id)}</p>
+            <p class="entity-item-meta">${escapeHtml(platform)} | ${escapeHtml(String(rowCount))} ${escapeHtml(t("rows"))} | ${escapeHtml(createdAt)}</p>
           </div>
           <div class="entity-actions">
-            <button type="button" class="entity-select" data-action="select">Ouvrir</button>
-            <button type="button" class="entity-delete" data-action="delete">Supprimer</button>
+            <button type="button" class="entity-select" data-action="select">${escapeHtml(t("open"))}</button>
+            <button type="button" class="entity-delete" data-action="delete">${escapeHtml(t("delete"))}</button>
           </div>
         </article>
       `;
@@ -522,7 +730,7 @@ import {
       return;
     }
     if (state.decks.length === 0) {
-      list.innerHTML = '<p class="muted">Aucun deck pour le moment.</p>';
+      list.innerHTML = `<p class="muted">${escapeHtml(t("decks_empty"))}</p>`;
       return;
     }
 
@@ -534,10 +742,10 @@ import {
       const glyph = escapeHtml(deckGlyph(entry.name, index + 1));
       return `
         <article class="deck-icon-item ${activeClass}" data-entity-id="${deckId}">
-          <button type="button" class="deck-icon-open" data-action="select" aria-label="Ouvrir ${deckName}" title="Ouvrir ${deckName}">
+          <button type="button" class="deck-icon-open" data-action="select" aria-label="${escapeHtml(t("open"))} ${deckName}" title="${escapeHtml(t("open"))} ${deckName}">
             <span class="deck-icon-glyph">${glyph}</span>
           </button>
-          <button type="button" class="deck-icon-delete" data-action="delete" aria-label="Supprimer ${deckName}" title="Supprimer ${deckName}">
+          <button type="button" class="deck-icon-delete" data-action="delete" aria-label="${escapeHtml(t("delete"))} ${deckName}" title="${escapeHtml(t("delete"))} ${deckName}">
             <svg viewBox="0 0 24 24" class="deck-icon-delete-svg" aria-hidden="true">
               <path d="M6 7h12"></path>
               <path d="M9 7V5h6v2"></path>
@@ -545,7 +753,7 @@ import {
             </svg>
           </button>
           <p class="deck-icon-name">${deckName}</p>
-          <p class="deck-icon-meta">${escapeHtml(String(rowCount))} lignes</p>
+          <p class="deck-icon-meta">${escapeHtml(String(rowCount))} ${escapeHtml(t("rows"))}</p>
         </article>
       `;
     }).join("");
@@ -642,8 +850,8 @@ import {
       if (!state.selectedCollectionId) {
         renderCollection({
           ok: false,
-          table: "Collections",
-          error: "Aucun dossier selectionne."
+          table: t("tabs_collections"),
+          error: currentUiLanguage() === "fr" ? "Aucun dossier selectionne." : "No folder selected."
         });
         renderDeckStatsPanel(null);
         return;
@@ -654,8 +862,8 @@ import {
       if (!payload) {
         renderCollection({
           ok: false,
-          table: meta?.name || "Collections",
-          error: "Chargement du dossier en cours..."
+          table: meta?.name || t("tabs_collections"),
+          error: currentUiLanguage() === "fr" ? "Chargement du dossier en cours..." : "Loading folder..."
         });
         renderDeckStatsPanel(null);
         return;
@@ -672,8 +880,8 @@ import {
       if (!selected) {
         renderCollection({
           ok: false,
-          table: "Decks",
-          error: "Aucun deck selectionne."
+          table: t("tabs_decks"),
+          error: currentUiLanguage() === "fr" ? "Aucun deck selectionne." : "No deck selected."
         });
         renderDeckStatsPanel(null);
         return;
@@ -701,8 +909,10 @@ import {
       } else {
         renderCollection({
           ok: false,
-          table: "Strategy",
-          error: "Selectionne une collection chargee pour calculer les synergies."
+          table: t("tabs_strategy"),
+          error: currentUiLanguage() === "fr"
+            ? "Selectionne une collection chargee pour calculer les synergies."
+            : "Select a loaded collection to compute synergies."
         });
       }
       renderStrategyPanel(payload, meta);
@@ -720,8 +930,8 @@ import {
     setWorkspaceLowerHidden(false);
     renderCollection({
       ok: false,
-      table: "Collections",
-      error: "Selectionne un onglet disponible."
+      table: t("tabs_collections"),
+      error: currentUiLanguage() === "fr" ? "Selectionne un onglet disponible." : "Select an available tab."
     });
     renderDeckStatsPanel(null);
   }
@@ -1216,11 +1426,12 @@ import {
 
     const collectionName = collectionMeta?.name || "Collection";
     if (!payload || payload.ok !== true) {
-      strategyNodes.sourceMeta.textContent = "Selectionne un dossier collection charge pour activer le calcul.";
-      strategyNodes.status.textContent = "Aucune source disponible.";
-      strategyNodes.directList.innerHTML = '<p class="muted">Aucun resultat.</p>';
-      strategyNodes.groupList.innerHTML = '<p class="muted">Aucun resultat.</p>';
+      strategyNodes.sourceMeta.textContent = t("strategy_source_unavailable");
+      strategyNodes.status.textContent = currentUiLanguage() === "fr" ? "Aucune source disponible." : "No source available.";
+      strategyNodes.directList.innerHTML = `<p class="muted">${escapeHtml(t("strategy_no_result"))}</p>`;
+      strategyNodes.groupList.innerHTML = `<p class="muted">${escapeHtml(t("strategy_no_result"))}</p>`;
       strategyNodes.seedList.innerHTML = "";
+      resetStrategyCardPreview();
       return;
     }
 
@@ -1231,20 +1442,20 @@ import {
         ? state.strategy.knownCardsModel.cards.length
         : 0;
       if (knownCount > 0) {
-        strategyNodes.sourceMeta.textContent = `${collectionName} | ${model.cards.length} cartes collection + ${knownCount} cartes via Scryfall (seed libre)`;
+        strategyNodes.sourceMeta.textContent = currentUiLanguage() === "fr"
+          ? `${collectionName} | ${model.cards.length} cartes collection + ${knownCount} cartes via Scryfall (seed libre)`
+          : `${collectionName} | ${model.cards.length} collection cards + ${knownCount} cards via Scryfall (free seed)`;
       } else if (state.strategy.knownCardsError) {
-        strategyNodes.sourceMeta.textContent = `${collectionName} | ${model.cards.length} cartes collection (Scryfall indisponible)`;
+        strategyNodes.sourceMeta.textContent = currentUiLanguage() === "fr"
+          ? `${collectionName} | ${model.cards.length} cartes collection (Scryfall indisponible)`
+          : `${collectionName} | ${model.cards.length} collection cards (Scryfall unavailable)`;
       } else {
-        strategyNodes.sourceMeta.textContent = `${collectionName} | ${model.cards.length} cartes collection (+ seed/cartes via Scryfall au calcul)`;
+        strategyNodes.sourceMeta.textContent = currentUiLanguage() === "fr"
+          ? `${collectionName} | ${model.cards.length} cartes collection (+ seed/cartes via Scryfall au calcul)`
+          : `${collectionName} | ${model.cards.length} collection cards (+ seed/cards via Scryfall at compute time)`;
       }
     } else {
       strategyNodes.sourceMeta.textContent = `${collectionName} | ${model.cards.length} cartes analysees`;
-    }
-    if (isStrategyIncludeSpellbookEnabled()) {
-      const spellbookHint = state.strategy.spellbookError
-        ? " | Spellbook indisponible"
-        : " | + reference combos Commander Spellbook";
-      strategyNodes.sourceMeta.textContent += spellbookHint;
     }
 
     const currentCollectionChanged = state.strategy.lastCollectionId !== state.selectedCollectionId;
@@ -1253,9 +1464,10 @@ import {
     if (currentCollectionChanged) {
       state.strategy.seedName = "";
       strategyNodes.seedInput.value = "";
-      strategyNodes.directList.innerHTML = '<p class="muted">Lance un calcul pour voir les synergies directes.</p>';
-      strategyNodes.groupList.innerHTML = '<p class="muted">Lance un calcul pour voir les groupes de cartes.</p>';
-      strategyNodes.status.textContent = "Choisis une carte seed puis clique sur Calculer.";
+      strategyNodes.directList.innerHTML = `<p class="muted">${escapeHtml(t("strategy_run_hint_direct"))}</p>`;
+      strategyNodes.groupList.innerHTML = `<p class="muted">${escapeHtml(t("strategy_run_hint_group"))}</p>`;
+      strategyNodes.status.textContent = t("strategy_choose_seed");
+      resetStrategyCardPreview();
     }
 
     const directLimit = clampInt(strategyNodes.directLimitInput?.value, 4, 24, 12);
@@ -1270,12 +1482,345 @@ import {
       strategyNodes.groupLimitInput.value = String(groupLimit);
     }
 
-    const maxOptions = 800;
-    const optionsMarkup = model.cards
-      .slice(0, maxOptions)
-      .map((card) => `<option value="${escapeHtml(card.name)}"></option>`)
+    renderStrategySeedDatalist(model.cards, [], "");
+  }
+
+  function resetStrategyCardPreview() {
+    const strategyNodes = nodes.strategy;
+    if (strategyNodes.previewTitle) {
+      strategyNodes.previewTitle.textContent = currentUiLanguage() === "fr" ? "Carte" : "Card";
+    }
+    if (strategyNodes.previewText) {
+      strategyNodes.previewText.textContent = t("strategy_preview_hint");
+    }
+    if (strategyNodes.previewImage) {
+      strategyNodes.previewImage.removeAttribute("src");
+      strategyNodes.previewImage.classList.add("is-hidden");
+      strategyNodes.previewImage.alt = "Card preview";
+    }
+    if (strategyNodes.previewMeta) {
+      strategyNodes.previewMeta.innerHTML = "";
+    }
+    if (STRATEGY_PREVIEW_STATE.activeElement) {
+      STRATEGY_PREVIEW_STATE.activeElement.classList.remove("is-selected");
+    }
+    STRATEGY_PREVIEW_STATE.activeElement = null;
+  }
+
+  function renderStrategyCardPreview(card, cardElement = null) {
+    const strategyNodes = nodes.strategy;
+    const titleNode = strategyNodes.previewTitle;
+    const textNode = strategyNodes.previewText;
+    const imageNode = strategyNodes.previewImage;
+    const metaNode = strategyNodes.previewMeta;
+    if (!titleNode || !textNode || !imageNode || !metaNode) {
+      return;
+    }
+
+    if (STRATEGY_PREVIEW_STATE.activeElement && STRATEGY_PREVIEW_STATE.activeElement !== cardElement) {
+      STRATEGY_PREVIEW_STATE.activeElement.classList.remove("is-selected");
+    }
+    if (cardElement) {
+      cardElement.classList.add("is-selected");
+      STRATEGY_PREVIEW_STATE.activeElement = cardElement;
+    }
+
+    const cardName = String(card?.name || "").trim() || (currentUiLanguage() === "fr" ? "Carte" : "Card");
+    const oracle = rowValue(card?.row, ["oracle_text", "printed_text", "card_text", "rules_text", "description"]);
+    const setCode = rowValue(card?.row, ["set_code", "set"]).toUpperCase();
+    const collector = rowValue(card?.row, ["collector_number"]);
+    const mana = rowValue(card?.row, ["mana_cost", "manacost", "mana"]);
+    const typeLine = rowValue(card?.row, ["type_line"]);
+    const source = strategySourceBadgeText(card?.source || "collection") || "Collection";
+    const sourceValue = source.replace(/^source\s*:\s*/i, "").trim() || source;
+    const scryfallId = String(card?.scryfallId || rowValue(card?.row, ["scryfall_id", "scry_fall_id"])).trim();
+
+    titleNode.textContent = cardName;
+    textNode.innerHTML = strategyOracleTextToHtml(oracle || t("strategy_preview_oracle_fallback"));
+
+    if (scryfallId) {
+      imageNode.src = `https://api.scryfall.com/cards/${encodeURIComponent(scryfallId)}?format=image&version=normal`;
+      imageNode.alt = `Apercu ${cardName}`;
+      imageNode.classList.remove("is-hidden");
+    } else {
+      imageNode.removeAttribute("src");
+      imageNode.alt = `Apercu ${cardName}`;
+      imageNode.classList.add("is-hidden");
+    }
+
+    const metaParts = [
+      ["source", sourceValue],
+      ["type", typeLine],
+      ["mana", mana],
+      ["set", [setCode, collector ? `#${collector}` : ""].filter(Boolean).join(" ")],
+      ["scryfall_id", scryfallId]
+    ].filter((entry) => String(entry[1] || "").trim().length > 0);
+
+    metaNode.innerHTML = "";
+    metaParts.forEach(([key, value]) => {
+      const dt = document.createElement("dt");
+      dt.textContent = strategyMetaLabel(key);
+      const dd = document.createElement("dd");
+      if (key === "mana") {
+        dd.innerHTML = strategyManaValueToHtml(value);
+      } else {
+        dd.textContent = String(value);
+      }
+      metaNode.appendChild(dt);
+      metaNode.appendChild(dd);
+    });
+
+    const requestToken = ++STRATEGY_PREVIEW_STATE.requestToken;
+    loadStrategyPreviewCardForLanguage(card, getCollectionLanguage())
+      .then((localizedCard) => {
+        if (!localizedCard || requestToken !== STRATEGY_PREVIEW_STATE.requestToken) {
+          return;
+        }
+        const localizedName = String(localizedCard?.printed_name || localizedCard?.name || cardName).trim();
+        const localizedText = String(localizedCard?.printed_text || localizedCard?.oracle_text || "").trim();
+        const localizedImage = String(localizedCard?.image_uris?.normal || "").trim();
+
+        if (localizedName) {
+          titleNode.textContent = localizedName;
+        }
+        if (localizedText) {
+          textNode.innerHTML = strategyOracleTextToHtml(localizedText);
+        }
+        if (localizedImage) {
+          imageNode.src = localizedImage;
+          imageNode.classList.remove("is-hidden");
+        }
+      })
+      .catch(() => {
+        // keep fallback row data if localization fetch fails
+      });
+  }
+
+  function strategyMetaLabel(key) {
+    const normalized = String(key || "").trim().toLowerCase();
+    const labels = currentUiLanguage() === "fr"
+      ? {
+          source: "Source",
+          type: "Type",
+          mana: "Mana",
+          set: "Edition",
+          scryfall_id: "Scryfall ID"
+        }
+      : {
+          source: "Source",
+          type: "Type",
+          mana: "Mana",
+          set: "Set",
+          scryfall_id: "Scryfall ID"
+        };
+    return labels[normalized] || normalized;
+  }
+
+  function strategyManaValueToHtml(value) {
+    const raw = String(value || "").trim();
+    if (!raw) {
+      return "";
+    }
+    const manaMatches = raw.match(/\{[^}]+\}/g) || [];
+    if (manaMatches.length === 0) {
+      return escapeHtml(raw);
+    }
+    const manaIcons = manaMatches
+      .map((chunk) => {
+        const token = chunk.slice(1, -1).trim().toUpperCase();
+        const iconUrl = strategyManaSymbolIconUrl(token);
+        if (!iconUrl) {
+          return `<span class="strategy-mana-symbol is-fallback">${escapeHtml(token)}</span>`;
+        }
+        return `<span class="strategy-mana-symbol"><img src="${iconUrl}" alt="${escapeHtml(token)}" loading="lazy"></span>`;
+      })
+      .join("");
+    return `<span class="strategy-mana-inline" title="${escapeHtml(raw)}">${manaIcons}</span>`;
+  }
+
+  function strategyOracleTextToHtml(value) {
+    const raw = String(value || "").trim();
+    if (!raw) {
+      return "";
+    }
+    const parts = raw.split(/(\{[^}]+\})/g).filter(Boolean);
+    return parts.map((part) => {
+      if (/^\{[^}]+\}$/.test(part)) {
+        const token = part.slice(1, -1).trim().toUpperCase();
+        const iconUrl = strategyManaSymbolIconUrl(token);
+        if (!iconUrl) {
+          return `<span class="strategy-mana-symbol is-fallback">${escapeHtml(token)}</span>`;
+        }
+        return `<span class="strategy-mana-symbol"><img src="${iconUrl}" alt="${escapeHtml(token)}" loading="lazy"></span>`;
+      }
+      return escapeHtml(part).replace(/\n/g, "<br>");
+    }).join("");
+  }
+
+  function strategyManaSymbolIconUrl(symbol) {
+    let code = String(symbol || "").toUpperCase().trim();
+    if (!code) {
+      return "";
+    }
+    code = code.replace(/\s+/g, "");
+    code = code.replace(/\//g, "");
+    code = code.replace(/∞/g, "INFINITY");
+    code = code.replace(/½/g, "HALF");
+    if (!/^[A-Z0-9]+$/.test(code)) {
+      return "";
+    }
+    return `https://svgs.scryfall.io/card-symbols/${code}.svg`;
+  }
+
+  async function loadStrategyPreviewCardForLanguage(card, language) {
+    const scryfallId = String(card?.scryfallId || rowValue(card?.row, ["scryfall_id", "scry_fall_id"]) || "").trim();
+    const cardName = String(card?.name || "").trim();
+    const lang = String(language || "en").trim().toLowerCase();
+    const cacheKey = `${scryfallId || cardName}::${lang}`;
+    if (!cacheKey || cacheKey === "::") {
+      return null;
+    }
+    if (STRATEGY_PREVIEW_STATE.cache.has(cacheKey)) {
+      return STRATEGY_PREVIEW_STATE.cache.get(cacheKey);
+    }
+
+    const task = resolveStrategyPreviewCardForLanguage(scryfallId, cardName, lang)
+      .catch(() => null);
+    STRATEGY_PREVIEW_STATE.cache.set(cacheKey, task);
+    return task;
+  }
+
+  async function resolveStrategyPreviewCardForLanguage(scryfallId, cardName, language) {
+    let base = null;
+    if (scryfallId) {
+      base = await fetchScryfallJson(`https://api.scryfall.com/cards/${encodeURIComponent(scryfallId)}`);
+    }
+    if (!base && cardName) {
+      base = await fetchScryfallJson(`https://api.scryfall.com/cards/named?${new URLSearchParams({ exact: cardName }).toString()}`);
+    }
+    if (!base || base.object !== "card") {
+      return null;
+    }
+    if (!language || base.lang === language) {
+      return base;
+    }
+
+    if (base.oracle_id) {
+      const query = encodeURIComponent(`oracleid:${base.oracle_id} lang:${language}`);
+      const byOracle = await fetchScryfallJson(`https://api.scryfall.com/cards/search?q=${query}&order=released&dir=desc`);
+      const localized = Array.isArray(byOracle?.data) ? byOracle.data : [];
+      if (localized.length > 0) {
+        return localized[0];
+      }
+    }
+
+    if (cardName) {
+      const byName = await fetchScryfallJson(`https://api.scryfall.com/cards/named?${new URLSearchParams({ exact: cardName, lang: language }).toString()}`);
+      if (byName && byName.object === "card") {
+        return byName;
+      }
+    }
+
+    return base;
+  }
+
+  function getStrategyBaseSeedCards() {
+    const collectionId = state.selectedCollectionId;
+    const payload = collectionId ? state.collectionPayloadById[collectionId] : null;
+    if (!payload || payload.ok !== true) {
+      return [];
+    }
+    const model = getStrategyModelForCollection(collectionId, payload);
+    return Array.isArray(model?.cards) ? model.cards : [];
+  }
+
+  function renderStrategySeedDatalist(baseCards, extraNames = [], queryText = "") {
+    const strategyNodes = nodes.strategy;
+    if (!strategyNodes?.seedList) {
+      return;
+    }
+
+    const query = normalizeStrategyName(queryText);
+    const seen = new Set();
+    const optionNames = [];
+
+    const maxBase = query ? 240 : 800;
+    (Array.isArray(baseCards) ? baseCards : []).forEach((card) => {
+      const name = String(card?.name || "").trim();
+      if (!name) {
+        return;
+      }
+      if (query && !normalizeStrategyName(name).includes(query)) {
+        return;
+      }
+      const key = normalizeStrategyName(name);
+      if (!key || seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      optionNames.push(name);
+    });
+
+    const scryfallNames = Array.isArray(extraNames) ? extraNames : [];
+    scryfallNames.forEach((nameValue) => {
+      const name = String(nameValue || "").trim();
+      if (!name) {
+        return;
+      }
+      const key = normalizeStrategyName(name);
+      if (!key || seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      optionNames.push(name);
+    });
+
+    const optionsMarkup = optionNames
+      .slice(0, maxBase + 80)
+      .map((name) => `<option value="${escapeHtml(name)}"></option>`)
       .join("");
     strategyNodes.seedList.innerHTML = optionsMarkup;
+  }
+
+  async function updateStrategySeedAutocomplete(queryText = "") {
+    const query = String(queryText || "").trim();
+    const token = ++state.strategy.seedAutocompleteToken;
+    const baseCards = getStrategyBaseSeedCards();
+
+    if (query.length < 2) {
+      renderStrategySeedDatalist(baseCards, [], query);
+      return;
+    }
+
+    const scryfallNames = await fetchScryfallAutocompleteNames(query);
+    if (token !== state.strategy.seedAutocompleteToken) {
+      return;
+    }
+    renderStrategySeedDatalist(baseCards, scryfallNames, query);
+  }
+
+  async function fetchScryfallAutocompleteNames(queryText) {
+    const query = String(queryText || "").trim();
+    if (query.length < 2) {
+      return [];
+    }
+
+    const cacheKey = normalizeStrategyName(query);
+    if (state.strategy.seedAutocompleteCache.has(cacheKey)) {
+      return state.strategy.seedAutocompleteCache.get(cacheKey);
+    }
+
+    const url = `https://api.scryfall.com/cards/autocomplete?${new URLSearchParams({
+      q: query,
+      include_extras: "true"
+    }).toString()}`;
+    const payload = await fetchScryfallJson(url);
+    const names = Array.isArray(payload?.data)
+      ? payload.data.map((name) => String(name || "").trim()).filter(Boolean)
+      : [];
+
+    state.strategy.seedAutocompleteCache.set(cacheKey, names);
+    return names;
   }
 
   function renderSpellbookPanel() {
@@ -1290,23 +1835,29 @@ import {
     }
 
     if (state.spellbook.loading) {
-      spellbookNodes.status.textContent = `Recherche Spellbook en cours pour "${state.spellbook.cardName}"...`;
+      spellbookNodes.status.textContent = currentUiLanguage() === "fr"
+        ? `Recherche Spellbook en cours pour "${state.spellbook.cardName}"...`
+        : `Spellbook lookup running for "${state.spellbook.cardName}"...`;
       return;
     }
 
     if (state.spellbook.error) {
-      spellbookNodes.status.textContent = `Erreur: ${state.spellbook.error}`;
+      spellbookNodes.status.textContent = currentUiLanguage() === "fr"
+        ? `Erreur: ${state.spellbook.error}`
+        : `Error: ${state.spellbook.error}`;
       return;
     }
 
     const variants = Array.isArray(state.spellbook.payload?.results) ? state.spellbook.payload.results : [];
     if (!state.spellbook.cardName) {
-      spellbookNodes.status.textContent = "Saisis une carte pour interroger Commander Spellbook.";
-      spellbookNodes.results.innerHTML = '<p class="muted">Aucun resultat.</p>';
+      spellbookNodes.status.textContent = t("spellbook_hint");
+      spellbookNodes.results.innerHTML = `<p class="muted">${escapeHtml(t("spellbook_none"))}</p>`;
       return;
     }
 
-    spellbookNodes.status.textContent = `${variants.length} variant(s) retournee(s) pour "${state.spellbook.cardName}".`;
+    spellbookNodes.status.textContent = currentUiLanguage() === "fr"
+      ? `${variants.length} variant(s) retournee(s) pour "${state.spellbook.cardName}".`
+      : `${variants.length} variant(s) returned for "${state.spellbook.cardName}".`;
     spellbookNodes.results.innerHTML = renderSpellbookVariants(variants);
   }
 
@@ -1328,16 +1879,18 @@ import {
     if (!cardName) {
       state.spellbook.error = "";
       state.spellbook.payload = null;
-      spellbookNodes.status.textContent = "Saisis un nom de carte.";
-      spellbookNodes.results.innerHTML = '<p class="muted">Aucun resultat.</p>';
+      spellbookNodes.status.textContent = currentUiLanguage() === "fr" ? "Saisis un nom de carte." : "Type a card name.";
+      spellbookNodes.results.innerHTML = `<p class="muted">${escapeHtml(t("spellbook_none"))}</p>`;
       return;
     }
 
     const runToken = ++state.spellbook.runToken;
     state.spellbook.loading = true;
     state.spellbook.error = "";
-    spellbookNodes.status.textContent = `Recherche Spellbook en cours pour "${cardName}"...`;
-    spellbookNodes.results.innerHTML = '<p class="muted">Chargement...</p>';
+    spellbookNodes.status.textContent = currentUiLanguage() === "fr"
+      ? `Recherche Spellbook en cours pour "${cardName}"...`
+      : `Spellbook lookup running for "${cardName}"...`;
+    spellbookNodes.results.innerHTML = `<p class="muted">${currentUiLanguage() === "fr" ? "Chargement..." : "Loading..."}</p>`;
 
     try {
       const payload = await fetchSpellbookVariants(cardName, limitValue);
@@ -1348,15 +1901,19 @@ import {
       if (!payload || payload.ok !== true) {
         state.spellbook.payload = null;
         state.spellbook.error = String(payload?.error || "Spellbook indisponible");
-        spellbookNodes.status.textContent = `Erreur: ${state.spellbook.error}`;
-        spellbookNodes.results.innerHTML = '<p class="muted">Aucun resultat.</p>';
+        spellbookNodes.status.textContent = currentUiLanguage() === "fr"
+          ? `Erreur: ${state.spellbook.error}`
+          : `Error: ${state.spellbook.error}`;
+        spellbookNodes.results.innerHTML = `<p class="muted">${escapeHtml(t("spellbook_none"))}</p>`;
         return;
       }
 
       state.spellbook.payload = payload;
       state.spellbook.error = "";
       const variants = Array.isArray(payload.results) ? payload.results : [];
-      spellbookNodes.status.textContent = `${variants.length} variant(s) retournee(s) pour "${cardName}".`;
+      spellbookNodes.status.textContent = currentUiLanguage() === "fr"
+        ? `${variants.length} variant(s) retournee(s) pour "${cardName}".`
+        : `${variants.length} variant(s) returned for "${cardName}".`;
       spellbookNodes.results.innerHTML = renderSpellbookVariants(variants);
     } catch (error) {
       if (runToken !== state.spellbook.runToken) {
@@ -1364,8 +1921,10 @@ import {
       }
       state.spellbook.payload = null;
       state.spellbook.error = String(error?.message || error || "Spellbook indisponible");
-      spellbookNodes.status.textContent = `Erreur: ${state.spellbook.error}`;
-      spellbookNodes.results.innerHTML = '<p class="muted">Aucun resultat.</p>';
+      spellbookNodes.status.textContent = currentUiLanguage() === "fr"
+        ? `Erreur: ${state.spellbook.error}`
+        : `Error: ${state.spellbook.error}`;
+      spellbookNodes.results.innerHTML = `<p class="muted">${escapeHtml(t("spellbook_none"))}</p>`;
     } finally {
       if (runToken === state.spellbook.runToken) {
         state.spellbook.loading = false;
@@ -1376,7 +1935,7 @@ import {
   function renderSpellbookVariants(variants) {
     const safeVariants = Array.isArray(variants) ? variants : [];
     if (safeVariants.length === 0) {
-      return '<p class="muted">Aucun combo trouve.</p>';
+      return `<p class="muted">${currentUiLanguage() === "fr" ? "Aucun combo trouve." : "No combo found."}</p>`;
     }
 
     return safeVariants.map((variant, index) => {
@@ -1384,7 +1943,9 @@ import {
       const variantId = String(variant?.id || "").trim() || String(index + 1);
       const statusClass = status === "OK" ? "is-ok" : "is-other";
       const popularity = Number(variant?.popularity);
-      const popularityText = Number.isFinite(popularity) ? popularity.toLocaleString("fr-FR") : "-";
+      const popularityText = Number.isFinite(popularity)
+        ? popularity.toLocaleString(currentUiLanguage() === "fr" ? "fr-FR" : "en-US")
+        : "-";
       const cards = spellbookEntryNames(variant?.uses, ["card", "name"]);
       const requires = spellbookEntryNames(variant?.requires, ["feature", "name"]);
       const produces = spellbookEntryNames(variant?.produces, ["feature", "name"]);
@@ -1398,24 +1959,24 @@ import {
       return `
         <article class="spellbook-variant-card">
           <div class="spellbook-variant-head">
-            <h4>Variant ${escapeHtml(String(index + 1))}</h4>
+            <h4>${currentUiLanguage() === "fr" ? "Variante" : "Variant"} ${escapeHtml(String(index + 1))}</h4>
             <div class="spellbook-head-badges">
               <span class="spellbook-head-badge ${statusClass}">${escapeHtml(status)}</span>
-              <span class="spellbook-head-badge">Popularite ${escapeHtml(popularityText)}</span>
+              <span class="spellbook-head-badge">${currentUiLanguage() === "fr" ? "Popularite" : "Popularity"} ${escapeHtml(popularityText)}</span>
               <span class="spellbook-head-badge">ID ${escapeHtml(variantId)}</span>
             </div>
           </div>
           <div class="spellbook-variant-content">
             <section class="spellbook-summary-row">
-              <p class="spellbook-column-title">Resume rapide</p>
+              <p class="spellbook-column-title">${currentUiLanguage() === "fr" ? "Resume rapide" : "Quick summary"}</p>
               <p class="spellbook-explicit-text">${escapeHtml(explicitText)}</p>
             </section>
             <section class="spellbook-card-ribbon-wrap">
-              <p class="spellbook-column-title">Cartes du combo</p>
+              <p class="spellbook-column-title">${currentUiLanguage() === "fr" ? "Cartes du combo" : "Combo cards"}</p>
               ${cardsMarkup}
             </section>
             <section class="spellbook-action-block">
-              <p class="spellbook-column-title">Arbre d'actions</p>
+              <p class="spellbook-column-title">${currentUiLanguage() === "fr" ? "Arbre d'actions" : "Action tree"}</p>
               ${stepsMarkup}
             </section>
             ${detailMarkup}
@@ -1817,7 +2378,9 @@ import {
       if (knownModel.cards.length > 0) {
         activeModel = mergeStrategyModels(model, knownModel);
       } else if (state.strategy.knownCardsError) {
-        strategyNodes.status.textContent = "Scryfall indisponible, calcul sur la collection uniquement.";
+        strategyNodes.status.textContent = currentUiLanguage() === "fr"
+          ? "Scryfall indisponible, calcul sur la collection uniquement."
+          : "Scryfall unavailable, running with collection only.";
       }
     }
 
@@ -1831,7 +2394,9 @@ import {
     if (colorFilteredCards.length <= 1) {
       renderDirectSynergyCards([], seedCard.name);
       renderGroupCards([], seedCard.name);
-      strategyNodes.status.textContent = `${seedCard.name}: aucun candidat apres filtre mana ${formatStrategyManaFilter(manaFilterCodes)}.`;
+      strategyNodes.status.textContent = currentUiLanguage() === "fr"
+        ? `${seedCard.name}: aucun candidat apres filtre mana ${formatStrategyManaFilter(manaFilterCodes)}.`
+        : `${seedCard.name}: no candidate after mana filter ${formatStrategyManaFilter(manaFilterCodes)}.`;
       return;
     }
     activeModel = { cards: colorFilteredCards };
@@ -1847,48 +2412,60 @@ import {
     const resolvedSeed = resolveSeedCard(seedCard.name, activeModel.cards) || seedCard;
     let spellbookContext = {
       boostByKey: new Map(),
+      refsByKey: new Map(),
+      popularityByKey: new Map(),
       variantCount: 0,
       variants: []
     };
-    if (isStrategyIncludeSpellbookEnabled()) {
-      strategyNodes.status.textContent = `Analyse Commander Spellbook en cours pour ${resolvedSeed.name}...`;
-      spellbookContext = await getStrategySpellbookContext(resolvedSeed);
-      if (runToken !== state.strategy.runToken) {
-        return;
-      }
+    strategyNodes.status.textContent = currentUiLanguage() === "fr"
+      ? `Analyse Commander Spellbook en cours pour ${resolvedSeed.name}...`
+      : `Commander Spellbook analysis in progress for ${resolvedSeed.name}...`;
+    spellbookContext = await getStrategySpellbookContext(resolvedSeed);
+    if (runToken !== state.strategy.runToken) {
+      return;
     }
 
     const direct = computeDirectSynergies(
       resolvedSeed,
       activeModel.cards,
       directLimit,
-      spellbookContext.boostByKey
+      spellbookContext
     );
     const spellbookGroups = isStrategyIncludeSpellbookEnabled()
-      ? computeSpellbookSynergyGroups(resolvedSeed, direct, activeModel.cards, groupLimit, spellbookContext)
+      ? computeSpellbookSynergyGroups(
+        resolvedSeed,
+        direct,
+        activeModel.cards,
+        groupLimit,
+        spellbookContext,
+        { allowExternalCards: manaFilterCodes.length === 0 }
+      )
       : [];
     const fallbackGroups = computeSynergyGroups(resolvedSeed, direct, activeModel.cards, groupLimit);
-    const groups = mergeStrategyGroups(spellbookGroups, fallbackGroups, groupLimit);
+    let groups = mergeStrategyGroups(spellbookGroups, fallbackGroups, groupLimit);
+    groups = await enrichStrategyGroupsWithScryfall(groups, getCollectionLanguage());
+    if (runToken !== state.strategy.runToken) {
+      return;
+    }
 
     renderDirectSynergyCards(direct, resolvedSeed.name);
-    renderGroupCards(groups, resolvedSeed.name);
+    renderGroupCards(groups, resolvedSeed.name, spellbookContext);
 
     const suffix = includeKnown && scryfallAddedCount > 0
       ? ` (incluant ${scryfallAddedCount} cartes Scryfall)`
       : "";
-    const manaSuffix = manaFilterCodes.length > 0 ? ` | filtre mana ${formatStrategyManaFilter(manaFilterCodes)}` : "";
-    const spellbookSuffix = isStrategyIncludeSpellbookEnabled()
-      ? (
-        spellbookContext.variantCount > 0
-          ? ` | Spellbook ${spellbookContext.variantCount} combos`
-          : (state.strategy.spellbookError ? " | Spellbook indisponible" : "")
-      )
+    const manaSuffix = manaFilterCodes.length > 0
+      ? (currentUiLanguage() === "fr"
+          ? ` | filtre mana ${formatStrategyManaFilter(manaFilterCodes)}`
+          : ` | mana filter ${formatStrategyManaFilter(manaFilterCodes)}`)
       : "";
-    strategyNodes.status.textContent = `${resolvedSeed.name}: ${direct.length} synergies directes, ${groups.length} groupes construits.${suffix}${manaSuffix}${spellbookSuffix}`;
+    strategyNodes.status.textContent = currentUiLanguage() === "fr"
+      ? `${resolvedSeed.name}: ${direct.length} synergies directes, ${groups.length} groupes construits.${suffix}${manaSuffix}`
+      : `${resolvedSeed.name}: ${direct.length} direct synergies, ${groups.length} groups built.${suffix}${manaSuffix}`;
   }
 
   function isStrategyIncludeKnownEnabled() {
-    return state.strategy.includeKnownCards === true;
+    return true;
   }
 
   function isStrategyIncludeSpellbookEnabled() {
@@ -1944,7 +2521,7 @@ import {
   async function getStrategySpellbookContext(seedCard) {
     const seedKey = normalizeStrategyName(seedCard?.key || seedCard?.name || "");
     if (!seedKey) {
-      return { boostByKey: new Map(), variantCount: 0, variants: [] };
+      return { boostByKey: new Map(), refsByKey: new Map(), popularityByKey: new Map(), variantCount: 0, variants: [] };
     }
     if (state.strategy.spellbookCache.has(seedKey)) {
       return state.strategy.spellbookCache.get(seedKey);
@@ -1961,7 +2538,7 @@ import {
       })
       .catch((error) => {
         state.strategy.spellbookError = String(error?.message || "Spellbook indisponible");
-        const fallback = { boostByKey: new Map(), variantCount: 0, variants: [] };
+        const fallback = { boostByKey: new Map(), refsByKey: new Map(), popularityByKey: new Map(), variantCount: 0, variants: [] };
         state.strategy.spellbookCache.set(seedKey, fallback);
         return fallback;
       })
@@ -1976,10 +2553,11 @@ import {
   async function fetchStrategySpellbookContext(seedCard) {
     const seedName = String(seedCard?.name || "").trim();
     if (!seedName) {
-      return { boostByKey: new Map(), variantCount: 0, variants: [] };
+      return { boostByKey: new Map(), refsByKey: new Map(), popularityByKey: new Map(), variantCount: 0, variants: [] };
     }
 
-    const payload = await fetchSpellbookVariants(seedName, 40);
+    const spellbookLimit = clampInt(state?.spellbook?.limit, 1, 100, 40);
+    const payload = await fetchSpellbookVariants(seedName, spellbookLimit);
     if (!payload || payload.ok === false || payload?.results == null) {
       throw new Error(payload?.error || payload?.detail || payload?.details || "Spellbook HTTP error");
     }
@@ -1987,6 +2565,8 @@ import {
     const variants = Array.isArray(payload.results) ? payload.results : [];
     const seedKey = normalizeStrategyName(seedCard?.key || seedName);
     const boostByKey = new Map();
+    const refsByKey = new Map();
+    const popularityByKey = new Map();
     const variantCards = [];
     let variantCount = 0;
 
@@ -2007,6 +2587,17 @@ import {
         return;
       }
 
+      const normalizedCards = uses
+        .map((entry) => {
+          const name = String(entry?.card?.name || "").trim();
+          const key = normalizeStrategyName(name);
+          if (!key) {
+            return null;
+          }
+          return { key, name: name || key };
+        })
+        .filter(Boolean);
+
       variantCount += 1;
       const popularity = Number(variant?.popularity) || 0;
       const popularityFactor = Math.min(1, Math.log10(popularity + 1) / 4);
@@ -2018,15 +2609,18 @@ import {
         }
         const previous = boostByKey.get(nameKey) || 0;
         boostByKey.set(nameKey, Math.min(1.2, previous + baseBoost));
+        refsByKey.set(nameKey, (refsByKey.get(nameKey) || 0) + 1);
+        popularityByKey.set(nameKey, (popularityByKey.get(nameKey) || 0) + popularity);
       });
 
       variantCards.push({
+        cards: normalizedCards,
         cardKeys: normalizedNames,
         popularity
       });
     });
 
-    return { boostByKey, variantCount, variants: variantCards };
+    return { boostByKey, refsByKey, popularityByKey, variantCount, variants: variantCards };
   }
 
   async function getKnownCardsStrategyModel(seedCard, strategyLanguage = "en") {
@@ -2608,20 +3202,39 @@ import {
     return cards.find((card) => card.key.includes(normalizedSeed)) || null;
   }
 
-  function computeDirectSynergies(seedCard, cards, limit, spellbookBoostByKey = new Map()) {
+  function computeDirectSynergies(seedCard, cards, limit, spellbookContext = {}) {
+    const spellbookBoostByKey = spellbookContext?.boostByKey instanceof Map
+      ? spellbookContext.boostByKey
+      : new Map();
+    const refsByKey = spellbookContext?.refsByKey instanceof Map
+      ? spellbookContext.refsByKey
+      : new Map();
+    const popularityByKey = spellbookContext?.popularityByKey instanceof Map
+      ? spellbookContext.popularityByKey
+      : new Map();
+    const variantCount = Math.max(1, Number(spellbookContext?.variantCount) || 0);
+
     const results = cards
       .filter((card) => card.key !== seedCard.key)
       .map((card) => {
         const sim = strategySimilarity(seedCard, card);
         const spellbookRaw = Number(spellbookBoostByKey?.get?.(card.key) || 0);
         const spellbookBoost = Math.max(0, spellbookRaw);
+        const spellbookRefs = Math.max(0, Number(refsByKey?.get?.(card.key) || 0));
+        const spellbookPopularity = Math.max(0, Number(popularityByKey?.get?.(card.key) || 0));
+        const scryfallExists = Boolean(String(card?.scryfallId || "").trim());
         const externalBoost = Math.min(0.45, spellbookBoost * 0.55);
         const score = clampScore(sim.score + externalBoost);
-        const scoreParts = buildStrategyScoreParts(card, sim.score, 0, externalBoost);
+        const validation = computeDirectApiValidation(
+          scryfallExists,
+          spellbookRefs,
+          spellbookPopularity,
+          variantCount
+        );
         return {
           card,
           score,
-          scoreParts,
+          validation,
           featureScore: sim.featureScore,
           ruleScore: sim.ruleScore,
           colorScore: sim.colorScore,
@@ -2636,6 +3249,11 @@ import {
         entry.spellbookBoost > 0.12
       ))
       .sort((left, right) => {
+        const leftSbScore = Number(left?.validation?.spellbookScore || 0);
+        const rightSbScore = Number(right?.validation?.spellbookScore || 0);
+        if (Math.abs(rightSbScore - leftSbScore) > 1e-9) {
+          return rightSbScore - leftSbScore;
+        }
         if (Math.abs(right.score - left.score) > 1e-9) {
           return right.score - left.score;
         }
@@ -2649,6 +3267,116 @@ import {
       });
 
     return results.slice(0, Math.max(1, limit));
+  }
+
+  function computeDirectApiValidation(scryfallExists, spellbookRefs, spellbookPopularity, variantCount) {
+    const scryfallScore = scryfallExists ? 1 : 0;
+    const refRatio = spellbookRefs > 0 ? Math.min(1, spellbookRefs / Math.max(1, variantCount)) : 0;
+    const popularityNorm = spellbookPopularity > 0
+      ? Math.min(1, Math.log10(spellbookPopularity + 1) / 4)
+      : 0;
+    const spellbookScore = clampScore(refRatio * 0.75 + popularityNorm * 0.25);
+    const normalized = spellbookScore;
+
+    return {
+      score: clampScore(normalized),
+      scryfallScore: clampScore(scryfallScore),
+      spellbookScore: clampScore(spellbookScore),
+      spellbookRefs,
+      spellbookPopularity,
+      scryfallExists
+    };
+  }
+
+  function computeGroupApiValidation(group, spellbookContext) {
+    const cards = Array.isArray(group?.cards) ? group.cards : [];
+    if (cards.length === 0) {
+      return {
+        score: 0,
+        variantHits: 0,
+        variantHitsFull: 0,
+        variantHitsPartial: 0,
+        matchedPopularity: 0,
+        scryfallCoverage: 0
+      };
+    }
+
+    const seedKey = String(cards[0]?.key || "").trim();
+    const nonSeedKeys = cards
+      .map((card) => String(card?.key || "").trim())
+      .filter((key) => key && key !== seedKey);
+    if (nonSeedKeys.length === 0) {
+      return {
+        score: 0,
+        variantHits: 0,
+        variantHitsFull: 0,
+        variantHitsPartial: 0,
+        matchedPopularity: 0,
+        scryfallCoverage: 0
+      };
+    }
+
+    const keySet = new Set(nonSeedKeys);
+    const variants = Array.isArray(spellbookContext?.variants) ? spellbookContext.variants : [];
+    let variantHitsFull = 0;
+    let variantHitsPartial = 0;
+    let matchedPopularity = 0;
+    let coverageSum = 0;
+    const minMatchCount = Math.min(2, keySet.size);
+
+    variants.forEach((variant) => {
+      const variantKeys = new Set(Array.isArray(variant?.cardKeys) ? variant.cardKeys : []);
+      let matchedCount = 0;
+      keySet.forEach((key) => {
+        if (variantKeys.has(key)) {
+          matchedCount += 1;
+        }
+      });
+
+      const fullMatch = matchedCount === keySet.size;
+      if (fullMatch) {
+        variantHitsFull += 1;
+      }
+
+      const partialMatch = matchedCount >= minMatchCount;
+      if (partialMatch) {
+        variantHitsPartial += 1;
+      }
+
+      if (!partialMatch) {
+        return;
+      }
+
+      const coverage = matchedCount / keySet.size;
+      if (!fullMatch) {
+        coverageSum += coverage;
+      } else {
+        coverageSum += 1;
+      }
+      matchedPopularity += Math.max(0, Number(variant?.popularity) || 0) * coverage;
+    });
+
+    const variantCount = Math.max(1, Number(spellbookContext?.variantCount) || 0);
+    const hitRatio = Math.min(1, coverageSum / variantCount);
+    const popularityNorm = matchedPopularity > 0
+      ? Math.min(1, Math.log10(matchedPopularity + 1) / 5)
+      : 0;
+    const spellbookScore = clampScore(hitRatio * 0.75 + popularityNorm * 0.25);
+    const scryfallKnown = cards.filter((card) => Boolean(String(card?.scryfallId || "").trim())).length;
+    const scryfallCoverage = scryfallKnown / cards.length;
+
+    const normalized = spellbookScore;
+
+    return {
+      score: clampScore(normalized),
+      scryfallScore: clampScore(scryfallCoverage),
+      spellbookScore: clampScore(spellbookScore),
+      variantHits: variantHitsFull,
+      variantHitsFull,
+      variantHitsPartial,
+      matchedPopularity,
+      scryfallCoverage
+    };
   }
 
   function computeSynergyGroups(seedCard, directEntries, allCards, groupLimit) {
@@ -2681,6 +3409,7 @@ import {
           cards: packageCards,
           coreCards: split.coreCards,
           sideCards: split.sideCards,
+          sourceType: "heuristic",
           bridgeName: left.score >= right.score ? left.card.name : right.card.name,
           score: groupScore,
           scoreParts: groupScoreParts,
@@ -2717,11 +3446,12 @@ import {
     return deduped;
   }
 
-  function computeSpellbookSynergyGroups(seedCard, directEntries, allCards, groupLimit, spellbookContext) {
+  function computeSpellbookSynergyGroups(seedCard, directEntries, allCards, groupLimit, spellbookContext, options = {}) {
     const variants = Array.isArray(spellbookContext?.variants) ? spellbookContext.variants : [];
     if (variants.length === 0) {
       return [];
     }
+    const allowExternalCards = options?.allowExternalCards !== false;
 
     const cardsByKey = new Map((Array.isArray(allCards) ? allCards : []).map((card) => [card.key, card]));
     const directByKey = new Map((Array.isArray(directEntries) ? directEntries : []).map((entry) => [entry.card.key, entry]));
@@ -2732,25 +3462,46 @@ import {
     const seen = new Set();
 
     variants.forEach((variant) => {
-      const rawKeys = Array.isArray(variant?.cardKeys) ? variant.cardKeys : [];
-      if (!rawKeys.includes(seedKey)) {
+      const variantCards = Array.isArray(variant?.cards) ? variant.cards : [];
+      const variantKeys = variantCards.length > 0
+        ? variantCards.map((entry) => String(entry?.key || "").trim()).filter(Boolean)
+        : (Array.isArray(variant?.cardKeys) ? variant.cardKeys : []);
+      if (!variantKeys.includes(seedKey)) {
         return;
       }
 
-      const partnerKeys = rawKeys
-        .filter((key) => key && key !== seedKey && cardsByKey.has(key) && directKeys.has(key))
-        .map((key) => ({
-          key,
-          score: Number(directByKey.get(key)?.score || 0)
+      const partnerEntries = (variantCards.length > 0
+        ? variantCards
+        : variantKeys.map((key) => ({ key, name: key })))
+        .map((entry) => {
+          const key = String(entry?.key || "").trim();
+          if (!key || key === seedKey) {
+            return null;
+          }
+          const existing = cardsByKey.get(key);
+          if (existing) {
+            return { key, card: existing };
+          }
+          if (!allowExternalCards) {
+            return null;
+          }
+          const fallbackName = String(entry?.name || "").trim() || key;
+          const placeholder = createStrategySpellbookPlaceholderCard(fallbackName, key);
+          cardsByKey.set(key, placeholder);
+          return { key, card: placeholder };
+        })
+        .filter(Boolean)
+        .map((item) => ({
+          ...item,
+          score: Number(directByKey.get(item.key)?.score || 0)
         }))
-        .sort((left, right) => right.score - left.score)
-        .slice(0, 4);
+        .sort((left, right) => right.score - left.score);
 
-      if (partnerKeys.length === 0) {
+      if (partnerEntries.length === 0) {
         return;
       }
 
-      const packageCards = [seedCard].concat(partnerKeys.map((item) => cardsByKey.get(item.key)));
+      const packageCards = [seedCard].concat(partnerEntries.map((item) => item.card));
       const signature = packageCards.map((card) => card.key).sort().join("|");
       if (seen.has(signature)) {
         return;
@@ -2760,15 +3511,16 @@ import {
       const split = splitGroupCoreAndSide(seedCard, packageCards);
       const popularity = Number(variant?.popularity) || 0;
       const popularityFactor = Math.min(1, Math.log10(popularity + 1) / 4);
-      const avgDirectScore = partnerKeys.reduce((sum, item) => sum + item.score, 0) / partnerKeys.length;
+      const avgDirectScore = partnerEntries.reduce((sum, item) => sum + item.score, 0) / partnerEntries.length;
       const groupScore = clampScore(avgDirectScore * 0.8 + popularityFactor * 0.2);
       const groupScoreParts = sumStrategyScoreParts([
-        ...partnerKeys.map((item) => directByKey.get(item.key)?.scoreParts || null),
+        ...partnerEntries.map((item) => directByKey.get(item.key)?.scoreParts || null),
         { collection: 0, scryfall: 0, spellbook: popularityFactor * 0.2 }
       ]);
+      const comboDetails = spellbookNormalizeText(spellbookDescription(variant));
 
-      const orderedNames = partnerKeys
-        .map((item) => cardsByKey.get(item.key)?.name)
+      const orderedNames = partnerEntries
+        .map((item) => item.card?.name)
         .filter(Boolean);
       const bridgeName = orderedNames[0] || seedCard.name;
       const lineA = orderedNames.length > 0
@@ -2782,19 +3534,15 @@ import {
         cards: packageCards,
         coreCards: split.coreCards,
         sideCards: split.sideCards,
+        sourceType: "spellbook",
+        sourceVariantId: String(variant?.id || "").trim(),
+        comboDetails,
         bridgeName,
         score: groupScore,
         scoreParts: groupScoreParts,
         lineA,
         lineB
       });
-    });
-
-    groups.sort((a, b) => {
-      if (Math.abs(b.score - a.score) > 1e-9) {
-        return b.score - a.score;
-      }
-      return a.bridgeName.localeCompare(b.bridgeName);
     });
 
     return groups.slice(0, Math.max(1, groupLimit));
@@ -2804,26 +3552,171 @@ import {
     const cap = Math.max(1, Number(limit) || 1);
     const out = [];
     const seen = new Set();
+    const hasPrimary = Array.isArray(primaryGroups) && primaryGroups.length > 0;
+    const hasFallback = Array.isArray(fallbackGroups) && fallbackGroups.length > 0;
+    const reserveFallbackSlot = hasPrimary && hasFallback && cap > 1;
+    const primaryCap = reserveFallbackSlot ? cap - 1 : cap;
 
-    function pushUnique(groups) {
-      (Array.isArray(groups) ? groups : []).forEach((group) => {
-        if (!group || !Array.isArray(group.cards)) {
-          return;
-        }
-        const key = group.cards.map((card) => card.key).sort().join("|");
-        if (seen.has(key)) {
-          return;
-        }
-        seen.add(key);
-        out.push(group);
-      });
+    function pushUniqueOne(group) {
+      if (!group || !Array.isArray(group.cards)) {
+        return false;
+      }
+      const key = group.cards.map((card) => card.key).sort().join("|");
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      out.push(group);
+      return true;
     }
 
-    pushUnique(primaryGroups);
+    function pushUnique(groups, maxCount = Infinity) {
+      for (const group of (Array.isArray(groups) ? groups : [])) {
+        if (out.length >= cap || maxCount <= 0) {
+          break;
+        }
+        const pushed = pushUniqueOne(group);
+        if (pushed) {
+          maxCount -= 1;
+        }
+      }
+    }
+
+    pushUnique(primaryGroups, primaryCap);
     if (out.length < cap) {
       pushUnique(fallbackGroups);
     }
+    if (out.length < cap) {
+      pushUnique(primaryGroups);
+    }
     return out.slice(0, cap);
+  }
+
+  function createStrategySpellbookPlaceholderCard(name, key) {
+    return {
+      key: String(key || "").trim(),
+      name: String(name || key || "").trim(),
+      row: {},
+      quantity: 1,
+      features: {},
+      semantics: {},
+      colors: [],
+      scryfallId: "",
+      source: "spellbook"
+    };
+  }
+
+  async function enrichStrategyGroupsWithScryfall(groups, strategyLanguage = "en") {
+    const safeGroups = Array.isArray(groups) ? groups : [];
+    if (safeGroups.length === 0) {
+      return safeGroups;
+    }
+
+    const language = normalizeStrategyLanguage(strategyLanguage);
+    const fetchTargets = [];
+    const seen = new Set();
+
+    safeGroups.forEach((group) => {
+      (Array.isArray(group?.cards) ? group.cards : []).forEach((card) => {
+        const cardName = String(card?.name || "").trim();
+        if (!cardName) {
+          return;
+        }
+        const hasScryfallId = Boolean(String(card?.scryfallId || rowValue(card?.row, ["scryfall_id", "scry_fall_id"])).trim());
+        if (hasScryfallId) {
+          return;
+        }
+        const key = normalizeStrategyName(card?.key || cardName);
+        if (!key) {
+          return;
+        }
+        const cacheKey = `${language}::${key}`;
+        if (seen.has(cacheKey)) {
+          return;
+        }
+        seen.add(cacheKey);
+        fetchTargets.push({ cacheKey, cardName });
+      });
+    });
+
+    for (let i = 0; i < fetchTargets.length; i += 6) {
+      const chunk = fetchTargets.slice(i, i + 6);
+      await Promise.all(chunk.map((target) => getStrategyNamedCardFromScryfall(target.cardName, language, target.cacheKey)));
+    }
+
+    safeGroups.forEach((group) => {
+      (Array.isArray(group?.cards) ? group.cards : []).forEach((card) => {
+        const cardName = String(card?.name || "").trim();
+        const key = normalizeStrategyName(card?.key || cardName);
+        if (!key) {
+          return;
+        }
+        const cacheKey = `${language}::${key}`;
+        const enriched = state.strategy.namedCardCache.get(cacheKey);
+        if (!enriched || !enriched.row) {
+          return;
+        }
+
+        card.row = {
+          ...(card.row && typeof card.row === "object" ? card.row : {}),
+          ...enriched.row
+        };
+        if (!card.scryfallId) {
+          card.scryfallId = enriched.scryfallId;
+        }
+        if ((!Array.isArray(card.colors) || card.colors.length === 0) && Array.isArray(enriched.colors)) {
+          card.colors = enriched.colors;
+        }
+        card.source = "scryfall";
+      });
+    });
+
+    return safeGroups;
+  }
+
+  async function getStrategyNamedCardFromScryfall(cardName, strategyLanguage = "en", forcedCacheKey = "") {
+    const safeName = String(cardName || "").trim();
+    if (!safeName) {
+      return null;
+    }
+
+    const language = normalizeStrategyLanguage(strategyLanguage);
+    const cacheKey = forcedCacheKey || `${language}::${normalizeStrategyName(safeName)}`;
+    if (state.strategy.namedCardCache.has(cacheKey)) {
+      return state.strategy.namedCardCache.get(cacheKey);
+    }
+    if (state.strategy.namedCardPromiseCache.has(cacheKey)) {
+      return state.strategy.namedCardPromiseCache.get(cacheKey);
+    }
+
+    const task = fetchScryfallNamedCardRecord(safeName, language)
+      .then((record) => {
+        if (!record || record.object !== "card") {
+          state.strategy.namedCardCache.set(cacheKey, null);
+          return null;
+        }
+
+        const row = mapScryfallCardToStrategyRow(record, language);
+        const enriched = {
+          row,
+          scryfallId: String(row?.scryfall_id || "").trim(),
+          colors: Array.isArray(record?.colors)
+            ? record.colors.filter((code) => "WUBRG".includes(String(code || "").toUpperCase()))
+            : []
+        };
+        state.strategy.namedCardCache.set(cacheKey, enriched);
+        return enriched;
+      })
+      .catch(() => {
+        state.strategy.namedCardCache.set(cacheKey, null);
+        return null;
+      })
+      .finally(() => {
+        state.strategy.namedCardPromiseCache.delete(cacheKey);
+      });
+
+    state.strategy.namedCardPromiseCache.set(cacheKey, task);
+    return task;
   }
 
   function splitGroupCoreAndSide(seedCard, rawCards) {
@@ -3097,18 +3990,33 @@ import {
     directEntries.forEach((entry, index) => {
       const comboPart = entry.comboBoost > 0 ? ` | combo ${formatDecimal(entry.comboBoost)}` : "";
       const spellbookPart = entry.spellbookBoost > 0 ? ` | sb ${formatDecimal(entry.spellbookBoost)}` : "";
+      const fullMeta = `score ${formatDecimal(entry.score)} | rules ${formatDecimal(entry.ruleScore || 0)}${comboPart}${spellbookPart}`;
       fragment.appendChild(
         createStrategyCardElement(
           entry.card,
-          `#${index + 1} | score ${formatDecimal(entry.score)} | rules ${formatDecimal(entry.ruleScore || 0)}${comboPart}${spellbookPart}`,
-          { scoreParts: entry.scoreParts }
+          `#${index + 1}`,
+          {
+            metaTitle: fullMeta,
+            validationMeta: buildDirectValidationMeta(entry.validation)
+          }
         )
       );
     });
     target.appendChild(fragment);
   }
 
-  function renderGroupCards(groups, seedName) {
+  function buildDirectValidationMeta(validation) {
+    const spellbook = Math.max(0, Math.min(1, Number(validation?.spellbookScore) || 0));
+    const global = Math.max(0, Math.min(1, Number(validation?.score) || 0));
+    const refs = Math.max(0, Number(validation?.spellbookRefs) || 0);
+    return {
+      spellbook: `SB ${Math.round(spellbook * 100)}%`,
+      global: `API ${Math.round(global * 100)}%`,
+      refs: `refs SB ${refs}`
+    };
+  }
+
+  function renderGroupCards(groups, seedName, spellbookContext = {}) {
     const target = nodes.strategy.groupList;
     if (!target) {
       return;
@@ -3123,19 +4031,24 @@ import {
 
     groups.forEach((group, index) => {
       const article = document.createElement("article");
-      article.className = "strategy-group";
+      const sourceType = normalizeGroupSourceType(group?.sourceType);
+      article.className = `strategy-group is-${sourceType}`;
+      const groupValidation = computeGroupApiValidation(group, spellbookContext);
 
       const title = document.createElement("p");
       title.className = "strategy-group-title";
-      title.textContent = `Groupe ${index + 1} | score ${formatDecimal(group.score)}`;
+      title.textContent = `Groupe ${index + 1} | Global ${Math.round((groupValidation.score || 0) * 100)}%`;
+      const sourceBadge = document.createElement("span");
+      sourceBadge.className = `strategy-group-source-badge is-${sourceType}`;
+      sourceBadge.textContent = sourceType === "spellbook" ? "Source: Spellbook" : "Source: Heuristique";
+      title.appendChild(sourceBadge);
       article.appendChild(title);
 
-      const scoreBar = createStrategyScoreBar(group.scoreParts);
-      if (scoreBar) {
-        article.appendChild(scoreBar);
-      }
+      const validationLine = document.createElement("p");
+      validationLine.className = "strategy-group-line";
+      validationLine.textContent = formatGroupValidationText(groupValidation);
+      article.appendChild(validationLine);
 
-      const packageNames = group.cards.map((card) => card.name);
       const coreCards = Array.isArray(group.coreCards) && group.coreCards.length > 0
         ? group.coreCards
         : group.cards.slice(0, Math.min(2, group.cards.length));
@@ -3144,32 +4057,24 @@ import {
         ? group.sideCards
         : group.cards.filter((card) => !coreKeySet.has(card.key));
 
-      const packageLine = document.createElement("p");
-      packageLine.className = "strategy-group-line";
-      packageLine.innerHTML = `<strong>Package:</strong> ${escapeHtml(packageNames.join(" + "))}`;
-      article.appendChild(packageLine);
+      const comboDetailsText = String(group?.comboDetails || "").trim();
+      if (sourceType === "spellbook") {
+        const details = document.createElement("details");
+        details.className = "strategy-group-details";
+        const summary = document.createElement("summary");
+        const variantId = String(group?.sourceVariantId || "").trim();
+        summary.textContent = variantId
+          ? `Details combo (Spellbook #${variantId})`
+          : "Details combo (Spellbook)";
+        details.appendChild(summary);
 
-      const coreLine = document.createElement("p");
-      coreLine.className = "strategy-group-line";
-      coreLine.innerHTML = `<strong>Core:</strong> ${escapeHtml(coreCards.map((card) => card.name).join(" + "))}`;
-      article.appendChild(coreLine);
+        const detailsText = document.createElement("p");
+        detailsText.className = "strategy-group-line";
+        detailsText.textContent = comboDetailsText || "Aucun detail API Spellbook pour cette variante.";
+        details.appendChild(detailsText);
 
-      if (sideCards.length > 0) {
-        const sideLine = document.createElement("p");
-        sideLine.className = "strategy-group-line";
-        sideLine.innerHTML = `<strong>Side:</strong> ${escapeHtml(sideCards.map((card) => card.name).join(" + "))}`;
-        article.appendChild(sideLine);
+        article.appendChild(details);
       }
-
-      const chainALine = document.createElement("p");
-      chainALine.className = "strategy-group-line";
-      chainALine.innerHTML = `<strong>Chaine A:</strong> ${escapeHtml(group.lineA)}`;
-      article.appendChild(chainALine);
-
-      const chainBLine = document.createElement("p");
-      chainBLine.className = "strategy-group-line";
-      chainBLine.innerHTML = `<strong>Chaine B:</strong> ${escapeHtml(group.lineB)}`;
-      article.appendChild(chainBLine);
 
       const coreSection = document.createElement("div");
       coreSection.className = "strategy-group-section is-core";
@@ -3180,7 +4085,7 @@ import {
       const coreGrid = document.createElement("div");
       coreGrid.className = "strategy-group-cards is-core";
       coreCards.forEach((card) => {
-        coreGrid.appendChild(createStrategyCardElement(card, "", { compact: true, badge: "CORE", badgeTone: "core" }));
+        coreGrid.appendChild(createStrategyCardElement(card, "", { compact: true }));
       });
       coreSection.appendChild(coreGrid);
       article.appendChild(coreSection);
@@ -3195,27 +4100,11 @@ import {
         const sideGrid = document.createElement("div");
         sideGrid.className = "strategy-group-cards is-side";
         sideCards.forEach((card) => {
-          sideGrid.appendChild(createStrategyCardElement(card, "", { compact: true, badge: "SIDE", badgeTone: "side" }));
+          sideGrid.appendChild(createStrategyCardElement(card, "", { compact: true }));
         });
         sideSection.appendChild(sideGrid);
         article.appendChild(sideSection);
       }
-
-      const chips = document.createElement("div");
-      chips.className = "strategy-chip-row";
-      coreCards.forEach((card) => {
-        const chip = document.createElement("span");
-        chip.className = "strategy-chip is-core";
-        chip.textContent = card.name;
-        chips.appendChild(chip);
-      });
-      sideCards.forEach((card) => {
-        const chip = document.createElement("span");
-        chip.className = "strategy-chip is-side";
-        chip.textContent = card.name;
-        chips.appendChild(chip);
-      });
-      article.appendChild(chips);
 
       fragment.appendChild(article);
     });
@@ -3223,17 +4112,37 @@ import {
     target.appendChild(fragment);
   }
 
+  function formatGroupValidationText(validation) {
+    const hitsFull = Math.max(0, Number(validation?.variantHitsFull) || 0);
+    const hitsPartial = Math.max(0, Number(validation?.variantHitsPartial) || 0);
+    const spellbook = Math.max(0, Math.min(1, Number(validation?.spellbookScore) || 0));
+    return `full SB ${hitsFull} | partiel SB ${hitsPartial} | SB ${Math.round(spellbook * 100)}%`;
+  }
+
+  function normalizeGroupSourceType(sourceType) {
+    return String(sourceType || "").toLowerCase() === "spellbook" ? "spellbook" : "heuristic";
+  }
+
   function createStrategyCardElement(card, metaLine, options = {}) {
     const compact = Boolean(options.compact);
     const badge = String(options.badge || "").trim();
     const badgeTone = String(options.badgeTone || "core").toLowerCase();
+    const metaTitle = String(options.metaTitle || "").trim();
+    const validationMeta = options.validationMeta && typeof options.validationMeta === "object"
+      ? options.validationMeta
+      : null;
     const cardNode = document.createElement("article");
     cardNode.className = compact ? "strategy-card is-compact" : "strategy-card";
 
     const scryfallId = card.scryfallId || "";
+    const imageVersion = "art_crop";
     const imageUrl = scryfallId
-      ? `https://api.scryfall.com/cards/${encodeURIComponent(scryfallId)}?format=image&version=normal`
+      ? `https://api.scryfall.com/cards/${encodeURIComponent(scryfallId)}?format=image&version=${encodeURIComponent(imageVersion)}`
       : "";
+    const hasImage = Boolean(imageUrl);
+    if (!hasImage) {
+      cardNode.classList.add("is-placeholder");
+    }
     const setCode = rowValue(card.row, ["set_code", "set"]).toUpperCase();
     const collector = rowValue(card.row, ["collector_number"]);
     const setLine = [setCode, collector ? `#${collector}` : ""].filter(Boolean).join(" ");
@@ -3241,7 +4150,7 @@ import {
 
     const art = document.createElement("div");
     art.className = "strategy-card-art";
-    if (imageUrl) {
+    if (hasImage) {
       const img = document.createElement("img");
       img.src = imageUrl;
       img.alt = card.name;
@@ -3250,7 +4159,7 @@ import {
     } else {
       const fallback = document.createElement("span");
       fallback.className = "strategy-card-fallback";
-      fallback.textContent = card.name;
+      fallback.textContent = "Image indisponible";
       art.appendChild(fallback);
     }
     cardNode.appendChild(art);
@@ -3262,6 +4171,11 @@ import {
     nameLine.className = "strategy-card-name";
     nameLine.textContent = card.name;
     body.appendChild(nameLine);
+
+    const oracleText = rowValue(card.row, ["oracle_text", "printed_text", "card_text", "rules_text", "description"]);
+    if (compact && oracleText) {
+      cardNode.title = oracleText;
+    }
 
     const badgesLine = document.createElement("div");
     badgesLine.className = "strategy-card-badges";
@@ -3284,12 +4198,34 @@ import {
       const rankingLine = document.createElement("p");
       rankingLine.className = "strategy-card-meta";
       rankingLine.textContent = metaLine;
+      if (metaTitle) {
+        rankingLine.title = metaTitle;
+      }
       body.appendChild(rankingLine);
     }
 
-    const scoreBar = createStrategyScoreBar(options.scoreParts);
-    if (scoreBar) {
-      body.appendChild(scoreBar);
+    if (!compact && validationMeta) {
+      const validationRow = document.createElement("div");
+      validationRow.className = "strategy-validation-row";
+
+      const sbChip = document.createElement("span");
+      sbChip.className = "strategy-validation-chip is-spellbook";
+      sbChip.textContent = validationMeta.spellbook;
+      validationRow.appendChild(sbChip);
+
+      const glChip = document.createElement("span");
+      glChip.className = "strategy-validation-chip is-global";
+      glChip.textContent = validationMeta.global;
+      validationRow.appendChild(glChip);
+
+      if (validationMeta.refs) {
+        const refsChip = document.createElement("span");
+        refsChip.className = "strategy-validation-chip is-refs";
+        refsChip.textContent = validationMeta.refs;
+        validationRow.appendChild(refsChip);
+      }
+
+      body.appendChild(validationRow);
     }
 
     const setMetaLine = document.createElement("p");
@@ -3304,12 +4240,61 @@ import {
 
     cardNode.appendChild(body);
 
+    cardNode.addEventListener("mouseenter", () => {
+      renderStrategyCardPreview(card, cardNode);
+    });
+    cardNode.addEventListener("click", () => {
+      renderStrategyCardPreview(card, cardNode);
+    });
+
     if (card?.row && typeof card.row === "object") {
       cardNode.classList.add("is-interactive", "data-row");
       bindRowPreviewEvents(cardNode, card.row);
     }
 
     return cardNode;
+  }
+
+  function strategyOriginPartsFromDirectEntry(entry) {
+    const source = String(entry?.card?.source || "collection").toLowerCase();
+    const spellbookBoost = Math.max(0, Number(entry?.spellbookBoost) || 0);
+    const collection = source === "scryfall" ? 0 : 1;
+    const api = (source === "scryfall" ? 1 : 0) + Math.min(0.7, spellbookBoost * 0.4);
+    return {
+      collection,
+      api,
+      apiDetails: {
+        scryfall: source === "scryfall" ? 1 : 0,
+        spellbook: Math.min(0.7, spellbookBoost * 0.4)
+      }
+    };
+  }
+
+  function strategyOriginPartsFromGroup(group) {
+    const cards = Array.isArray(group?.cards) ? group.cards : [];
+    if (cards.length === 0) {
+      return { collection: 0, api: 0, apiDetails: { scryfall: 0, spellbook: 0 } };
+    }
+
+    let collection = 0;
+    let api = 0;
+    cards.forEach((card) => {
+      const source = String(card?.source || "collection").toLowerCase();
+      if (source === "scryfall") {
+        api += 1;
+      } else {
+        collection += 1;
+      }
+    });
+
+    return {
+      collection,
+      api,
+      apiDetails: {
+        scryfall: api,
+        spellbook: 0
+      }
+    };
   }
 
   function buildStrategyScoreParts(card, internalScore = 0, scryfallBoost = 0, spellbookBoost = 0) {
@@ -3350,7 +4335,8 @@ import {
       scryfall: Math.max(0, Number(parts?.scryfall) || 0),
       spellbook: Math.max(0, Number(parts?.spellbook) || 0)
     };
-    const total = safe.collection + safe.scryfall + safe.spellbook;
+    const apiTotal = safe.scryfall + safe.spellbook;
+    const total = safe.collection + apiTotal;
     if (total <= 0) {
       return null;
     }
@@ -3369,16 +4355,10 @@ import {
         className: "is-collection"
       },
       {
-        key: "scryfall",
-        label: "Scryfall",
-        value: safe.scryfall,
-        className: "is-scryfall"
-      },
-      {
-        key: "spellbook",
-        label: "Spellbook",
-        value: safe.spellbook,
-        className: "is-spellbook"
+        key: "api",
+        label: "API",
+        value: apiTotal,
+        className: "is-api"
       }
     ].filter((segment) => segment.value > 0);
 
@@ -3386,7 +4366,11 @@ import {
       const node = document.createElement("span");
       node.className = `strategy-score-segment ${segment.className}`;
       node.style.width = `${(segment.value / total) * 100}%`;
-      node.title = `${segment.label}: ${formatDecimal(segment.value)} (${Math.round((segment.value / total) * 100)}%)`;
+      if (segment.key === "api") {
+        node.title = `${segment.label}: ${formatDecimal(segment.value)} (${Math.round((segment.value / total) * 100)}%) | Scryfall ${formatDecimal(safe.scryfall)} + Spellbook ${formatDecimal(safe.spellbook)}`;
+      } else {
+        node.title = `${segment.label}: ${formatDecimal(segment.value)} (${Math.round((segment.value / total) * 100)}%)`;
+      }
       bar.appendChild(node);
     });
 
@@ -3395,6 +4379,50 @@ import {
     legend.textContent = segments
       .map((segment) => `${segment.label} ${Math.round((segment.value / total) * 100)}%`)
       .join(" | ");
+
+    wrap.appendChild(bar);
+    wrap.appendChild(legend);
+    return wrap;
+  }
+
+  function createStrategyOriginBar(parts) {
+    const safe = {
+      collection: Math.max(0, Number(parts?.collection) || 0),
+      api: Math.max(0, Number(parts?.api) || 0),
+      apiScryfall: Math.max(0, Number(parts?.apiDetails?.scryfall) || 0),
+      apiSpellbook: Math.max(0, Number(parts?.apiDetails?.spellbook) || 0)
+    };
+    const total = safe.collection + safe.api;
+    if (total <= 0) {
+      return null;
+    }
+
+    const wrap = document.createElement("div");
+    wrap.className = "strategy-origin-wrap";
+
+    const bar = document.createElement("div");
+    bar.className = "strategy-origin-bar";
+
+    const segments = [
+      { label: "Collection", value: safe.collection, className: "is-collection" },
+      { label: "API", value: safe.api, className: "is-api" }
+    ].filter((segment) => segment.value > 0);
+
+    segments.forEach((segment) => {
+      const node = document.createElement("span");
+      node.className = `strategy-origin-segment ${segment.className}`;
+      node.style.width = `${(segment.value / total) * 100}%`;
+      if (segment.className === "is-api") {
+        node.title = `${segment.label}: ${Math.round((segment.value / total) * 100)}% | Scryfall ${formatDecimal(safe.apiScryfall)} + Spellbook ${formatDecimal(safe.apiSpellbook)}`;
+      } else {
+        node.title = `${segment.label}: ${Math.round((segment.value / total) * 100)}%`;
+      }
+      bar.appendChild(node);
+    });
+
+    const legend = document.createElement("div");
+    legend.className = "strategy-origin-legend";
+    legend.textContent = `Origine synergie: Collection ${Math.round((safe.collection / total) * 100)}% | API ${Math.round((safe.api / total) * 100)}%`;
 
     wrap.appendChild(bar);
     wrap.appendChild(legend);
@@ -4511,6 +5539,7 @@ import {
   async function init() {
     const initialLanguage = getCollectionLanguage();
     applyLanguageButtonState(initialLanguage);
+    applyStaticUiTranslations();
 
     if (nodes.langEnButton && nodes.langFrButton) {
       nodes.langEnButton.addEventListener("click", () => onLanguageSelect("en"));
@@ -4535,8 +5564,8 @@ import {
       if (!selected) {
         renderCollection({
           ok: false,
-          table: "Collections",
-          error: "Selectionne un csv."
+          table: t("tabs_collections"),
+          error: currentUiLanguage() === "fr" ? "Selectionne un csv." : "Select a CSV file."
         });
         return;
       }
@@ -4550,8 +5579,8 @@ import {
       if (!payload || payload.ok !== true) {
         renderCollection({
           ok: false,
-          table: "Collections",
-          error: payload?.error || "Import impossible"
+          table: t("tabs_collections"),
+          error: payload?.error || (currentUiLanguage() === "fr" ? "Import impossible" : "Import failed")
         });
         return;
       }
@@ -4563,7 +5592,7 @@ import {
       }
       nodes.collections.nameInput.value = "";
       nodes.collections.fileInput.value = "";
-      setCollectionPickButtonLabel("Choisir CSV");
+      setCollectionPickButtonLabel(t("pick_csv"));
       nodes.collections.pickFileButton.classList.remove("has-file");
       renderCollectionsList("");
       renderActiveTabTable();
@@ -4578,8 +5607,8 @@ import {
       if (!selected) {
         renderCollection({
           ok: false,
-          table: "Decks",
-          error: "Selectionne un fichier."
+          table: t("tabs_decks"),
+          error: currentUiLanguage() === "fr" ? "Selectionne un fichier." : "Select a file."
         });
         return;
       }
@@ -4590,7 +5619,7 @@ import {
         if (state.activeTab === "decks") {
           renderCollection(payload || {
             ok: false,
-            error: "Impossible de charger le deck."
+            error: currentUiLanguage() === "fr" ? "Impossible de charger le deck." : "Unable to load deck."
           });
         }
         return;
@@ -4611,7 +5640,7 @@ import {
       renderDecksList();
       nodes.decks.nameInput.value = "";
       nodes.decks.fileInput.value = "";
-      setDeckPickButtonLabel("Choisir un fichier deck");
+      setDeckPickButtonLabel(t("pick_deck_file"));
       nodes.decks.pickFileButton.classList.remove("has-file");
       if (state.activeTab === "decks") {
         renderActiveTabTable();
@@ -4626,7 +5655,7 @@ import {
       await loadStoredCollectionIntoTable(state.selectedCollectionId);
     }
     renderDecksList();
-    renderActiveTabTable();
+    selectTab(state.activeTab);
   }
 
   init().catch((error) => {

@@ -47,15 +47,6 @@
           </svg>
           <span class="visually-hidden">Strategy</span>
         </button>
-        <button type="button" class="side-tab" data-tab="spellbook" data-label="Spellbook" aria-label="Spellbook" title="Spellbook">
-          <svg viewBox="0 0 24 24" class="side-tab-icon" aria-hidden="true">
-            <path d="M6 4h11a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"></path>
-            <path d="M8 8h8"></path>
-            <path d="M8 12h8"></path>
-            <path d="M8 16h5"></path>
-          </svg>
-          <span class="visually-hidden">Spellbook</span>
-        </button>
       </nav>
     </aside>
 
@@ -146,48 +137,35 @@
           </div>
 
           <div class="strategy-controls">
-            <p id="strategy-source-meta" class="muted">Selectionne un dossier collection pour activer le calcul.</p>
+            <p id="strategy-source-meta" class="muted" style="display:none"></p>
             <div class="strategy-control-grid">
               <label for="strategy-seed-input">
-                Carte seed
-                <input id="strategy-seed-input" type="search" placeholder="Entomb">
+                <span id="strategy-seed-label">Carte seed</span>
+                <input id="strategy-seed-input" type="search" list="strategy-seed-list" placeholder="Entomb">
                 <datalist id="strategy-seed-list"></datalist>
               </label>
-              <label for="strategy-seed-b-input">
-                Carte cible B (optionnel pour A + n*k + B)
-                <input id="strategy-seed-b-input" type="search" placeholder="Reanimate">
-              </label>
               <label for="strategy-direct-limit">
-                Top synergies directes
+                <span id="strategy-direct-limit-label">Top synergies directes</span>
                 <input id="strategy-direct-limit" type="number" min="4" max="24" value="12">
               </label>
               <label for="strategy-group-limit">
-                Top groupes
+                <span id="strategy-group-limit-label">Top groupes</span>
                 <input id="strategy-group-limit" type="number" min="3" max="12" value="6">
               </label>
-              <label for="strategy-include-known" class="strategy-toggle">
-                Inclure cartes externes (Scryfall)
-                <span class="strategy-toggle-row">
-                  <input id="strategy-include-known" type="checkbox">
-                  <span>Etendre le calcul avec des cartes hors collection</span>
-                </span>
-              </label>
               <label for="strategy-include-spellbook" class="strategy-toggle">
-                Inclure reference combos (Commander Spellbook)
                 <span class="strategy-toggle-row">
                   <input id="strategy-include-spellbook" type="checkbox">
-                  <span>Prioriser les cartes presentes dans les combos publics</span>
+                  <span id="strategy-include-spellbook-hint">Prioriser les cartes presentes dans les combos publics</span>
                 </span>
               </label>
               <label class="strategy-mana-filter">
-                Filtre mana (couleurs autorisees)
                 <span class="strategy-mana-filter-row">
-                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="W"><span>W</span></label>
-                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="U"><span>U</span></label>
-                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="B"><span>B</span></label>
-                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="R"><span>R</span></label>
-                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="G"><span>G</span></label>
-                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="C"><span>C</span></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="W"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/W.svg" alt="W" loading="lazy"></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="U"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/U.svg" alt="U" loading="lazy"></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="B"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/B.svg" alt="B" loading="lazy"></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="R"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/R.svg" alt="R" loading="lazy"></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="G"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/G.svg" alt="G" loading="lazy"></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="C"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/C.svg" alt="C" loading="lazy"></label>
                 </span>
               </label>
               <div class="actions strategy-actions">
@@ -212,32 +190,18 @@
               </div>
               <div id="strategy-group-list" class="strategy-group-list"></div>
             </section>
+
+            <aside id="strategy-card-preview" class="strategy-result-preview" aria-live="polite">
+              <div class="strategy-result-head">
+                <h4 id="strategy-card-preview-title">Carte</h4>
+              </div>
+              <div class="strategy-card-preview-body">
+                <img id="strategy-card-preview-image" alt="Card preview" loading="lazy">
+                <p id="strategy-card-preview-text" class="muted">Survole ou selectionne une carte de synergie pour afficher ses details.</p>
+                <dl id="strategy-card-preview-meta" class="card-preview-meta"></dl>
+              </div>
+            </aside>
           </div>
-        </section>
-      </section>
-
-      <section id="tab-spellbook" class="tab-view" aria-labelledby="workspace-title">
-        <section class="panel spellbook-panel">
-          <div class="panel-head">
-            <h3>Commander Spellbook Lookup</h3>
-          </div>
-
-          <form id="spellbook-form" class="spellbook-form">
-            <label for="spellbook-card-input">
-              Nom de carte
-              <input id="spellbook-card-input" type="search" placeholder="Entomb">
-            </label>
-            <label for="spellbook-limit-input">
-              Limite
-              <input id="spellbook-limit-input" type="number" min="1" max="100" value="20">
-            </label>
-            <div class="actions spellbook-actions">
-              <button type="submit" id="spellbook-run-btn">Rechercher</button>
-            </div>
-          </form>
-
-          <div id="spellbook-status" class="muted">Saisis une carte pour interroger Commander Spellbook.</div>
-          <div id="spellbook-results" class="spellbook-result-list"></div>
         </section>
       </section>
 
