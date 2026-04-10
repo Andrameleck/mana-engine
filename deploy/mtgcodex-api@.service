@@ -1,0 +1,18 @@
+[Unit]
+Description=MTG Codex API worker %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=debian
+Group=debian
+WorkingDirectory=/home/debian/git/mtgcodex.api
+EnvironmentFile=/etc/mtgcodex/mtgcodex-api.env
+Environment=MTGCODEX_API_WORKER=%i
+ExecStart=/usr/bin/Rscript /home/debian/git/mtgcodex.api/scripts/run-api.R
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

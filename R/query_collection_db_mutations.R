@@ -41,6 +41,7 @@ query_collection_db_import <- function(req,
   out <- tryCatch(
     {
       con <- query_db_connect(resolved$path)
+      query_collection_db_ensure_indexes(con)
       DBI::dbBegin(con)
 
       source_cards <- query_collection_db_prepare_cards_rows(load_out$cards_rows)
@@ -153,6 +154,7 @@ query_collection_db_add_card <- function(db_path = "",
   out <- tryCatch(
     {
       con <- query_db_connect(resolved$path)
+      query_collection_db_ensure_indexes(con)
       DBI::dbBegin(con)
 
       rows <- query_collection_db_complete_collection_rows(rows, con)
@@ -710,6 +712,41 @@ query_collection_db_sql_placeholders <- function(n) {
     return("")
   }
   paste(rep("?", n), collapse = ", ")
+}
+
+query_collection_db_ensure_indexes <- function(con) {
+  if (is.null(con) || !DBI::dbIsValid(con)) {
+    return(invisible(FALSE))
+  }
+
+  statements <- c(
+    paste(
+      "CREATE INDEX IF NOT EXISTS idx_collection_manabox_id",
+      "ON collection(manabox_id)"
+    ),
+    paste(
+      "CREATE INDEX IF NOT EXISTS idx_collection_scryfall_set_collector_finish_lang",
+      "ON collection(scryfall_id, set_code, collector_number, foil, language)"
+    ),
+    paste(
+      "CREATE INDEX IF NOT EXISTS idx_collection_name_set_collector_finish_lang",
+      "ON collection(name, set_code, collector_number, foil, language)"
+    ),
+    paste(
+      "CREATE INDEX IF NOT EXISTS idx_cards_set_collector_lang",
+      "ON cards(set_code, collector_number, lang)"
+    ),
+    paste(
+      "CREATE INDEX IF NOT EXISTS idx_cards_name_set_lang_released",
+      "ON cards(name, set_code, lang, released_at)"
+    )
+  )
+
+  for (sql in statements) {
+    DBI::dbExecute(con, sql)
+  }
+
+  invisible(TRUE)
 }
 
 query_collection_db_insert_collection_rows <- function(con, rows, dedupe_enabled = TRUE) {
