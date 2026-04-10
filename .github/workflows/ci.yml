@@ -115,6 +115,8 @@ jobs:
       contents: read
       pages: write
       id-token: write
+    env:
+      PAGES_ADMIN_TOKEN: ${{ secrets.PAGES_ADMIN_TOKEN }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -191,10 +193,10 @@ jobs:
           fi
 
       - name: Try to enable Pages (optional admin token)
-        if: steps.pages_status.outputs.enabled != 'true' && secrets.PAGES_ADMIN_TOKEN != ''
+        if: steps.pages_status.outputs.enabled != 'true' && env.PAGES_ADMIN_TOKEN != ''
         uses: actions/configure-pages@v6
         with:
-          token: ${{ secrets.PAGES_ADMIN_TOKEN }}
+          token: ${{ env.PAGES_ADMIN_TOKEN }}
           enablement: true
 
       - name: Re-check Pages status
