@@ -869,6 +869,191 @@ compute_bridge_recommendations <- function(
     )
   )
 }
+
+#' Resolve A + n*k + B Bridge Equations
+#'
+#' Build candidate bridge packages between two seed cards, then re-rank them
+#' against known synergy references such as Commander Spellbook or curated
+#' Scryfall-derived packages.
+#'
+#' Each known reference is a list with at least a `cards` field and optional
+#' metadata such as `source`, `label`, and `weight`.
+#'
+#' @param cards List of cards.
+#' @param A_id Seed A id.
+#' @param B_id Seed B id.
+#' @param n Maximum number of bridge cards `k` to keep between A and B.
+#' @param depth_N Propagation depth.
+#' @param top_k Neighbor and frontier cap.
+#' @param gamma Damping factor.
+#' @param topN Number of bridge cards to keep.
+#' @param known_synergies List of known synergy references. Each item should
+#' contain `cards`.
+#' @param reference_bonus Bonus applied to exact known matches.
+#' @param near_bonus Bonus applied to near matches.
+#' @param novel_penalty Mild penalty applied when no known match is found.
+#' @param missing_card_penalty Penalty per missing card for near matches.
+#' @param max_missing_cards Maximum missing cards allowed for a near match.
+#' @param options Options forwarded to [compute_bridge_recommendations()].
+#'
+#' @return List with `candidates`, `references`, and the raw `bridge_payload`.
+#'
+#' @examples
+#' cards <- bridge_synergy_example_cards()
+#' refs <- list(
+#'   list(
+#'     label = "Known glue package",
+#'     source = "spellbook",
+#'     cards = c("card_A", "card_glue", "card_B"),
+#'     weight = 1
+#'   )
+#' )
+#' out <- resolve_bridge_equation(cards, "card_A", "card_B", n = 2L, known_synergies = refs)
+#' stopifnot(is.data.frame(out$candidates))
+#'
+#' @export
+resolve_bridge_equation <- function(
+    cards,
+    A_id,
+    B_id,
+    n = 2L,
+    depth_N = 3L,
+    top_k = 50L,
+    gamma = 0.65,
+    topN = 20L,
+    known_synergies = list(),
+    reference_bonus = 0.30,
+    near_bonus = 0.18,
+    novel_penalty = 0.05,
+    missing_card_penalty = 0.03,
+    max_missing_cards = 2L,
+    options = list(
+      enforce_color_identity = FALSE,
+      unique_nodes = TRUE,
+      max_candidates = 2000L,
+      max_chain_len = 6L,
+      support_k = 2L
+    )) {
+  ids <- .validate_cards(cards)
+  if (!A_id %in% ids) {
+    stop("`A_id` not found in cards.")
+  }
+  if (!B_id %in% ids) {
+    stop("`B_id` not found in cards.")
+  }
+
+  n <- .as_count(n, default = 2L)
+  max_missing_cards <- .as_count(max_missing_cards, default = 2L)
+  opts <- .merge_bridge_options(options)
+
+  top_packages <- max(10L, .as_count(topN, default = 20L))
+  bridge_payload <- compute_bridge_recommendations(
+    cards = cards,
+    A_id = A_id,
+    B_id = B_id,
+    depth_N = depth_N,
+    top_k = top_k,
+    gamma = gamma,
+    topN = topN,
+    topChains = top_packages,
+    topPackages = top_packages,
+    options = opts
+  )
+
+  id_to_name <- setNames(vapply(cards, .card_name, character(1)), ids)
+  refs <- .normalize_known_synergies(known_synergies)
+
+  packages <- bridge_payload$packages
+  if (length(packages) == 0L) {
+    return(list(
+      candidates = .empty_bridge_equation_df(),
+      references = refs,
+      bridge_payload = bridge_payload
+    ))
+  }
+
+  bridge_score_map <- setNames(
+    bridge_payload$bridges$bridge_score,
+    bridge_payload$bridges$id
+  )
+
+  rows <- vector("list", length(packages))
+  row_count <- 0L
+  for (pkg in packages) {
+    bridge_cards <- unique(c(as.character(pkg$bridge_id), as.character(pkg$cards)))
+    bridge_cards <- bridge_cards[nzchar(bridge_cards)]
+    bridge_cards <- setdiff(bridge_cards, c(A_id, B_id))
+    if (n > 0L && length(bridge_cards) > n) {
+      bridge_cards <- bridge_cards[seq_len(n)]
+    }
+    total_ids <- unique(c(A_id, bridge_cards, B_id))
+    bridge_id <- as.character(pkg$bridge_id[[1]])
+    structural_score <- unname(bridge_score_map[[bridge_id]])
+    if (!is.finite(structural_score)) {
+      structural_score <- 0
+    }
+
+    ref_match <- .match_known_synergy(
+      candidate_ids = total_ids,
+      references = refs,
+      max_missing_cards = max_missing_cards
+    )
+
+    reference_state <- ref_match$state
+    reference_source <- ref_match$source
+    reference_label <- ref_match$label
+    missing_ids <- ref_match$missing_cards
+    missing_names <- id_to_name[missing_ids]
+    missing_names[is.na(missing_names)] <- missing_ids[is.na(missing_names)]
+
+    reference_adjustment <- switch(
+      reference_state,
+      exact = reference_bonus * ref_match$weight,
+      near = near_bonus * ref_match$weight - missing_card_penalty * length(missing_ids),
+      -novel_penalty
+    )
+    total_score <- structural_score + reference_adjustment
+
+    row_count <- row_count + 1L
+    rows[[row_count]] <- data.frame(
+      seedA_id = A_id,
+      seedA_name = id_to_name[[A_id]],
+      seedB_id = B_id,
+      seedB_name = id_to_name[[B_id]],
+      bridge_id = bridge_id,
+      bridge_name = id_to_name[[bridge_id]],
+      bridge_cards = paste(bridge_cards, collapse = " | "),
+      bridge_card_names = paste(id_to_name[bridge_cards], collapse = " | "),
+      total_cards = paste(total_ids, collapse = " | "),
+      total_card_names = paste(id_to_name[total_ids], collapse = " | "),
+      structural_score = as.numeric(structural_score),
+      reference_adjustment = as.numeric(reference_adjustment),
+      total_score = as.numeric(total_score),
+      reference_state = as.character(reference_state),
+      reference_source = as.character(reference_source),
+      reference_label = as.character(reference_label),
+      missing_cards = paste(missing_ids, collapse = " | "),
+      missing_card_names = paste(missing_names, collapse = " | "),
+      stringsAsFactors = FALSE
+    )
+  }
+
+  candidates <- do.call(rbind, rows[seq_len(row_count)])
+  ord <- order(
+    -candidates$total_score,
+    -candidates$structural_score,
+    candidates$bridge_name,
+    candidates$bridge_cards
+  )
+  candidates <- candidates[ord, , drop = FALSE]
+  rownames(candidates) <- NULL
+
+  list(
+    candidates = candidates,
+    references = refs,
+    bridge_payload = bridge_payload
+  )
+}
 #' Example Cards for Bridge Synergy
 #'
 #' Create a deterministic toy dataset (14 cards) where seed A and seed B share
@@ -1062,6 +1247,24 @@ run_bridge_synergy_selftest <- function() {
   stopifnot(identical(rec$chains, rec2$chains))
   stopifnot(identical(rec$packages, rec2$packages))
 
+  eq <- resolve_bridge_equation(
+    cards = cards,
+    A_id = "card_A",
+    B_id = "card_B",
+    n = 2L,
+    known_synergies = list(
+      list(
+        label = "Known example package",
+        source = "spellbook",
+        cards = c("card_A", "card_glue", "card_B"),
+        weight = 1
+      )
+    )
+  )
+  stopifnot(is.data.frame(eq$candidates))
+  stopifnot(nrow(eq$candidates) >= 1L)
+  stopifnot(eq$candidates$reference_state[[1]] %in% c("exact", "near", "novel"))
+
   TRUE
 }
 
@@ -1230,4 +1433,141 @@ run_bridge_synergy_selftest <- function() {
   merged$support_k <- .as_count(merged$support_k, default = 2L)
 
   merged
+}
+
+.empty_bridge_equation_df <- function() {
+  data.frame(
+    seedA_id = character(0),
+    seedA_name = character(0),
+    seedB_id = character(0),
+    seedB_name = character(0),
+    bridge_id = character(0),
+    bridge_name = character(0),
+    bridge_cards = character(0),
+    bridge_card_names = character(0),
+    total_cards = character(0),
+    total_card_names = character(0),
+    structural_score = numeric(0),
+    reference_adjustment = numeric(0),
+    total_score = numeric(0),
+    reference_state = character(0),
+    reference_source = character(0),
+    reference_label = character(0),
+    missing_cards = character(0),
+    missing_card_names = character(0),
+    stringsAsFactors = FALSE
+  )
+}
+
+.scalar_text <- function(value, default = "") {
+  if (is.null(value)) {
+    return(default)
+  }
+  raw <- as.character(value)
+  if (length(raw) == 0L || is.na(raw[[1]])) {
+    return(default)
+  }
+  picked <- trimws(raw[[1]])
+  if (!nzchar(picked)) {
+    return(default)
+  }
+  picked
+}
+
+.normalize_known_synergies <- function(known_synergies) {
+  if (is.null(known_synergies) || length(known_synergies) == 0L) {
+    return(list())
+  }
+  if (!is.list(known_synergies)) {
+    stop("`known_synergies` must be a list.")
+  }
+
+  out <- list()
+  out_count <- 0L
+  for (item in known_synergies) {
+    if (is.null(item$cards)) {
+      next
+    }
+    cards <- unique(as.character(item$cards))
+    cards <- cards[nzchar(cards)]
+    if (length(cards) == 0L) {
+      next
+    }
+
+    weight <- suppressWarnings(as.numeric(item$weight[[1]]))
+    if (length(weight) == 0L || !is.finite(weight[[1]]) || weight[[1]] <= 0) {
+      weight <- 1
+    } else {
+      weight <- weight[[1]]
+    }
+
+    out_count <- out_count + 1L
+    out[[out_count]] <- list(
+      cards = sort(cards),
+      source = .scalar_text(item$source, default = "unknown"),
+      label = .scalar_text(item$label, default = sprintf("ref_%s", out_count)),
+      weight = weight
+    )
+  }
+
+  out
+}
+
+.match_known_synergy <- function(candidate_ids, references, max_missing_cards = 2L) {
+  candidate_ids <- sort(unique(as.character(candidate_ids)))
+  candidate_ids <- candidate_ids[nzchar(candidate_ids)]
+  if (length(candidate_ids) == 0L || length(references) == 0L) {
+    return(list(
+      state = "novel",
+      source = "",
+      label = "",
+      missing_cards = character(0),
+      weight = 1
+    ))
+  }
+
+  best <- list(
+    state = "novel",
+    source = "",
+    label = "",
+    missing_cards = character(0),
+    weight = 1,
+    overlap = -1
+  )
+
+  for (ref in references) {
+    ref_cards <- ref$cards
+    if (setequal(candidate_ids, ref_cards)) {
+      return(list(
+        state = "exact",
+        source = ref$source,
+        label = ref$label,
+        missing_cards = character(0),
+        weight = ref$weight
+      ))
+    }
+
+    missing_cards <- setdiff(ref_cards, candidate_ids)
+    extra_cards <- setdiff(candidate_ids, ref_cards)
+    overlap <- length(intersect(candidate_ids, ref_cards))
+    if (overlap <= 0L) {
+      next
+    }
+
+    if (length(missing_cards) <= max_missing_cards && length(extra_cards) == 0L) {
+      if (overlap > best$overlap) {
+        best <- list(
+          state = "near",
+          source = ref$source,
+          label = ref$label,
+          missing_cards = missing_cards,
+          weight = ref$weight,
+          overlap = overlap
+        )
+      }
+    }
+  }
+
+  best$overlap <- NULL
+  best
 }
