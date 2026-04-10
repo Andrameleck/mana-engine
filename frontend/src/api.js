@@ -7,6 +7,7 @@ const API_ENDPOINTS = Object.freeze({
   collectionsImportCsv: "/collections/import_csv",
   collections: "/collections",
   strategyBridgeEquation: "/strategy/bridge_equation",
+  referenceLotusNoirPosts: "/reference/lotusnoir/posts",
   referenceSpellbookVariants: "/reference/spellbook/variants",
   referenceMtgjsonCards: "/reference/mtgjson/cards"
 });
@@ -197,6 +198,17 @@ async function fetchSpellbookVariants(query, limit = 40) {
   });
 }
 
+async function fetchLotusNoirPosts(query, limit = 20) {
+  return apiRequest(API_ENDPOINTS.referenceLotusNoirPosts, {
+    method: "GET",
+    query: {
+      q: toTrimmedText(query),
+      limit: toText(limit || 20)
+    },
+    fallback: { results: [] }
+  });
+}
+
 async function fetchStrategyBridgeEquation(payload = {}) {
   return apiRequest(API_ENDPOINTS.strategyBridgeEquation, {
     method: "POST",
@@ -236,6 +248,7 @@ window.listStoredCollections = listStoredCollections;
 window.getStoredCollection = getStoredCollection;
 window.deleteStoredCollection = deleteStoredCollection;
 window.fetchSpellbookVariants = fetchSpellbookVariants;
+window.fetchLotusNoirPosts = fetchLotusNoirPosts;
 window.fetchStrategyBridgeEquation = fetchStrategyBridgeEquation;
 window.fetchMtgjsonCards = fetchMtgjsonCards;
 
@@ -250,6 +263,7 @@ export {
   getStoredCollection,
   deleteStoredCollection,
   fetchSpellbookVariants,
+  fetchLotusNoirPosts,
   fetchStrategyBridgeEquation,
   fetchMtgjsonCards
 };

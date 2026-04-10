@@ -4,6 +4,7 @@ import {
   listStoredCollections,
   getStoredCollection,
   deleteStoredCollection,
+  fetchLotusNoirPosts as fetchLotusNoirPostsApi,
   fetchSpellbookVariants
 } from "./api.js";
 import {
@@ -56,6 +57,7 @@ import {
       strategy_group_limit_label: "Top groups",
       strategy_include_spellbook_label: "Include combo references (Commander Spellbook)",
       strategy_include_spellbook_hint: "Prioritize cards present in public combos",
+      strategy_include_lotus_hint: "Cross-check with LotusNoir community decks (beta)",
       strategy_mana_filter_label: "Mana filter (allowed colors)",
       direct_synergies: "Direct synergies",
       card_groups: "Card groups",
@@ -109,6 +111,7 @@ import {
       strategy_group_limit_label: "Top groupes",
       strategy_include_spellbook_label: "Inclure reference combos (Commander Spellbook)",
       strategy_include_spellbook_hint: "Prioriser les cartes presentes dans les combos publics",
+      strategy_include_lotus_hint: "Croiser avec les decks communautaires LotusNoir (beta)",
       strategy_mana_filter_label: "Filtre mana (couleurs autorisees)",
       direct_synergies: "Synergies directes",
       card_groups: "Groupes de cartes",
@@ -199,6 +202,7 @@ import {
       lastCollectionId: null,
       includeKnownCards: true,
       includeSpellbookCombos: true,
+      includeLotusSignals: false,
       knownCardsModel: null,
       knownCardsModelKey: "",
       knownCardsModelPromise: null,
@@ -206,11 +210,14 @@ import {
       knownCardsError: "",
       spellbookCache: new Map(),
       spellbookPromiseCache: new Map(),
+      lotusCache: new Map(),
+      lotusPromiseCache: new Map(),
       namedCardCache: new Map(),
       namedCardPromiseCache: new Map(),
       seedAutocompleteCache: new Map(),
       seedAutocompleteToken: 0,
       spellbookError: "",
+      lotusError: "",
       runToken: 0
     },
     spellbook: {
@@ -270,6 +277,7 @@ import {
       directLimitInput: document.getElementById("strategy-direct-limit"),
       groupLimitInput: document.getElementById("strategy-group-limit"),
       includeSpellbookInput: document.getElementById("strategy-include-spellbook"),
+      includeLotusInput: document.getElementById("strategy-include-lotus"),
       manaFilterInputs: Array.from(document.querySelectorAll("input[data-strategy-mana]")),
       runButton: document.getElementById("strategy-run-btn"),
       status: document.getElementById("strategy-status"),
@@ -423,6 +431,7 @@ import {
     setText("#strategy-group-limit-label", t("strategy_group_limit_label"));
     setText("#strategy-include-spellbook-label", t("strategy_include_spellbook_label"));
     setText("#strategy-include-spellbook-hint", t("strategy_include_spellbook_hint"));
+    setText("#strategy-include-lotus-hint", t("strategy_include_lotus_hint"));
     setText("#strategy-mana-filter-label", t("strategy_mana_filter_label"));
     setText("#tab-strategy .strategy-result-block:nth-of-type(1) .strategy-result-head h4", t("direct_synergies"));
     setText("#tab-strategy .strategy-result-block:nth-of-type(2) .strategy-result-head h4", t("card_groups"));
@@ -525,6 +534,18 @@ import {
       strategyNodes.includeSpellbookInput.addEventListener("change", () => {
         state.strategy.includeSpellbookCombos = strategyNodes.includeSpellbookInput.checked === true;
         resetStrategySpellbookCache();
+        const collectionId = state.selectedCollectionId;
+        const payload = collectionId ? state.collectionPayloadById[collectionId] : null;
+        const meta = state.collections.find((entry) => entry.id === collectionId);
+        renderStrategyPanel(payload, meta);
+      });
+    }
+
+    if (strategyNodes.includeLotusInput) {
+      strategyNodes.includeLotusInput.checked = isStrategyIncludeLotusEnabled();
+      strategyNodes.includeLotusInput.addEventListener("change", () => {
+        state.strategy.includeLotusSignals = strategyNodes.includeLotusInput.checked === true;
+        resetStrategyLotusCache();
         const collectionId = state.selectedCollectionId;
         const payload = collectionId ? state.collectionPayloadById[collectionId] : null;
         const meta = state.collections.find((entry) => entry.id === collectionId);
@@ -2417,19 +2438,35 @@ import {
       variantCount: 0,
       variants: []
     };
-    strategyNodes.status.textContent = currentUiLanguage() === "fr"
-      ? `Analyse Commander Spellbook en cours pour ${resolvedSeed.name}...`
-      : `Commander Spellbook analysis in progress for ${resolvedSeed.name}...`;
-    spellbookContext = await getStrategySpellbookContext(resolvedSeed);
+    let lotusContext = {
+      boostByKey: new Map(),
+      refsByKey: new Map(),
+      postCount: 0
+    };
+
+    if (isStrategyIncludeSpellbookEnabled()) {
+      strategyNodes.status.textContent = currentUiLanguage() === "fr"
+        ? `Analyse Commander Spellbook en cours pour ${resolvedSeed.name}...`
+        : `Commander Spellbook analysis in progress for ${resolvedSeed.name}...`;
+      spellbookContext = await getStrategySpellbookContext(resolvedSeed);
+    }
+    if (isStrategyIncludeLotusEnabled()) {
+      strategyNodes.status.textContent = currentUiLanguage() === "fr"
+        ? `Analyse LotusNoir en cours pour ${resolvedSeed.name}...`
+        : `LotusNoir analysis in progress for ${resolvedSeed.name}...`;
+      lotusContext = await getStrategyLotusNoirContext(resolvedSeed, activeModel.cards);
+    }
     if (runToken !== state.strategy.runToken) {
       return;
     }
+
+    const externalContext = mergeStrategyExternalContexts(spellbookContext, lotusContext);
 
     const direct = computeDirectSynergies(
       resolvedSeed,
       activeModel.cards,
       directLimit,
-      spellbookContext
+      externalContext
     );
     const spellbookGroups = isStrategyIncludeSpellbookEnabled()
       ? computeSpellbookSynergyGroups(
@@ -2470,6 +2507,10 @@ import {
 
   function isStrategyIncludeSpellbookEnabled() {
     return state.strategy.includeSpellbookCombos === true;
+  }
+
+  function isStrategyIncludeLotusEnabled() {
+    return state.strategy.includeLotusSignals === true;
   }
 
   function getActiveStrategyManaFilterCodes() {
@@ -2518,6 +2559,12 @@ import {
     state.strategy.spellbookError = "";
   }
 
+  function resetStrategyLotusCache() {
+    state.strategy.lotusCache = new Map();
+    state.strategy.lotusPromiseCache = new Map();
+    state.strategy.lotusError = "";
+  }
+
   async function getStrategySpellbookContext(seedCard) {
     const seedKey = normalizeStrategyName(seedCard?.key || seedCard?.name || "");
     if (!seedKey) {
@@ -2548,6 +2595,157 @@ import {
 
     state.strategy.spellbookPromiseCache.set(seedKey, task);
     return task;
+  }
+
+  function mergeStrategyExternalContexts(spellbookContext = {}, lotusContext = {}) {
+    const boostByKey = spellbookContext?.boostByKey instanceof Map
+      ? new Map(spellbookContext.boostByKey)
+      : new Map();
+    const refsByKey = spellbookContext?.refsByKey instanceof Map
+      ? new Map(spellbookContext.refsByKey)
+      : new Map();
+    const popularityByKey = spellbookContext?.popularityByKey instanceof Map
+      ? new Map(spellbookContext.popularityByKey)
+      : new Map();
+
+    const lotusBoostByKey = lotusContext?.boostByKey instanceof Map
+      ? new Map(lotusContext.boostByKey)
+      : new Map();
+    const lotusRefsByKey = lotusContext?.refsByKey instanceof Map
+      ? new Map(lotusContext.refsByKey)
+      : new Map();
+
+    lotusBoostByKey.forEach((value, key) => {
+      const previous = Number(boostByKey.get(key) || 0);
+      boostByKey.set(key, previous + Number(value || 0));
+    });
+
+    return {
+      boostByKey,
+      refsByKey,
+      popularityByKey,
+      variantCount: Math.max(1, Number(spellbookContext?.variantCount) || 0),
+      lotusBoostByKey,
+      lotusRefsByKey,
+      lotusPostCount: Math.max(0, Number(lotusContext?.postCount) || 0)
+    };
+  }
+
+  async function getStrategyLotusNoirContext(seedCard, cards) {
+    const seedKey = normalizeStrategyName(seedCard?.key || seedCard?.name || "");
+    if (!seedKey) {
+      return { boostByKey: new Map(), refsByKey: new Map(), postCount: 0 };
+    }
+    if (state.strategy.lotusCache.has(seedKey)) {
+      return state.strategy.lotusCache.get(seedKey);
+    }
+    if (state.strategy.lotusPromiseCache.has(seedKey)) {
+      return state.strategy.lotusPromiseCache.get(seedKey);
+    }
+
+    const task = fetchStrategyLotusNoirContext(seedCard, cards)
+      .then((context) => {
+        state.strategy.lotusCache.set(seedKey, context);
+        state.strategy.lotusError = "";
+        return context;
+      })
+      .catch((error) => {
+        state.strategy.lotusError = String(error?.message || "LotusNoir indisponible");
+        const fallback = { boostByKey: new Map(), refsByKey: new Map(), postCount: 0 };
+        state.strategy.lotusCache.set(seedKey, fallback);
+        return fallback;
+      })
+      .finally(() => {
+        state.strategy.lotusPromiseCache.delete(seedKey);
+      });
+
+    state.strategy.lotusPromiseCache.set(seedKey, task);
+    return task;
+  }
+
+  async function fetchStrategyLotusNoirContext(seedCard, cards) {
+    const seedName = String(seedCard?.name || "").trim();
+    const seedKey = normalizeStrategyName(seedCard?.key || seedName);
+    if (!seedName || !seedKey) {
+      return { boostByKey: new Map(), refsByKey: new Map(), postCount: 0 };
+    }
+
+    const posts = await fetchLotusNoirPosts(seedName);
+    const refsByKey = new Map();
+    const boostByKey = new Map();
+    const uniquePosts = Array.isArray(posts) ? posts : [];
+    const postCount = uniquePosts.length;
+    if (postCount === 0) {
+      return { boostByKey, refsByKey, postCount: 0 };
+    }
+
+    const safeCards = Array.isArray(cards) ? cards : [];
+    const candidates = safeCards
+      .map((card) => ({
+        key: normalizeStrategyName(card?.key || card?.name || ""),
+        name: String(card?.name || "").trim()
+      }))
+      .filter((entry) => entry.key && entry.key !== seedKey && entry.key.length >= 3);
+
+    uniquePosts.forEach((post) => {
+      const normalizedText = ` ${normalizeStrategyName(stripHtml(String(post?.content || "")))} `;
+      if (!normalizedText.includes(` ${seedKey} `)) {
+        return;
+      }
+
+      candidates.forEach((candidate) => {
+        if (normalizedText.includes(` ${candidate.key} `)) {
+          refsByKey.set(candidate.key, (refsByKey.get(candidate.key) || 0) + 1);
+        }
+      });
+    });
+
+    refsByKey.forEach((refs, cardKey) => {
+      const ratio = refs > 0 ? refs / Math.max(1, postCount) : 0;
+      const boost = Math.min(0.34, 0.08 + ratio * 0.44);
+      boostByKey.set(cardKey, boost);
+    });
+
+    return { boostByKey, refsByKey, postCount };
+  }
+
+  async function fetchLotusNoirPosts(seedName) {
+    const safeSearch = String(seedName || "").trim();
+    if (!safeSearch) {
+      return [];
+    }
+
+    const payload = await fetchLotusNoirPostsApi(safeSearch, 20);
+    if (!payload || payload.ok === false) {
+      return [];
+    }
+    const allPosts = Array.isArray(payload.results) ? payload.results : [];
+    const dedup = new Map();
+    allPosts.forEach((post) => {
+      const id = String(post?.id || "").trim();
+      if (!id) {
+        return;
+      }
+      const title = stripHtml(String(post?.title || ""));
+      const excerpt = stripHtml(String(post?.snippet || ""));
+      const link = stripHtml(String(post?.url || ""));
+      dedup.set(id, {
+        id,
+        content: `${title}\n${excerpt}\n${link}`
+      });
+    });
+    return Array.from(dedup.values());
+  }
+
+  function stripHtml(value) {
+    return String(value || "")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/\s+/g, " ")
+      .trim();
   }
 
   async function fetchStrategySpellbookContext(seedCard) {
@@ -3202,17 +3400,24 @@ import {
     return cards.find((card) => card.key.includes(normalizedSeed)) || null;
   }
 
-  function computeDirectSynergies(seedCard, cards, limit, spellbookContext = {}) {
-    const spellbookBoostByKey = spellbookContext?.boostByKey instanceof Map
-      ? spellbookContext.boostByKey
+  function computeDirectSynergies(seedCard, cards, limit, externalContext = {}) {
+    const spellbookBoostByKey = externalContext?.boostByKey instanceof Map
+      ? externalContext.boostByKey
       : new Map();
-    const refsByKey = spellbookContext?.refsByKey instanceof Map
-      ? spellbookContext.refsByKey
+    const refsByKey = externalContext?.refsByKey instanceof Map
+      ? externalContext.refsByKey
       : new Map();
-    const popularityByKey = spellbookContext?.popularityByKey instanceof Map
-      ? spellbookContext.popularityByKey
+    const popularityByKey = externalContext?.popularityByKey instanceof Map
+      ? externalContext.popularityByKey
       : new Map();
-    const variantCount = Math.max(1, Number(spellbookContext?.variantCount) || 0);
+    const lotusBoostByKey = externalContext?.lotusBoostByKey instanceof Map
+      ? externalContext.lotusBoostByKey
+      : new Map();
+    const lotusRefsByKey = externalContext?.lotusRefsByKey instanceof Map
+      ? externalContext.lotusRefsByKey
+      : new Map();
+    const variantCount = Math.max(1, Number(externalContext?.variantCount) || 0);
+    const lotusPostCount = Math.max(1, Number(externalContext?.lotusPostCount) || 0);
 
     const results = cards
       .filter((card) => card.key !== seedCard.key)
@@ -3222,14 +3427,18 @@ import {
         const spellbookBoost = Math.max(0, spellbookRaw);
         const spellbookRefs = Math.max(0, Number(refsByKey?.get?.(card.key) || 0));
         const spellbookPopularity = Math.max(0, Number(popularityByKey?.get?.(card.key) || 0));
+        const lotusRefs = Math.max(0, Number(lotusRefsByKey?.get?.(card.key) || 0));
+        const lotusBoost = Math.max(0, Number(lotusBoostByKey?.get?.(card.key) || 0));
         const scryfallExists = Boolean(String(card?.scryfallId || "").trim());
-        const externalBoost = Math.min(0.45, spellbookBoost * 0.55);
+        const externalBoost = Math.min(0.55, spellbookBoost * 0.42 + lotusBoost * 0.35);
         const score = clampScore(sim.score + externalBoost);
         const validation = computeDirectApiValidation(
           scryfallExists,
           spellbookRefs,
           spellbookPopularity,
-          variantCount
+          variantCount,
+          lotusRefs,
+          lotusPostCount
         );
         return {
           card,
@@ -3239,14 +3448,16 @@ import {
           ruleScore: sim.ruleScore,
           colorScore: sim.colorScore,
           comboBoost: sim.comboBoost,
-          spellbookBoost
+          spellbookBoost,
+          lotusBoost
         };
       })
       .filter((entry) => entry.score > 0.05 && (
         entry.ruleScore > 0.02 ||
         entry.featureScore > 0.08 ||
         entry.comboBoost > 0 ||
-        entry.spellbookBoost > 0.12
+        entry.spellbookBoost > 0.12 ||
+        entry.lotusBoost > 0.08
       ))
       .sort((left, right) => {
         const leftSbScore = Number(left?.validation?.spellbookScore || 0);
@@ -3256,6 +3467,11 @@ import {
         }
         if (Math.abs(right.score - left.score) > 1e-9) {
           return right.score - left.score;
+        }
+        const leftLotusScore = Number(left?.validation?.lotusScore || 0);
+        const rightLotusScore = Number(right?.validation?.lotusScore || 0);
+        if (Math.abs(rightLotusScore - leftLotusScore) > 1e-9) {
+          return rightLotusScore - leftLotusScore;
         }
         if (Math.abs((right.spellbookBoost || 0) - (left.spellbookBoost || 0)) > 1e-9) {
           return (right.spellbookBoost || 0) - (left.spellbookBoost || 0);
@@ -3269,21 +3485,25 @@ import {
     return results.slice(0, Math.max(1, limit));
   }
 
-  function computeDirectApiValidation(scryfallExists, spellbookRefs, spellbookPopularity, variantCount) {
+  function computeDirectApiValidation(scryfallExists, spellbookRefs, spellbookPopularity, variantCount, lotusRefs = 0, lotusPostCount = 0) {
     const scryfallScore = scryfallExists ? 1 : 0;
     const refRatio = spellbookRefs > 0 ? Math.min(1, spellbookRefs / Math.max(1, variantCount)) : 0;
     const popularityNorm = spellbookPopularity > 0
       ? Math.min(1, Math.log10(spellbookPopularity + 1) / 4)
       : 0;
     const spellbookScore = clampScore(refRatio * 0.75 + popularityNorm * 0.25);
-    const normalized = spellbookScore;
+    const lotusScore = lotusRefs > 0 ? Math.min(1, lotusRefs / Math.max(1, lotusPostCount)) : 0;
+    const normalized = clampScore(spellbookScore * 0.7 + lotusScore * 0.3);
 
     return {
       score: clampScore(normalized),
       scryfallScore: clampScore(scryfallScore),
       spellbookScore: clampScore(spellbookScore),
+      lotusScore: clampScore(lotusScore),
       spellbookRefs,
       spellbookPopularity,
+      lotusRefs,
+      lotusPostCount,
       scryfallExists
     };
   }
