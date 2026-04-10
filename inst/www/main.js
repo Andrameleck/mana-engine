@@ -8,7 +8,8 @@ import {
   listStoredCollections,
   getStoredCollection,
   deleteStoredCollection,
-  fetchSpellbookVariants
+  fetchSpellbookVariants,
+  fetchStrategyBridgeEquation
 } from "./api.js";
 import {
   renderCollection,
@@ -48,6 +49,7 @@ import {
     selectedDeckId: null,
     strategy: {
       seedName: "",
+      seedNameB: "",
       directLimit: 12,
       groupLimit: 6,
       manaFilter: {
@@ -142,6 +144,7 @@ import {
     strategy: {
       sourceMeta: document.getElementById("strategy-source-meta"),
       seedInput: document.getElementById("strategy-seed-input"),
+      seedBInput: document.getElementById("strategy-seed-b-input"),
       seedList: document.getElementById("strategy-seed-list"),
       directLimitInput: document.getElementById("strategy-direct-limit"),
       groupLimitInput: document.getElementById("strategy-group-limit"),
@@ -385,8 +388,17 @@ import {
     strategyNodes.seedInput.addEventListener("input", () => {
       state.strategy.seedName = strategyNodes.seedInput.value || "";
     });
+    strategyNodes.seedBInput?.addEventListener("input", () => {
+      state.strategy.seedNameB = strategyNodes.seedBInput.value || "";
+    });
 
     strategyNodes.seedInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        runStrategyComputation();
+      }
+    });
+    strategyNodes.seedBInput?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
         runStrategyComputation();
@@ -1422,10 +1434,17 @@ import {
 
     if (currentCollectionChanged) {
       state.strategy.seedName = "";
+      state.strategy.seedNameB = "";
       strategyNodes.seedInput.value = "";
+      if (strategyNodes.seedBInput) {
+        strategyNodes.seedBInput.value = "";
+      }
       strategyNodes.directList.innerHTML = '<p class="muted">Lance un calcul pour voir les synergies directes.</p>';
       strategyNodes.groupList.innerHTML = '<p class="muted">Lance un calcul pour voir les groupes de cartes.</p>';
       strategyNodes.status.textContent = "Choisis une carte seed puis clique sur Calculer.";
+    }
+    if (strategyNodes.seedBInput && !currentCollectionChanged) {
+      strategyNodes.seedBInput.value = state.strategy.seedNameB || "";
     }
 
     const directLimit = clampInt(strategyNodes.directLimitInput?.value, 4, 24, 12);
@@ -1932,7 +1951,14 @@ import {
 
     const model = getStrategyModelForCollection(collectionId, payload);
     const includeKnown = isStrategyIncludeKnownEnabled();
-    executeStrategyComputation(strategyNodes, model, rawSeedFromUi(strategyNodes), includeKnown, runToken)
+    executeStrategyComputation(
+      strategyNodes,
+      model,
+      rawSeedFromUi(strategyNodes),
+      rawSeedBFromUi(strategyNodes),
+      includeKnown,
+      runToken
+    )
       .catch((error) => {
         if (runToken !== state.strategy.runToken) {
           return;
@@ -1945,7 +1971,11 @@ import {
     return String(strategyNodes.seedInput.value || state.strategy.seedName || "").trim();
   }
 
-  async function executeStrategyComputation(strategyNodes, model, rawSeed, includeKnown, runToken) {
+  function rawSeedBFromUi(strategyNodes) {
+    return String(strategyNodes.seedBInput?.value || state.strategy.seedNameB || "").trim();
+  }
+
+  async function executeStrategyComputation(strategyNodes, model, rawSeed, rawSeedB, includeKnown, runToken) {
     if (runToken !== state.strategy.runToken) {
       return;
     }
@@ -1991,13 +2021,38 @@ import {
       }
     }
 
+    let seedCardB = null;
+    if (rawSeedB) {
+      seedCardB = resolveSeedCard(rawSeedB, activeModel.cards);
+      if (!seedCardB && includeKnown) {
+        strategyNodes.status.textContent = `Recherche de la cible B "${rawSeedB}" via Scryfall...`;
+        seedCardB = await resolveStrategySeedFromScryfall(rawSeedB, strategyLanguage);
+        if (runToken !== state.strategy.runToken) {
+          return;
+        }
+      }
+      if (!seedCardB) {
+        strategyNodes.status.textContent = includeKnown
+          ? `Carte cible B "${rawSeedB}" introuvable (collection et Scryfall).`
+          : `Carte cible B "${rawSeedB}" introuvable dans la collection.`;
+        return;
+      }
+    }
+
     if (seedCard.source === "scryfall") {
       activeModel = mergeStrategyModels(activeModel, { cards: [seedCard] });
+    }
+    if (seedCardB?.source === "scryfall") {
+      activeModel = mergeStrategyModels(activeModel, { cards: [seedCardB] });
     }
     const scryfallAddedCount = Math.max(0, activeModel.cards.length - model.cards.length);
 
     const manaFilterCodes = getActiveStrategyManaFilterCodes();
-    const colorFilteredCards = filterStrategyCardsByMana(activeModel.cards, manaFilterCodes, seedCard?.key);
+    const protectedSeedKeys = [seedCard?.key];
+    if (seedCardB?.key) {
+      protectedSeedKeys.push(seedCardB.key);
+    }
+    const colorFilteredCards = filterStrategyCardsByMana(activeModel.cards, manaFilterCodes, protectedSeedKeys);
     if (colorFilteredCards.length <= 1) {
       renderDirectSynergyCards([], seedCard.name);
       renderGroupCards([], seedCard.name);
@@ -2015,6 +2070,13 @@ import {
     state.strategy.groupLimit = groupLimit;
 
     const resolvedSeed = resolveSeedCard(seedCard.name, activeModel.cards) || seedCard;
+    const resolvedSeedB = seedCardB
+      ? (resolveSeedCard(seedCardB.name, activeModel.cards) || seedCardB)
+      : null;
+    state.strategy.seedNameB = resolvedSeedB?.name || rawSeedB || "";
+    if (strategyNodes.seedBInput) {
+      strategyNodes.seedBInput.value = state.strategy.seedNameB;
+    }
     let spellbookContext = {
       boostByKey: new Map(),
       variantCount: 0,
@@ -2054,6 +2116,35 @@ import {
           : (state.strategy.spellbookError ? " | Spellbook indisponible" : "")
       )
       : "";
+
+    if (resolvedSeedB && resolvedSeedB.key !== resolvedSeed.key) {
+      strategyNodes.status.textContent = `Resolution equation A + n*k + B pour ${resolvedSeed.name} et ${resolvedSeedB.name}...`;
+      const bridgeResponse = await fetchStrategyBridgeEquation(
+        buildBridgeEquationRequestPayload(activeModel.cards, resolvedSeed, resolvedSeedB, directLimit, spellbookContext)
+      );
+      if (runToken !== state.strategy.runToken) {
+        return;
+      }
+      if (bridgeResponse?.ok === true && Array.isArray(bridgeResponse.candidates)) {
+        const bridgeCandidates = bridgeResponse.candidates.slice(0, directLimit);
+        const bridgeDirectEntries = mapBridgeCandidatesToDirectEntries(bridgeCandidates, activeModel.cards);
+        const bridgeGroups = mapBridgeCandidatesToGroups(
+          bridgeCandidates.slice(0, groupLimit),
+          activeModel.cards,
+          resolvedSeed,
+          resolvedSeedB
+        );
+        renderDirectSynergyCards(bridgeDirectEntries, `${resolvedSeed.name} -> ${resolvedSeedB.name}`);
+        renderGroupCards(bridgeGroups, `${resolvedSeed.name} -> ${resolvedSeedB.name}`);
+
+        const exactCount = bridgeCandidates.filter((entry) => String(entry?.reference_state || "") === "exact").length;
+        const nearCount = bridgeCandidates.filter((entry) => String(entry?.reference_state || "") === "near").length;
+        const novelCount = bridgeCandidates.filter((entry) => String(entry?.reference_state || "") === "novel").length;
+        strategyNodes.status.textContent = `${resolvedSeed.name} + n*k + ${resolvedSeedB.name}: ${bridgeCandidates.length} candidats (${exactCount} exact, ${nearCount} near, ${novelCount} novel).${suffix}${manaSuffix}${spellbookSuffix}`;
+        return;
+      }
+    }
+
     strategyNodes.status.textContent = `${resolvedSeed.name}: ${direct.length} synergies directes, ${groups.length} groupes construits.${suffix}${manaSuffix}${spellbookSuffix}`;
   }
 
@@ -2078,15 +2169,20 @@ import {
     return safe.join("/");
   }
 
-  function filterStrategyCardsByMana(cards, selectedCodes, seedKey = "") {
+  function filterStrategyCardsByMana(cards, selectedCodes, seedKeys = []) {
     const safeCards = Array.isArray(cards) ? cards : [];
     const selected = new Set(Array.isArray(selectedCodes) ? selectedCodes : []);
     if (selected.size === 0) {
       return safeCards;
     }
-    const normalizedSeedKey = normalizeStrategyName(seedKey);
+    const protectedKeys = Array.isArray(seedKeys) ? seedKeys : [seedKeys];
+    const normalizedSeedKeys = new Set(
+      protectedKeys
+        .map((entry) => normalizeStrategyName(entry))
+        .filter(Boolean)
+    );
     return safeCards.filter((card) => {
-      if (normalizedSeedKey && normalizeStrategyName(card?.key) === normalizedSeedKey) {
+      if (normalizedSeedKeys.size > 0 && normalizedSeedKeys.has(normalizeStrategyName(card?.key))) {
         return true;
       }
       const cardColors = Array.isArray(card?.colors) ? card.colors.filter((code) => "WUBRG".includes(code)) : [];
@@ -2094,6 +2190,128 @@ import {
         return selected.has("C");
       }
       return cardColors.every((code) => selected.has(code));
+    });
+  }
+
+  function buildBridgeEquationRequestPayload(cards, seedA, seedB, limit, spellbookContext) {
+    const safeCards = Array.isArray(cards) ? cards : [];
+    const bridgeCards = safeCards
+      .filter((card) => card && card.key)
+      .map((card) => ({
+        id: String(card.key || "").trim(),
+        name: String(card.name || card.key || "").trim(),
+        features: { ...(card.features || {}) },
+        colors: Array.isArray(card.colors) ? card.colors : []
+      }));
+
+    return {
+      cards: bridgeCards,
+      seed_a: String(seedA?.key || "").trim(),
+      seed_b: String(seedB?.key || "").trim(),
+      n: 2,
+      depth_n: 3,
+      top_k: 50,
+      top_n: clampInt(limit, 1, 100, 20),
+      max_missing_cards: 2,
+      known_synergies: mapSpellbookContextToKnownSynergies(spellbookContext)
+    };
+  }
+
+  function mapSpellbookContextToKnownSynergies(spellbookContext) {
+    const variants = Array.isArray(spellbookContext?.variants) ? spellbookContext.variants : [];
+    return variants
+      .filter((variant) => Array.isArray(variant?.cardKeys) && variant.cardKeys.length >= 2)
+      .map((variant, index) => {
+        const popularity = Number(variant?.popularity) || 0;
+        const weight = Math.max(1, Math.log10(popularity + 1) + 1);
+        return {
+          source: "commander_spellbook",
+          label: `spellbook_variant_${index + 1}`,
+          cards: variant.cardKeys,
+          weight
+        };
+      });
+  }
+
+  function mapBridgeCandidatesToDirectEntries(candidates, cards) {
+    const byKey = new Map();
+    (Array.isArray(cards) ? cards : []).forEach((card) => {
+      if (card?.key) {
+        byKey.set(card.key, card);
+      }
+    });
+
+    return (Array.isArray(candidates) ? candidates : []).map((candidate) => {
+      const bridgeKey = String(candidate?.bridge_id || "").trim();
+      const bridgeName = String(candidate?.bridge_name || bridgeKey || "Bridge").trim();
+      const card = byKey.get(bridgeKey) || {
+        key: bridgeKey || normalizeStrategyName(bridgeName),
+        name: bridgeName || bridgeKey || "Bridge",
+        row: {},
+        colors: [],
+        source: "reference",
+        features: {},
+        semantics: {}
+      };
+      const referenceState = String(candidate?.reference_state || "").toLowerCase();
+      return {
+        card,
+        score: Number(candidate?.total_score) || 0,
+        ruleScore: Number(candidate?.structural_score) || 0,
+        comboBoost: referenceState === "exact" ? 0.4 : (referenceState === "near" ? 0.2 : 0),
+        spellbookBoost: referenceState === "novel" ? 0 : 0.1
+      };
+    });
+  }
+
+  function mapBridgeCandidatesToGroups(candidates, cards, seedA, seedB) {
+    const byKey = new Map();
+    (Array.isArray(cards) ? cards : []).forEach((card) => {
+      if (card?.key) {
+        byKey.set(card.key, card);
+      }
+    });
+
+    const toCard = (id, fallbackName = "") => {
+      const key = String(id || "").trim();
+      if (key && byKey.has(key)) {
+        return byKey.get(key);
+      }
+      return {
+        key: key || normalizeStrategyName(fallbackName),
+        name: String(fallbackName || key || "Card").trim(),
+        row: {},
+        colors: [],
+        source: "reference",
+        features: {},
+        semantics: {}
+      };
+    };
+
+    return (Array.isArray(candidates) ? candidates : []).map((candidate) => {
+      const bridgeIds = String(candidate?.bridge_cards || "")
+        .split("|")
+        .map((entry) => String(entry || "").trim())
+        .filter(Boolean);
+      const bridgeNames = String(candidate?.bridge_card_names || "")
+        .split("|")
+        .map((entry) => String(entry || "").trim());
+
+      const coreCards = bridgeIds.length > 0
+        ? bridgeIds.map((id, idx) => toCard(id, bridgeNames[idx] || id))
+        : [toCard(candidate?.bridge_id, candidate?.bridge_name)];
+      const sideCards = [toCard(seedA?.key, seedA?.name), toCard(seedB?.key, seedB?.name)]
+        .filter((card) => card?.key && !coreCards.some((core) => core.key === card.key));
+      const allCards = [...coreCards, ...sideCards];
+
+      return {
+        score: Number(candidate?.total_score) || 0,
+        cards: allCards,
+        coreCards,
+        sideCards,
+        lineA: `${seedA?.name || "A"} -> ${candidate?.bridge_name || "bridge"}`,
+        lineB: `${candidate?.bridge_name || "bridge"} -> ${seedB?.name || "B"}`
+      };
     });
   }
 

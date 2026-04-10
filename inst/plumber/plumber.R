@@ -292,6 +292,16 @@ function(q = "", set_code = "", collector_number = "", uuid = "", limit = "40") 
   )
 }
 
+#* Resolve bridge equation A + n*k + B from strategy cards
+#* @serializer unboxedJSON
+#* @post /strategy/bridge_equation
+function(req, res) {
+  query_call(
+    "query_strategy_bridge_equation",
+    req = req
+  )
+}
+
 #* UI entrypoint
 #* @serializer contentType list(type="text/html; charset=utf-8")
 #* @get /ui

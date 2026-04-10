@@ -6,6 +6,7 @@ const API_ENDPOINTS = Object.freeze({
   collectionDbDeleteCard: "/collection/db/delete_card",
   collectionsImportCsv: "/collections/import_csv",
   collections: "/collections",
+  strategyBridgeEquation: "/strategy/bridge_equation",
   referenceSpellbookVariants: "/reference/spellbook/variants",
   referenceMtgjsonCards: "/reference/mtgjson/cards"
 });
@@ -56,13 +57,14 @@ async function apiRequest(endpoint, options = {}) {
     method = "GET",
     query = {},
     body = undefined,
+    headers = undefined,
     fallback = {}
   } = options;
 
   const url = appendQuery(endpoint, query);
   let response;
   try {
-    response = await fetch(url, { method, body });
+    response = await fetch(url, { method, body, headers });
   } catch (error) {
     return {
       ok: false,
@@ -195,6 +197,15 @@ async function fetchSpellbookVariants(query, limit = 40) {
   });
 }
 
+async function fetchStrategyBridgeEquation(payload = {}) {
+  return apiRequest(API_ENDPOINTS.strategyBridgeEquation, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+    fallback: { candidates: [] }
+  });
+}
+
 async function fetchMtgjsonCards({
   q = "",
   set_code = "",
@@ -225,6 +236,7 @@ window.listStoredCollections = listStoredCollections;
 window.getStoredCollection = getStoredCollection;
 window.deleteStoredCollection = deleteStoredCollection;
 window.fetchSpellbookVariants = fetchSpellbookVariants;
+window.fetchStrategyBridgeEquation = fetchStrategyBridgeEquation;
 window.fetchMtgjsonCards = fetchMtgjsonCards;
 
 export {
@@ -238,5 +250,6 @@ export {
   getStoredCollection,
   deleteStoredCollection,
   fetchSpellbookVariants,
+  fetchStrategyBridgeEquation,
   fetchMtgjsonCards
 };
