@@ -26,10 +26,12 @@ import {
       tabs_collections: "Collections",
       tabs_decks: "Decks",
       tabs_strategy: "Strategy",
+      tabs_calculdev: "Calcul_dev",
       tabs_spellbook: "Spellbook",
       subtitle_collections: "Create and manage multiple collection folders.",
       subtitle_decks: "Import and browse multiple decks.",
       subtitle_strategy: "Workspace for synergy and combo exploration.",
+      subtitle_calculdev: "Sandbox for testing mechanical synergy changes.",
       subtitle_spellbook: "Query Commander Spellbook by card name.",
       pick_csv: "Choose CSV",
       pick_deck_file: "Choose deck file",
@@ -72,10 +74,12 @@ import {
       tabs_collections: "Collections",
       tabs_decks: "Decks",
       tabs_strategy: "Strategy",
+      tabs_calculdev: "Calcul_dev",
       tabs_spellbook: "Spellbook",
       subtitle_collections: "Creer et gerer plusieurs dossiers de collection.",
       subtitle_decks: "Importer et visualiser plusieurs decks.",
       subtitle_strategy: "Zone reservee au module de strategies.",
+      subtitle_calculdev: "Bac a sable pour tester les changements de mecaniques.",
       subtitle_spellbook: "Interroger Commander Spellbook par nom de carte.",
       pick_csv: "Choisir CSV",
       pick_deck_file: "Choisir un fichier deck",
@@ -139,6 +143,10 @@ import {
         title: t("tabs_strategy"),
         subtitle: t("subtitle_strategy")
       },
+      calculdev: {
+        title: t("tabs_calculdev"),
+        subtitle: t("subtitle_calculdev")
+      },
       spellbook: {
         title: t("tabs_spellbook"),
         subtitle: t("subtitle_spellbook")
@@ -161,6 +169,10 @@ import {
     strategy: {
       title: "Strategy",
       subtitle: "Zone reservee au module de strategies."
+    },
+    calculdev: {
+      title: "Calcul_dev",
+      subtitle: "Bac a sable pour tester les changements de mecaniques."
     },
     spellbook: {
       title: "Spellbook",
@@ -214,6 +226,25 @@ import {
     spellbook: {
       cardName: "",
       limit: 20,
+      loading: false,
+      error: "",
+      payload: null,
+      runToken: 0
+    },
+    calculdev: {
+      cardName: "",
+      directLimit: 12,
+      groupLimit: 6,
+      manaFilter: {
+        W: false,
+        U: false,
+        B: false,
+        R: false,
+        G: false,
+        C: false
+      },
+      includeSpellbookCombos: false,
+      includeLotusSignals: false,
       loading: false,
       error: "",
       payload: null,
@@ -309,6 +340,23 @@ import {
       runButton: document.getElementById("spellbook-run-btn"),
       status: document.getElementById("spellbook-status"),
       results: document.getElementById("spellbook-results")
+    },
+    calculdev: {
+      sourceMeta: document.getElementById("calculdev-source-meta"),
+      seedInput: document.getElementById("calculdev-seed-input"),
+      directLimitInput: document.getElementById("calculdev-direct-limit"),
+      groupLimitInput: document.getElementById("calculdev-group-limit"),
+      includeSpellbookInput: document.getElementById("calculdev-include-spellbook"),
+      includeLotusInput: document.getElementById("calculdev-include-lotus"),
+      manaFilterInputs: Array.from(document.querySelectorAll("input[data-calculdev-mana]")),
+      runButton: document.getElementById("calculdev-run-btn"),
+      status: document.getElementById("calculdev-status"),
+      directList: document.getElementById("calculdev-direct-list"),
+      groupList: document.getElementById("calculdev-group-list"),
+      previewTitle: document.getElementById("calculdev-card-preview-title"),
+      previewText: document.getElementById("calculdev-card-preview-text"),
+      previewImage: document.getElementById("calculdev-card-preview-image"),
+      previewMeta: document.getElementById("calculdev-card-preview-meta")
     }
   };
 
@@ -408,6 +456,7 @@ import {
       collections: t("tabs_collections"),
       decks: t("tabs_decks"),
       strategy: t("tabs_strategy"),
+      calculdev: t("tabs_calculdev"),
       spellbook: t("tabs_spellbook")
     };
     nodes.tabButtons.forEach((button) => {
@@ -446,6 +495,22 @@ import {
     setText("#strategy-source-meta", t("source_meta_waiting"));
     setText("#strategy-card-preview-text", t("strategy_preview_hint"));
     setText("#spellbook-status", t("spellbook_hint"));
+    setText("#tab-calculdev #calculdev-status", t("strategy_waiting"));
+    setText("#tab-calculdev .strategy-result-block:nth-of-type(1) .strategy-result-head h4", t("direct_synergies"));
+    setText("#tab-calculdev .strategy-result-block:nth-of-type(2) .strategy-result-head h4", currentUiLanguage() === "fr" ? "Details techniques" : "Technical details");
+    setText("#tab-calculdev .panel-head h3", "Calcul_dev Playground");
+    setText("#calculdev-seed-label", t("strategy_seed_label"));
+    setText("#calculdev-direct-limit-label", t("strategy_direct_limit_label"));
+    setText("#calculdev-group-limit-label", t("strategy_group_limit_label"));
+    setText("#calculdev-include-spellbook-hint", currentUiLanguage() === "fr" ? "Option sandbox reservee" : "Sandbox-only option");
+    setText("#calculdev-include-lotus-hint", currentUiLanguage() === "fr" ? "Option sandbox reservee" : "Sandbox-only option");
+    setText("#calculdev-mana-filter-label", t("strategy_mana_filter_label"));
+    setText("#calculdev-run-btn", currentUiLanguage() === "fr" ? "Calculer" : "Compute");
+    setText("#calculdev-card-preview-text", t("strategy_preview_hint"));
+    const calculSeed = document.getElementById("calculdev-seed-input");
+    if (calculSeed) {
+      calculSeed.setAttribute("placeholder", "Sheoldred, the Apocalypse");
+    }
   }
 
   function onLanguageSelect(language) {
@@ -656,6 +721,376 @@ import {
       event.preventDefault();
       runSpellbookLookup();
     });
+  }
+
+  function bindCalculDevControls() {
+    const calculNodes = nodes.calculdev;
+    if (!calculNodes.seedInput || !calculNodes.runButton || !calculNodes.status || !calculNodes.directList || !calculNodes.groupList) {
+      return;
+    }
+
+    calculNodes.seedInput.value = state.calculdev.cardName;
+    if (calculNodes.directLimitInput) {
+      calculNodes.directLimitInput.value = String(state.calculdev.directLimit);
+    }
+    if (calculNodes.groupLimitInput) {
+      calculNodes.groupLimitInput.value = String(state.calculdev.groupLimit);
+    }
+    if (calculNodes.includeSpellbookInput) {
+      calculNodes.includeSpellbookInput.checked = state.calculdev.includeSpellbookCombos === true;
+    }
+    if (calculNodes.includeLotusInput) {
+      calculNodes.includeLotusInput.checked = state.calculdev.includeLotusSignals === true;
+    }
+    if (Array.isArray(calculNodes.manaFilterInputs) && calculNodes.manaFilterInputs.length > 0) {
+      calculNodes.manaFilterInputs.forEach((inputNode) => {
+        const code = String(inputNode?.dataset?.calculdevMana || "").toUpperCase();
+        if (!code || !Object.prototype.hasOwnProperty.call(state.calculdev.manaFilter, code)) {
+          return;
+        }
+        inputNode.checked = state.calculdev.manaFilter[code] === true;
+        inputNode.addEventListener("change", () => {
+          state.calculdev.manaFilter[code] = inputNode.checked === true;
+        });
+      });
+    }
+    if (calculNodes.sourceMeta) {
+      calculNodes.sourceMeta.textContent = currentUiLanguage() === "fr"
+        ? "Mode sandbox: calcul mecanique direct via /synergy/find."
+        : "Sandbox mode: direct mechanical scoring via /synergy/find.";
+      calculNodes.sourceMeta.style.display = "block";
+    }
+    resetCalculDevPreview();
+    calculNodes.directList.innerHTML = `<p class="muted">${escapeHtml(currentUiLanguage() === "fr" ? "Lance un calcul pour voir les synergies directes." : "Run a computation to see direct synergies.")}</p>`;
+    calculNodes.groupList.innerHTML = `<p class="muted">${escapeHtml(currentUiLanguage() === "fr" ? "Lance un calcul pour afficher les details techniques." : "Run a computation to show technical details.")}</p>`;
+
+    calculNodes.seedInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        runCalculDevComputation();
+      }
+    });
+    calculNodes.seedInput.addEventListener("input", () => {
+      state.calculdev.cardName = String(calculNodes.seedInput.value || "").trim();
+    });
+
+    calculNodes.directLimitInput?.addEventListener("change", () => {
+      const value = clampInt(calculNodes.directLimitInput.value, 4, 24, 12);
+      state.calculdev.directLimit = value;
+      calculNodes.directLimitInput.value = String(value);
+    });
+    calculNodes.groupLimitInput?.addEventListener("change", () => {
+      const value = clampInt(calculNodes.groupLimitInput.value, 3, 12, 6);
+      state.calculdev.groupLimit = value;
+      calculNodes.groupLimitInput.value = String(value);
+    });
+
+    calculNodes.includeSpellbookInput?.addEventListener("change", () => {
+      state.calculdev.includeSpellbookCombos = calculNodes.includeSpellbookInput.checked === true;
+    });
+    calculNodes.includeLotusInput?.addEventListener("change", () => {
+      state.calculdev.includeLotusSignals = calculNodes.includeLotusInput.checked === true;
+    });
+
+    calculNodes.runButton.addEventListener("click", () => {
+      runCalculDevComputation();
+    });
+  }
+
+  async function runCalculDevComputation() {
+    const calculNodes = nodes.calculdev;
+    if (!calculNodes.seedInput || !calculNodes.runButton || !calculNodes.status || !calculNodes.directList || !calculNodes.groupList) {
+      return;
+    }
+
+    const cardName = String(calculNodes.seedInput.value || "").trim();
+    const maxResults = clampInt(calculNodes.directLimitInput?.value, 4, 24, state.calculdev.directLimit || 12);
+    const groupLimit = clampInt(calculNodes.groupLimitInput?.value, 3, 12, state.calculdev.groupLimit || 6);
+    const colorIdentity = selectedCalculDevColors();
+    const formatName = "commander";
+
+    state.calculdev.cardName = cardName;
+    state.calculdev.directLimit = maxResults;
+    state.calculdev.groupLimit = groupLimit;
+    if (calculNodes.directLimitInput) {
+      calculNodes.directLimitInput.value = String(maxResults);
+    }
+    if (calculNodes.groupLimitInput) {
+      calculNodes.groupLimitInput.value = String(groupLimit);
+    }
+    state.calculdev.manaFilter = {
+      W: colorIdentity.includes("W"),
+      U: colorIdentity.includes("U"),
+      B: colorIdentity.includes("B"),
+      R: colorIdentity.includes("R"),
+      G: colorIdentity.includes("G"),
+      C: colorIdentity.includes("C")
+    };
+
+    if (!cardName) {
+      calculNodes.status.textContent = currentUiLanguage() === "fr"
+        ? "Saisis une carte cible."
+        : "Type a target card.";
+      return;
+    }
+
+    const runToken = ++state.calculdev.runToken;
+    state.calculdev.loading = true;
+    state.calculdev.error = "";
+    calculNodes.status.textContent = currentUiLanguage() === "fr"
+      ? `Calcul mecanique en cours pour "${cardName}"...`
+      : `Mechanical scoring in progress for "${cardName}"...`;
+    calculNodes.directList.innerHTML = `<p class="muted">${currentUiLanguage() === "fr" ? "Chargement..." : "Loading..."}</p>`;
+    calculNodes.groupList.innerHTML = `<p class="muted">${currentUiLanguage() === "fr" ? "Chargement..." : "Loading..."}</p>`;
+    resetCalculDevPreview();
+
+    const payload = {
+      card_name: cardName,
+      format: formatName,
+      max_results: maxResults
+    };
+    if (colorIdentity.length > 0) {
+      payload.color_identity = colorIdentity;
+    }
+
+    try {
+      const response = await fetch("/synergy/find", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+      const out = await response.json().catch(() => ({}));
+      if (runToken !== state.calculdev.runToken) {
+        return;
+      }
+      if (!response.ok || out?.ok !== true) {
+        state.calculdev.error = String(out?.error || `HTTP ${response.status}`);
+        calculNodes.status.textContent = currentUiLanguage() === "fr"
+          ? `Erreur: ${state.calculdev.error}`
+          : `Error: ${state.calculdev.error}`;
+        calculNodes.directList.innerHTML = `<p class="muted">${escapeHtml(currentUiLanguage() === "fr" ? "Aucun resultat." : "No result.")}</p>`;
+        calculNodes.groupList.innerHTML = `<p class="muted">${escapeHtml(currentUiLanguage() === "fr" ? "Aucun resultat." : "No result.")}</p>`;
+        return;
+      }
+
+      state.calculdev.payload = out;
+      state.calculdev.error = "";
+      renderCalculDevResults(out.best_matches, cardName);
+      const count = Array.isArray(out.best_matches) ? out.best_matches.length : 0;
+      calculNodes.status.textContent = currentUiLanguage() === "fr"
+        ? `${count} resultat(s) pour "${cardName}".`
+        : `${count} result(s) for "${cardName}".`;
+    } catch (error) {
+      if (runToken !== state.calculdev.runToken) {
+        return;
+      }
+      state.calculdev.error = String(error?.message || error || "unexpected error");
+      calculNodes.status.textContent = currentUiLanguage() === "fr"
+        ? `Erreur: ${state.calculdev.error}`
+        : `Error: ${state.calculdev.error}`;
+      calculNodes.directList.innerHTML = `<p class="muted">${escapeHtml(currentUiLanguage() === "fr" ? "Aucun resultat." : "No result.")}</p>`;
+      calculNodes.groupList.innerHTML = `<p class="muted">${escapeHtml(currentUiLanguage() === "fr" ? "Aucun resultat." : "No result.")}</p>`;
+    } finally {
+      if (runToken === state.calculdev.runToken) {
+        state.calculdev.loading = false;
+      }
+    }
+  }
+
+  function selectedCalculDevColors() {
+    const calculNodes = nodes.calculdev;
+    if (!Array.isArray(calculNodes?.manaFilterInputs) || calculNodes.manaFilterInputs.length === 0) {
+      return [];
+    }
+    const selected = [];
+    calculNodes.manaFilterInputs.forEach((inputNode) => {
+      const code = String(inputNode?.dataset?.calculdevMana || "").toUpperCase();
+      if (!code || !"WUBRGC".includes(code) || inputNode.checked !== true) {
+        return;
+      }
+      selected.push(code);
+    });
+    return Array.from(new Set(selected));
+  }
+
+  function resetCalculDevPreview() {
+    const calculNodes = nodes.calculdev;
+    if (calculNodes.previewTitle) {
+      calculNodes.previewTitle.textContent = currentUiLanguage() === "fr" ? "Carte" : "Card";
+    }
+    if (calculNodes.previewText) {
+      calculNodes.previewText.textContent = currentUiLanguage() === "fr"
+        ? "Survole ou selectionne une carte de synergie pour afficher ses details."
+        : "Hover or select a synergy card to display details.";
+    }
+    if (calculNodes.previewImage) {
+      calculNodes.previewImage.removeAttribute("src");
+      calculNodes.previewImage.classList.add("is-hidden");
+    }
+    if (calculNodes.previewMeta) {
+      calculNodes.previewMeta.innerHTML = "";
+    }
+  }
+
+  function renderCalculDevCardPreview(entry, cardNode) {
+    const calculNodes = nodes.calculdev;
+    if (!calculNodes.previewTitle || !calculNodes.previewText || !calculNodes.previewImage || !calculNodes.previewMeta) {
+      return;
+    }
+
+    calculNodes.previewTitle.textContent = String(entry?.name || "Card");
+    const reasons = Array.isArray(entry?.reasons) ? entry.reasons : [];
+    calculNodes.previewText.innerHTML = reasons.length > 0
+      ? reasons.map((reason) => escapeHtml(String(reason || ""))).join("<br>")
+      : escapeHtml(currentUiLanguage() === "fr" ? "Aucune explication." : "No explanation.");
+
+    const cardId = String(entry?.id || "").trim();
+    if (isLikelyScryfallId(cardId)) {
+      calculNodes.previewImage.src = `https://api.scryfall.com/cards/${encodeURIComponent(cardId)}?format=image&version=normal`;
+      calculNodes.previewImage.classList.remove("is-hidden");
+    } else {
+      calculNodes.previewImage.removeAttribute("src");
+      calculNodes.previewImage.classList.add("is-hidden");
+    }
+
+    const breakdown = entry?.score_breakdown && typeof entry.score_breakdown === "object"
+      ? entry.score_breakdown
+      : {};
+    const relationClasses = Array.isArray(entry?.relation_classes) ? entry.relation_classes : [];
+    calculNodes.previewMeta.innerHTML = `
+      <dt>score</dt><dd>${escapeHtml(String(entry?.score ?? 0))}</dd>
+      <dt>relations</dt><dd>${escapeHtml(relationClasses.join(", ") || "-")}</dd>
+      <dt>event match</dt><dd>${escapeHtml(String(breakdown?.event_production_match ?? 0))}</dd>
+      <dt>payoff match</dt><dd>${escapeHtml(String(breakdown?.event_payoff_match ?? 0))}</dd>
+      <dt>anti penalty</dt><dd>${escapeHtml(String(breakdown?.anti_penalty ?? 0))}</dd>
+    `;
+
+    const directList = calculNodes.directList;
+    if (directList) {
+      Array.from(directList.querySelectorAll(".row-active")).forEach((node) => node.classList.remove("row-active"));
+    }
+    if (cardNode && typeof cardNode.classList?.add === "function") {
+      cardNode.classList.add("row-active");
+    }
+  }
+
+  function isLikelyScryfallId(value) {
+    const raw = String(value || "").trim();
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw);
+  }
+
+  function createCalculDevCardElement(entry, index) {
+    const cardNode = document.createElement("article");
+    cardNode.className = "strategy-card";
+
+    const cardName = String(entry?.name || "Card");
+    const cardId = String(entry?.id || "");
+    const imageUrl = isLikelyScryfallId(cardId)
+      ? `https://api.scryfall.com/cards/${encodeURIComponent(cardId)}?format=image&version=art_crop`
+      : "";
+
+    const art = document.createElement("div");
+    art.className = "strategy-card-art";
+    if (imageUrl) {
+      const img = document.createElement("img");
+      img.src = imageUrl;
+      img.alt = cardName;
+      img.loading = "lazy";
+      art.appendChild(img);
+    } else {
+      const fallback = document.createElement("span");
+      fallback.className = "strategy-card-fallback";
+      fallback.textContent = currentUiLanguage() === "fr" ? "Image indisponible" : "No image";
+      art.appendChild(fallback);
+    }
+    cardNode.appendChild(art);
+
+    const body = document.createElement("div");
+    body.className = "strategy-card-body";
+
+    const nameLine = document.createElement("p");
+    nameLine.className = "strategy-card-name";
+    nameLine.textContent = cardName;
+    body.appendChild(nameLine);
+
+    const badgesLine = document.createElement("div");
+    badgesLine.className = "strategy-card-badges";
+    appendStrategyCardBadge(badgesLine, `#${index + 1}`, "is-core");
+    appendStrategyCardBadge(badgesLine, "Source: API", "is-source-scryfall");
+    body.appendChild(badgesLine);
+
+    const scoreLine = document.createElement("p");
+    scoreLine.className = "strategy-card-meta";
+    scoreLine.textContent = `score ${formatDecimal(Number(entry?.score || 0))}`;
+    body.appendChild(scoreLine);
+
+    const relationClasses = Array.isArray(entry?.relation_classes) ? entry.relation_classes : [];
+    const relationLine = document.createElement("p");
+    relationLine.className = "strategy-card-meta";
+    relationLine.textContent = relationClasses.length > 0
+      ? relationClasses.join(", ")
+      : (currentUiLanguage() === "fr" ? "Aucune relation classee" : "No classified relation");
+    body.appendChild(relationLine);
+
+    cardNode.appendChild(body);
+
+    cardNode.addEventListener("mouseenter", () => renderCalculDevCardPreview(entry, cardNode));
+    cardNode.addEventListener("click", () => renderCalculDevCardPreview(entry, cardNode));
+
+    return cardNode;
+  }
+
+  function renderCalculDevResults(matches, seedName = "") {
+    const calculNodes = nodes.calculdev;
+    if (!calculNodes.directList || !calculNodes.groupList) {
+      return;
+    }
+
+    const safeMatches = Array.isArray(matches) ? matches : [];
+    if (safeMatches.length === 0) {
+      calculNodes.directList.innerHTML = `<p class="muted">${escapeHtml(currentUiLanguage() === "fr" ? "Aucune synergie directe calculee." : "No direct synergy found.")}</p>`;
+      calculNodes.groupList.innerHTML = `<p class="muted">${escapeHtml(currentUiLanguage() === "fr" ? "Aucun detail technique disponible." : "No technical detail available.")}</p>`;
+      return;
+    }
+
+    calculNodes.directList.innerHTML = "";
+    const directFragment = document.createDocumentFragment();
+    safeMatches.forEach((entry, index) => {
+      const cardNode = createCalculDevCardElement(entry, index);
+      directFragment.appendChild(cardNode);
+    });
+    calculNodes.directList.appendChild(directFragment);
+
+    const detailLimit = clampInt(state.calculdev.groupLimit, 3, 12, 6);
+    const detailCards = safeMatches.slice(0, Math.min(detailLimit, safeMatches.length)).map((entry, index) => {
+      const reasons = Array.isArray(entry?.reasons) ? entry.reasons : [];
+      const matched = entry?.matched_events && typeof entry.matched_events === "object"
+        ? entry.matched_events
+        : {};
+      const detailLine = [
+        `score ${Number(entry?.score || 0)}`,
+        `reasons ${reasons.length}`,
+        `events ${Object.keys(matched).length}`
+      ].join(" | ");
+      const reasonMarkup = reasons.length > 0
+        ? `<ul class="strategy-group-line">${reasons.slice(0, 4).map((reason) => `<li>${escapeHtml(String(reason || ""))}</li>`).join("")}</ul>`
+        : `<p class="strategy-group-line">${escapeHtml(currentUiLanguage() === "fr" ? "Aucune explication." : "No explanation.")}</p>`;
+      return `
+        <article class="strategy-group is-heuristic">
+          <p class="strategy-group-title">#${index + 1} ${escapeHtml(String(entry?.name || "Card"))}</p>
+          <p class="strategy-group-line">${escapeHtml(detailLine)}</p>
+          ${reasonMarkup}
+        </article>
+      `;
+    }).join("");
+
+    calculNodes.groupList.innerHTML = detailCards || `<p class="muted">${escapeHtml(currentUiLanguage() === "fr" ? "Aucun detail technique disponible." : "No technical detail available.")}</p>`;
+    calculNodes.status.textContent = currentUiLanguage() === "fr"
+      ? `${safeMatches.length} synergie(s) calculee(s) pour ${seedName || "la seed"}.`
+      : `${safeMatches.length} synergy result(s) for ${seedName || "seed"}.`;
   }
 
   function inferDeckSourceType(fileName) {
@@ -1089,6 +1524,12 @@ import {
         });
       }
       renderStrategyPanel(payload, meta);
+      renderDeckStatsPanel(null);
+      return;
+    }
+
+    if (state.activeTab === "calculdev") {
+      setWorkspaceLowerHidden(true);
       renderDeckStatsPanel(null);
       return;
     }
@@ -7044,6 +7485,7 @@ import {
     bindDeckPicker();
     attachDbActionEvents();
     bindStrategyControls();
+    bindCalculDevControls();
     bindSpellbookControls();
     bindDeckAnalysisControls();
     loadDeckStateFromStorage();

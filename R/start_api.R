@@ -25,9 +25,9 @@ start_api <- function(
 
   .start_api_log("info", "Initializing mtgcodex.api API on %s:%s", host, port)
 
-  api_file <- system.file("plumber", "plumber.R", package = "mtgcodex.api")
-  if (!nzchar(api_file)) {
-    api_file <- file.path(getwd(), "inst", "plumber", "plumber.R")
+  api_file <- file.path(getwd(), "inst", "plumber", "plumber.R")
+  if (!file.exists(api_file)) {
+    api_file <- system.file("plumber", "plumber.R", package = "mtgcodex.api")
   }
   if (!file.exists(api_file)) {
     .start_api_log("error", "Unable to locate inst/plumber/plumber.R")

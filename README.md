@@ -73,5 +73,26 @@ Build output is written to `inst/www/`, which is what `/ui` and `/ui/static/<fil
 - `POST /collection/upload?type=db|csv|text&table=<optional>&filename=<name>` (application/octet-stream)
 - `GET /reference/spellbook/variants?q=<card>&limit=<1-100>`
 - `GET /reference/mtgjson/cards?q=<optional>&set_code=<optional>&collector_number=<optional>&uuid=<optional>&limit=<1-200>`
+- `POST /cards/normalize` (symbolic normalization for one card or a list of cards)
+- `POST /synergy/find` (mechanical synergy search from atomic gameplay events)
+- `GET /cards/<card_id>?include_normalized=true|false`
+- `GET /events` (atomic event vocabulary)
+- `GET /mechanics` (mechanic decomposition rules)
 - `GET /ui`
 - `GET /ui/static/<file>`
+
+## Synergy Engine (MVP)
+
+The mechanical synergy engine is symbolic and explainable. It does not rely on
+raw Oracle text similarity alone.
+
+- Source of truth: Scryfall `oracle_cards` bulk dataset (cached locally)
+- Normalization: cards are mapped to atomic produced/consumed events
+- Rule expansion: mechanics like `connive`, `cycling`, `surveil`, `exploit`
+  expand into explicit event primitives
+- Scoring model: combines event matching, shared plan tags, setup/finisher
+  overlap, color/tempo/format fit, and anti-synergy penalties
+- Explainability: each match returns reasons and relation classes
+
+Implementation details are documented in
+`man/synergy_engine.md`.

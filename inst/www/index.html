@@ -47,6 +47,17 @@
           </svg>
           <span class="visually-hidden">Strategy</span>
         </button>
+        <button type="button" class="side-tab" data-tab="calculdev" data-label="Calcul_dev" aria-label="Calcul_dev" title="Calcul_dev">
+          <svg viewBox="0 0 24 24" class="side-tab-icon" aria-hidden="true">
+            <path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"></path>
+            <path d="M8 8h8"></path>
+            <path d="M8 12h3"></path>
+            <path d="M13 12h3"></path>
+            <path d="M8 16h3"></path>
+            <path d="M13 16h3"></path>
+          </svg>
+          <span class="visually-hidden">Calcul_dev</span>
+        </button>
       </nav>
     </aside>
 
@@ -205,6 +216,93 @@
                 <img id="strategy-card-preview-image" alt="Card preview" loading="lazy">
                 <p id="strategy-card-preview-text" class="muted">Survole ou selectionne une carte de synergie pour afficher ses details.</p>
                 <dl id="strategy-card-preview-meta" class="card-preview-meta"></dl>
+              </div>
+            </aside>
+          </div>
+        </section>
+      </section>
+
+      <section id="tab-calculdev" class="tab-view" aria-labelledby="workspace-title">
+        <section class="panel strategy-panel">
+          <div class="panel-head">
+            <h3>Calcul_dev Playground</h3>
+          </div>
+
+          <div class="strategy-controls">
+            <p id="calculdev-source-meta" class="muted" style="display:none"></p>
+            <div class="strategy-control-grid">
+              <label for="calculdev-seed-input">
+                <span id="calculdev-seed-label">Carte seed</span>
+                <input id="calculdev-seed-input" type="search" list="strategy-seed-list" placeholder="Entomb">
+              </label>
+
+              <label for="calculdev-direct-limit">
+                <span id="calculdev-direct-limit-label">Top synergies directes</span>
+                <input id="calculdev-direct-limit" type="number" min="4" max="24" value="12">
+              </label>
+
+              <label for="calculdev-group-limit">
+                <span id="calculdev-group-limit-label">Top groupes</span>
+                <input id="calculdev-group-limit" type="number" min="3" max="12" value="6">
+              </label>
+
+              <label for="calculdev-include-spellbook" class="strategy-toggle">
+                <span class="strategy-toggle-row">
+                  <input id="calculdev-include-spellbook" type="checkbox">
+                  <span id="calculdev-include-spellbook-hint">Mode sandbox (option reservee)</span>
+                </span>
+              </label>
+
+              <label for="calculdev-include-lotus" class="strategy-toggle">
+                <span class="strategy-toggle-row">
+                  <input id="calculdev-include-lotus" type="checkbox">
+                  <span id="calculdev-include-lotus-hint">Mode sandbox (option reservee)</span>
+                </span>
+              </label>
+
+              <label class="strategy-mana-filter">
+                <span id="calculdev-mana-filter-label">Filtre mana (couleurs autorisees)</span>
+                <span class="strategy-mana-filter-row">
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-calculdev-mana="W"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/W.svg" alt="W" loading="lazy"></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-calculdev-mana="U"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/U.svg" alt="U" loading="lazy"></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-calculdev-mana="B"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/B.svg" alt="B" loading="lazy"></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-calculdev-mana="R"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/R.svg" alt="R" loading="lazy"></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-calculdev-mana="G"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/G.svg" alt="G" loading="lazy"></label>
+                  <label class="strategy-mana-toggle"><input type="checkbox" data-calculdev-mana="C"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/C.svg" alt="C" loading="lazy"></label>
+                </span>
+              </label>
+
+              <div class="actions strategy-actions">
+                <button type="button" id="calculdev-run-btn">Calculer</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="calculdev-status" class="muted">En attente de calcul.</div>
+
+          <div class="strategy-results-grid">
+            <section class="strategy-result-block">
+              <div class="strategy-result-head">
+                <h4>Synergies directes</h4>
+              </div>
+              <div id="calculdev-direct-list" class="strategy-card-grid"></div>
+            </section>
+
+            <section class="strategy-result-block">
+              <div class="strategy-result-head">
+                <h4>Details techniques</h4>
+              </div>
+              <div id="calculdev-group-list" class="strategy-group-list"></div>
+            </section>
+
+            <aside id="calculdev-card-preview" class="strategy-result-preview" aria-live="polite">
+              <div class="strategy-result-head">
+                <h4 id="calculdev-card-preview-title">Carte</h4>
+              </div>
+              <div class="strategy-card-preview-body">
+                <img id="calculdev-card-preview-image" alt="Card preview" loading="lazy">
+                <p id="calculdev-card-preview-text" class="muted">Survole ou selectionne une carte de synergie pour afficher ses details.</p>
+                <dl id="calculdev-card-preview-meta" class="card-preview-meta"></dl>
               </div>
             </aside>
           </div>

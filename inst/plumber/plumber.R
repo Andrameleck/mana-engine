@@ -340,6 +340,53 @@ function(req, res) {
   )
 }
 
+#* Normalize one or more cards into atomic mechanics/events
+#* @serializer unboxedJSON
+#* @post /cards/normalize
+function(req, res) {
+  query_call(
+    "query_synergy_normalize_cards",
+    req = req
+  )
+}
+
+#* Find mechanical synergies for one target card
+#* @serializer unboxedJSON
+#* @post /synergy/find
+function(req, res) {
+  query_call(
+    "query_synergy_find",
+    req = req
+  )
+}
+
+#* Fetch one card from the Scryfall oracle catalog
+#* @param card_id Card UUID or card name.
+#* @param include_normalized Include normalized payload (true/false).
+#* @serializer unboxedJSON
+#* @get /cards/<card_id>
+function(card_id = "", include_normalized = "true") {
+  query_call(
+    "query_synergy_get_card",
+    card_id = card_id,
+    include_normalized = include_normalized
+  )
+}
+
+#* List registered atomic gameplay events
+#* @serializer unboxedJSON
+#* @get /events
+function() {
+  query_call("query_synergy_list_events")
+}
+
+#* List mechanic decomposition rules
+#* @serializer unboxedJSON
+#* @get /mechanics
+function() {
+  query_call("query_synergy_list_mechanics")
+}
+
 #* UI entrypoint
 #* @serializer contentType list(type="text/html; charset=utf-8")
 #* @get /ui
