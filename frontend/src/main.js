@@ -2466,7 +2466,7 @@ import {
 
     const externalContext = mergeStrategyExternalContexts(spellbookContext, lotusContext);
 
-    const direct = computeDirectSynergies(
+    const direct = computeDirectSynergiesForSeedFaces(
       resolvedSeed,
       activeModel.cards,
       directLimit,
@@ -3009,11 +3009,28 @@ import {
 
   function mapScryfallCardToStrategyRow(card, strategyLanguage = "en") {
     const displayName = scryfallDisplayName(card, strategyLanguage);
+    const cardFaces = Array.isArray(card?.card_faces) ? card.card_faces : [];
+    const faceNames = cardFaces
+      .map((face) => String(face?.printed_name || face?.name || "").trim())
+      .filter(Boolean);
+    const faceOracles = cardFaces
+      .map((face) => String(face?.printed_text || face?.oracle_text || "").trim())
+      .filter(Boolean);
+    const faceTypes = cardFaces
+      .map((face) => String(face?.printed_type_line || face?.type_line || "").trim())
+      .filter(Boolean);
+    const faceManaCosts = cardFaces
+      .map((face) => String(face?.mana_cost || "").trim())
+      .filter(Boolean);
     return {
       name: displayName || String(card?.name || "").trim(),
       name_en: String(card?.name || "").trim(),
       mana_cost: scryfallManaCost(card),
       oracle_text: scryfallDisplayOracleText(card, strategyLanguage),
+      face_names: faceNames.join(" || "),
+      face_oracle_texts: faceOracles.join(" || "),
+      face_type_lines: faceTypes.join(" || "),
+      face_mana_costs: faceManaCosts.join(" || "),
       keywords: Array.isArray(card?.keywords) ? card.keywords.join(", ") : "",
       type_line: scryfallDisplayTypeLine(card, strategyLanguage),
       colors: Array.isArray(card?.colors) ? card.colors.join("") : "",
@@ -3404,6 +3421,137 @@ import {
     return cards.find((card) => card.key.includes(normalizedSeed)) || null;
   }
 
+  function parseStrategyFaceList(value) {
+    return String(value || "")
+      .split(/\s*\|\|\s*/g)
+      .map((entry) => String(entry || "").trim())
+      .filter(Boolean);
+  }
+
+  function strategySeedFaceVariants(seedCard) {
+    if (!seedCard || !seedCard.key) {
+      return [];
+    }
+
+    const seedRow = seedCard.row || {};
+    const faceNames = parseStrategyFaceList(rowValue(seedRow, ["face_names"]));
+    const faceOracles = parseStrategyFaceList(rowValue(seedRow, ["face_oracle_texts"]));
+    const faceTypes = parseStrategyFaceList(rowValue(seedRow, ["face_type_lines"]));
+    const faceManaCosts = parseStrategyFaceList(rowValue(seedRow, ["face_mana_costs"]));
+
+    const variants = [seedCard];
+    faceNames.forEach((faceName, index) => {
+      const faceKey = normalizeStrategyName(faceName);
+      if (!faceKey || faceKey === seedCard.key) {
+        return;
+      }
+
+      const faceRow = {
+        ...seedRow,
+        name: faceName,
+        name_en: faceName,
+        oracle_text: faceOracles[index] || rowValue(seedRow, ["oracle_text", "printed_text", "card_text", "rules_text", "description"]),
+        type_line: faceTypes[index] || rowValue(seedRow, ["type_line", "type"]),
+        mana_cost: faceManaCosts[index] || rowValue(seedRow, ["mana_cost", "manacost", "mana"])
+      };
+
+      const textBlob = [
+        rowValue(faceRow, ["type_line", "type"]),
+        rowValue(faceRow, ["oracle_text", "printed_text", "card_text", "rules_text", "description"]),
+        rowValue(faceRow, ["keywords", "abilities", "keyword"])
+      ].join(" ");
+
+      variants.push({
+        ...seedCard,
+        key: faceKey,
+        name: faceName,
+        row: faceRow,
+        features: extractStrategyFeatureMap(textBlob),
+        semantics: extractStrategySemantics(faceRow)
+      });
+    });
+
+    const unique = new Map();
+    variants.forEach((entry) => {
+      if (!entry?.key || unique.has(entry.key)) {
+        return;
+      }
+      unique.set(entry.key, entry);
+    });
+    return Array.from(unique.values());
+  }
+
+  function mergeDirectSynergyEntries(entriesByKey, limit) {
+    const merged = Array.from(entriesByKey.values()).map((entry) => {
+      const out = { ...entry };
+      delete out._seedFaces;
+      return out;
+    });
+
+    merged.sort((left, right) => {
+      const leftSbScore = Number(left?.validation?.spellbookScore || 0);
+      const rightSbScore = Number(right?.validation?.spellbookScore || 0);
+      if (Math.abs(rightSbScore - leftSbScore) > 1e-9) {
+        return rightSbScore - leftSbScore;
+      }
+      if (Math.abs(right.score - left.score) > 1e-9) {
+        return right.score - left.score;
+      }
+      const leftLotusScore = Number(left?.validation?.lotusScore || 0);
+      const rightLotusScore = Number(right?.validation?.lotusScore || 0);
+      if (Math.abs(rightLotusScore - leftLotusScore) > 1e-9) {
+        return rightLotusScore - leftLotusScore;
+      }
+      return left.card.name.localeCompare(right.card.name);
+    });
+
+    return merged.slice(0, Math.max(1, limit));
+  }
+
+  function computeDirectSynergiesForSeedFaces(seedCard, cards, limit, externalContext = {}) {
+    const variants = strategySeedFaceVariants(seedCard);
+    if (variants.length <= 1) {
+      return computeDirectSynergies(seedCard, cards, limit, externalContext);
+    }
+
+    const candidateLimit = Math.max(24, Number(limit) || 1);
+    const mergedByKey = new Map();
+
+    variants.forEach((variantSeed) => {
+      const direct = computeDirectSynergies(variantSeed, cards, candidateLimit, externalContext);
+      direct.forEach((entry) => {
+        const key = String(entry?.card?.key || "").trim();
+        if (!key) {
+          return;
+        }
+        const existing = mergedByKey.get(key);
+        if (!existing) {
+          mergedByKey.set(key, {
+            ...entry,
+            _seedFaces: new Set([variantSeed.name])
+          });
+          return;
+        }
+
+        existing.score = Math.max(Number(existing.score || 0), Number(entry.score || 0));
+        existing.featureScore = Math.max(Number(existing.featureScore || 0), Number(entry.featureScore || 0));
+        existing.ruleScore = Math.max(Number(existing.ruleScore || 0), Number(entry.ruleScore || 0));
+        existing.colorScore = Math.max(Number(existing.colorScore || 0), Number(entry.colorScore || 0));
+        existing.comboBoost = Math.max(Number(existing.comboBoost || 0), Number(entry.comboBoost || 0));
+        existing.spellbookBoost = Math.max(Number(existing.spellbookBoost || 0), Number(entry.spellbookBoost || 0));
+        existing.lotusBoost = Math.max(Number(existing.lotusBoost || 0), Number(entry.lotusBoost || 0));
+        const existingValidation = Number(existing?.validation?.score || 0);
+        const nextValidation = Number(entry?.validation?.score || 0);
+        if (nextValidation >= existingValidation) {
+          existing.validation = entry.validation;
+        }
+        existing._seedFaces.add(variantSeed.name);
+      });
+    });
+
+    return mergeDirectSynergyEntries(mergedByKey, limit);
+  }
+
   function computeDirectSynergies(seedCard, cards, limit, externalContext = {}) {
     const spellbookBoostByKey = externalContext?.boostByKey instanceof Map
       ? externalContext.boostByKey
@@ -3423,7 +3571,7 @@ import {
     const variantCount = Math.max(1, Number(externalContext?.variantCount) || 0);
     const lotusPostCount = Math.max(1, Number(externalContext?.lotusPostCount) || 0);
 
-    const results = cards
+    const scored = cards
       .filter((card) => card.key !== seedCard.key)
       .map((card) => {
         const sim = strategySimilarity(seedCard, card);
@@ -3447,6 +3595,7 @@ import {
         return {
           card,
           score,
+          heuristicScore: clampScore(sim.score),
           validation,
           featureScore: sim.featureScore,
           ruleScore: sim.ruleScore,
@@ -3455,7 +3604,9 @@ import {
           spellbookBoost,
           lotusBoost
         };
-      })
+      });
+
+    const results = scored
       .filter((entry) => entry.score > 0.05 && (
         entry.ruleScore > 0.02 ||
         entry.featureScore > 0.08 ||
@@ -3485,6 +3636,27 @@ import {
         }
         return left.card.name.localeCompare(right.card.name);
       });
+
+    if (results.length === 0 && scored.length > 0) {
+      const fallback = scored
+        .slice()
+        .sort((left, right) => {
+          if (Math.abs(right.heuristicScore - left.heuristicScore) > 1e-9) {
+            return right.heuristicScore - left.heuristicScore;
+          }
+          if (Math.abs((right.ruleScore || 0) - (left.ruleScore || 0)) > 1e-9) {
+            return (right.ruleScore || 0) - (left.ruleScore || 0);
+          }
+          if (Math.abs((right.featureScore || 0) - (left.featureScore || 0)) > 1e-9) {
+            return (right.featureScore || 0) - (left.featureScore || 0);
+          }
+          if (Math.abs((right.colorScore || 0) - (left.colorScore || 0)) > 1e-9) {
+            return (right.colorScore || 0) - (left.colorScore || 0);
+          }
+          return left.card.name.localeCompare(right.card.name);
+        });
+      return fallback.slice(0, Math.max(1, limit));
+    }
 
     return results.slice(0, Math.max(1, limit));
   }
