@@ -7,6 +7,9 @@ const API_ENDPOINTS = Object.freeze({
   collectionsImportCsv: "/collections/import_csv",
   collections: "/collections",
   strategyBridgeEquation: "/strategy/bridge_equation",
+  synergyFind: "/synergy/find",
+  synergyJobStart: "/synergy/jobs/start",
+  synergyJobs: "/synergy/jobs",
   referenceLotusNoirPosts: "/reference/lotusnoir/posts",
   referenceSpellbookVariants: "/reference/spellbook/variants",
   referenceMtgjsonCards: "/reference/mtgjson/cards"
@@ -248,6 +251,36 @@ async function fetchStrategyBridgeEquation(payload = {}) {
   });
 }
 
+async function fetchSynergyFind(payload = {}) {
+  return apiRequest(API_ENDPOINTS.synergyFind, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+    fallback: {
+      best_matches: [],
+      buckets: {},
+      packages: []
+    }
+  });
+}
+
+async function startSynergyJob(payload = {}) {
+  return apiRequest(API_ENDPOINTS.synergyJobStart, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+    fallback: { status: "error" }
+  });
+}
+
+async function fetchSynergyJobStatus(jobId = "") {
+  const safeId = encodeURIComponent(toTrimmedText(jobId));
+  return apiRequest(`${API_ENDPOINTS.synergyJobs}/${safeId}`, {
+    method: "GET",
+    fallback: { status: "error" }
+  });
+}
+
 async function fetchMtgjsonCards({
   q = "",
   set_code = "",
@@ -280,6 +313,9 @@ window.deleteStoredCollection = deleteStoredCollection;
 window.fetchSpellbookVariants = fetchSpellbookVariants;
 window.fetchLotusNoirPosts = fetchLotusNoirPosts;
 window.fetchStrategyBridgeEquation = fetchStrategyBridgeEquation;
+window.fetchSynergyFind = fetchSynergyFind;
+window.startSynergyJob = startSynergyJob;
+window.fetchSynergyJobStatus = fetchSynergyJobStatus;
 window.fetchMtgjsonCards = fetchMtgjsonCards;
 
 export {
@@ -295,5 +331,8 @@ export {
   fetchSpellbookVariants,
   fetchLotusNoirPosts,
   fetchStrategyBridgeEquation,
+  fetchSynergyFind,
+  startSynergyJob,
+  fetchSynergyJobStatus,
   fetchMtgjsonCards
 };

@@ -360,6 +360,27 @@ function(req, res) {
   )
 }
 
+#* Start a background mechanical synergy job with progress reporting
+#* @serializer unboxedJSON
+#* @post /synergy/jobs/start
+function(req, res) {
+  query_call(
+    "query_synergy_start_job",
+    req = req
+  )
+}
+
+#* Fetch one background mechanical synergy job status
+#* @param job_id Job identifier.
+#* @serializer unboxedJSON
+#* @get /synergy/jobs/<job_id>
+function(job_id = "") {
+  query_call(
+    "query_synergy_get_job_status",
+    job_id = job_id
+  )
+}
+
 #* Fetch one card from the Scryfall oracle catalog
 #* @param card_id Card UUID or card name.
 #* @param include_normalized Include normalized payload (true/false).

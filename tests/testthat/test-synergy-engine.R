@@ -57,6 +57,77 @@ test_that("mechanic expansion can produce structured abilities without oracle te
   expect_true("DRAW_CARD" %in% effect_events)
 })
 
+test_that("mechanic expansion is keyword-driven even with non-informative oracle text", {
+  normalized <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "flashback-card",
+    name = "Echoes From Ash",
+    oracle_text = "Flavor text only.",
+    keywords = c("Flashback"),
+    colors = c("R"),
+    color_identity = c("R"),
+    cmc = 2
+  ))
+
+  expect_true("flashback" %in% normalized$mechanics)
+  expect_true("CAST_SPELL" %in% normalized$produced_events)
+  expect_true("MILL_CARD" %in% normalized$consumed_events)
+  expect_true(any(vapply(
+    Filter(function(ability) identical(ability$source, "mechanic_rule"), normalized$abilities),
+    function(ability) identical(ability$mechanic, "flashback"),
+    logical(1)
+  )))
+})
+
+test_that("structured ability parsing is extensible through parse rules", {
+  registry <- mtgcodex.api:::query_synergy_build_event_registry(
+    events = list(
+      treasure_created = list(
+        label = "Treasure created",
+        description = "A treasure token is created",
+        parent = "CREATE_TOKEN",
+        aliases = c("TREASURE_CREATED"),
+        kind = "board_delta",
+        scope = "generic",
+        resource = "token",
+        zones = list(from = "outside_game", to = "battlefield"),
+        tags = c("tokens", "treasure")
+      )
+    ),
+    base_registry = mtgcodex.api:::query_synergy_event_registry_default()
+  )
+
+  parse_rules <- mtgcodex.api:::query_synergy_build_ability_parse_rules(
+    rules = list(
+      produced_patterns = list(
+        treasure_created = c("manufacture\\s+a\\s+treasure")
+      )
+    ),
+    base_rules = mtgcodex.api:::query_synergy_ability_parse_rules_default(registry = registry),
+    registry = registry
+  )
+
+  normalized <- mtgcodex.api:::query_synergy_normalize_card(
+    list(
+      id = "treasure-card",
+      name = "Quartermaster Gearwright",
+      oracle_text = "Manufacture a Treasure.",
+      colors = c("R"),
+      color_identity = c("R"),
+      cmc = 3
+    ),
+    registry = registry,
+    ability_parse_rules = parse_rules
+  )
+
+  parsed_abilities <- Filter(function(ability) identical(ability$source, "oracle_parse"), normalized$abilities)
+  produced_effects <- unlist(lapply(parsed_abilities, function(ability) {
+    vapply(Filter(function(effect) identical(effect$role, "produce"), ability$effects), function(effect) effect$event, character(1))
+  }), use.names = FALSE)
+
+  expect_true("TREASURE_CREATED" %in% normalized$produced_events)
+  expect_true("TREASURE_CREATED" %in% produced_effects)
+})
+
 test_that("event registry is extensible and canonicalizes aliases", {
   base_registry <- mtgcodex.api:::query_synergy_event_registry_default()
   extended <- mtgcodex.api:::query_synergy_build_event_registry(
@@ -370,4 +441,578 @@ test_that("synergy finder ranks Raffine for Sheoldred in a mini catalog", {
   } else {
     expect_true(length(crypt_idx) == 0)
   }
+})
+
+test_that("pairwise scoring exposes directional explanations", {
+  target <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "draw-payoff",
+    name = "Scholar of Echoes",
+    oracle_text = "Whenever you draw a card, gain 1 life.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 3,
+    legalities = list(commander = "legal")
+  ))
+
+  candidate <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "draw-engine",
+    name = "Engine of Insight",
+    oracle_text = "Draw two cards, then discard a card.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 2,
+    legalities = list(commander = "legal")
+  ))
+
+  score <- mtgcodex.api:::query_synergy_score_pair(target, candidate, "commander")
+
+  expect_true(is.list(score$directional))
+  expect_true("DRAW_CARD" %in% score$directional$candidate_to_target$matched_events)
+  expect_true(grepl("enables", score$directional$candidate_to_target$reason, fixed = TRUE))
+  expect_true(any(grepl("Produces DRAW_CARD", score$reasons, fixed = TRUE)))
+})
+
+test_that("anti synergy detection explains graveyard tension", {
+  graveyard_payoff <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "graveyard-engine",
+    name = "Sepulchral Scholar",
+    oracle_text = "Return target card from your graveyard to your hand.",
+    colors = c("B"),
+    color_identity = c("B"),
+    cmc = 3,
+    legalities = list(commander = "legal")
+  ))
+
+  graveyard_hate <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "graveyard-hate",
+    name = "Sanctified Lantern",
+    oracle_text = "Exile all graveyards.",
+    colors = c("W"),
+    color_identity = c("W"),
+    cmc = 2,
+    legalities = list(commander = "legal")
+  ))
+
+  score <- mtgcodex.api:::query_synergy_score_pair(graveyard_payoff, graveyard_hate, "commander")
+
+  expect_true("anti_synergy" %in% score$relation_classes)
+  expect_true("plan_conflict" %in% score$relation_classes)
+  expect_true(any(grepl("graveyard", score$reasons, ignore.case = TRUE)))
+  expect_true(any(grepl("GRAVEYARD_DEPENDENT", score$matched_events$anti_conflicts, fixed = TRUE)))
+})
+
+test_that("multi-card package detection finds draw-discard line", {
+  payoff <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "payoff",
+    name = "Archive Judge",
+    oracle_text = "Whenever you draw a card, gain 1 life.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 3,
+    legalities = list(commander = "legal")
+  ))
+
+  setup <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "setup",
+    name = "Frantic Research",
+    oracle_text = "Draw two cards, then discard two cards.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 2,
+    legalities = list(commander = "legal")
+  ))
+
+  converter <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "converter",
+    name = "Lore Recycler",
+    oracle_text = "Whenever you discard a card, draw a card.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 2,
+    legalities = list(commander = "legal")
+  ))
+
+  packages <- mtgcodex.api:::query_synergy_detect_packages_for_target(
+    target = payoff,
+    candidates = list(setup, converter),
+    format_name = "commander",
+    min_edge_score = 10
+  )
+
+  expect_gte(length(packages), 1)
+  expect_true(any(vapply(packages, function(pkg) pkg$archetype == "draw_discard_engine", logical(1))))
+  expect_true(any(vapply(packages, function(pkg) any(grepl("Package line", pkg$reasons, fixed = TRUE)), logical(1))))
+})
+
+test_that("multi-archetype package detection distinguishes graveyard lines", {
+  payoff <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "grave-payoff",
+    name = "Afterlife Caller",
+    oracle_text = "Whenever you cast a spell, create a token.",
+    colors = c("B"),
+    color_identity = c("B"),
+    cmc = 4,
+    legalities = list(commander = "legal")
+  ))
+
+  setup <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "grave-setup",
+    name = "Tomb Survey",
+    oracle_text = "Mill three cards.",
+    colors = c("B"),
+    color_identity = c("B"),
+    cmc = 1,
+    legalities = list(commander = "legal")
+  ))
+
+  converter <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "grave-converter",
+    name = "Ash Script",
+    oracle_text = "",
+    keywords = c("Flashback"),
+    colors = c("B"),
+    color_identity = c("B"),
+    cmc = 2,
+    legalities = list(commander = "legal")
+  ))
+
+  packages <- mtgcodex.api:::query_synergy_detect_packages_for_target(
+    target = payoff,
+    candidates = list(setup, converter),
+    format_name = "commander",
+    min_edge_score = 10
+  )
+
+  expect_gte(length(packages), 1)
+  expect_true(any(vapply(packages, function(pkg) pkg$archetype == "graveyard_setup_converter_payoff", logical(1))))
+})
+
+test_that("synergy finder returns bucketed output with explainable axes", {
+  catalog <- list(
+    list(
+      id = "seed",
+      name = "Ledger Saint",
+      oracle_text = "Whenever you draw a card, gain 1 life.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 3,
+      legalities = list(commander = "legal")
+    ),
+    list(
+      id = "direct",
+      name = "Thought Current",
+      oracle_text = "Draw two cards.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 2,
+      legalities = list(commander = "legal")
+    ),
+    list(
+      id = "indirect",
+      name = "Rooftop Conniver",
+      oracle_text = "Whenever you attack, target attacking creature connives 1.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 3,
+      legalities = list(commander = "legal")
+    ),
+    list(
+      id = "warning",
+      name = "Closed Archive",
+      oracle_text = "If you would draw a card, exile the top card of your library instead.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 2,
+      legalities = list(commander = "legal")
+    )
+  )
+
+  out <- mtgcodex.api:::query_synergy_find_in_catalog(
+    list(card_name = "Ledger Saint", format = "commander", max_results = 6),
+    catalog
+  )
+
+  expect_true(isTRUE(out$ok))
+  expect_true(is.list(out$buckets))
+  expect_true(all(c("direct_enablers", "indirect_engines", "reciprocal_value_cards", "anti_synergy_warnings", "packages") %in% names(out$buckets)))
+  expect_gte(length(out$best_matches), 1)
+  expect_true(is.character(out$best_matches[[1]]$bucket))
+  expect_true(is.list(out$best_matches[[1]]$axis_scores))
+  expect_true(is.character(out$best_matches[[1]]$explanation_text))
+  expect_true(is.character(out$best_matches[[1]]$roles))
+})
+
+test_that("token sacrifice engines surface as indirect packages", {
+  payoff <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "death-payoff",
+    name = "Mortuary Ledger",
+    oracle_text = "Whenever a creature dies, draw a card.",
+    colors = c("B"),
+    color_identity = c("B"),
+    cmc = 4,
+    legalities = list(commander = "legal")
+  ))
+
+  setup <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "token-maker",
+    name = "Call the Ranks",
+    oracle_text = "Create two 1/1 white Soldier creature tokens.",
+    colors = c("W"),
+    color_identity = c("W"),
+    cmc = 2,
+    legalities = list(commander = "legal")
+  ))
+
+  converter <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "sac-outlet",
+    name = "Ash Altar Adept",
+    oracle_text = "Sacrifice a creature: Add {B}.",
+    colors = c("B"),
+    color_identity = c("B"),
+    cmc = 2,
+    legalities = list(commander = "legal")
+  ))
+
+  packages <- mtgcodex.api:::query_synergy_detect_packages_for_target(
+    target = payoff,
+    candidates = list(setup, converter),
+    format_name = "commander",
+    min_edge_score = 10
+  )
+
+  expect_gte(length(packages), 1)
+  expect_true(any(vapply(packages, function(pkg) pkg$archetype == "tokens_sacrifice_payoff", logical(1))))
+})
+
+test_that("indirect engine scoring is structure driven rather than name driven", {
+  target <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "seed-draw",
+    name = "Sage of Copies",
+    oracle_text = "Whenever you draw a card, gain 1 life.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 3,
+    legalities = list(commander = "legal")
+  ))
+
+  engine_a <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "engine-a",
+    name = "Alpha Broker",
+    oracle_text = "Whenever you attack, target attacking creature connives 1.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 3,
+    legalities = list(commander = "legal")
+  ))
+
+  engine_b <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "engine-b",
+    name = "Beta Broker",
+    oracle_text = "Whenever you attack, target attacking creature connives 1.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 3,
+    legalities = list(commander = "legal")
+  ))
+
+  score_a <- mtgcodex.api:::query_synergy_score_pair(target, engine_a, "commander")
+  score_b <- mtgcodex.api:::query_synergy_score_pair(target, engine_b, "commander")
+
+  expect_identical(score_a$primary_bucket, score_b$primary_bucket)
+  expect_equal(score_a$axis_scores, score_b$axis_scores)
+  expect_identical(score_a$score, score_b$score)
+})
+
+test_that("replacement conflicts surface in anti synergy warnings", {
+  catalog <- list(
+    list(
+      id = "seed",
+      name = "Ledger Saint",
+      oracle_text = "Whenever you draw a card, gain 1 life.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 3,
+      legalities = list(commander = "legal")
+    ),
+    list(
+      id = "direct",
+      name = "Thought Current",
+      oracle_text = "Draw two cards.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 2,
+      legalities = list(commander = "legal")
+    ),
+    list(
+      id = "warning",
+      name = "Closed Archive",
+      oracle_text = "If you would draw a card, exile the top card of your library instead.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 2,
+      legalities = list(commander = "legal")
+    )
+  )
+
+  out <- mtgcodex.api:::query_synergy_find_in_catalog(
+    list(card_name = "Ledger Saint", format = "commander", max_results = 6),
+    catalog
+  )
+
+  anti_bucket <- out$buckets$anti_synergy_warnings
+  expect_true(is.list(anti_bucket))
+  expect_gte(anti_bucket$count, 1)
+  expect_true(any(vapply(anti_bucket$results, function(entry) identical(entry$name, "Closed Archive"), logical(1))))
+
+  warning_entry <- Filter(function(entry) identical(entry$name, "Closed Archive"), anti_bucket$results)[[1]]
+  expect_identical(warning_entry$bucket, "anti_synergy_warnings")
+  expect_true("DRAW_CARD" %in% warning_entry$matched_events$replaces_payoff)
+})
+
+test_that("staged pipeline scans full catalog but deep scores only top k", {
+  catalog <- c(
+    list(list(
+      id = "seed",
+      name = "Ledger Saint",
+      oracle_text = "Whenever you draw a card, gain 1 life.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 3,
+      legalities = list(commander = "legal")
+    )),
+    lapply(seq_len(8), function(i) {
+      list(
+        id = paste0("noise-", i),
+        name = paste("Noise", i),
+        oracle_text = "",
+        colors = c("G"),
+        color_identity = c("G"),
+        cmc = 3 + i,
+        legalities = list(commander = "legal")
+      )
+    }),
+    list(
+      list(
+        id = "direct",
+        name = "Thought Current",
+        oracle_text = "Draw two cards.",
+        colors = c("U"),
+        color_identity = c("U"),
+        cmc = 2,
+        legalities = list(commander = "legal")
+      ),
+      list(
+        id = "indirect",
+        name = "Rooftop Conniver",
+        oracle_text = "Whenever you attack, target attacking creature connives 1.",
+        colors = c("U"),
+        color_identity = c("U"),
+        cmc = 3,
+        legalities = list(commander = "legal")
+      ),
+      list(
+        id = "warning",
+        name = "Closed Archive",
+        oracle_text = "If you would draw a card, exile the top card of your library instead.",
+        colors = c("U"),
+        color_identity = c("U"),
+        cmc = 2,
+        legalities = list(commander = "legal")
+      )
+    )
+  )
+
+  out <- mtgcodex.api:::query_synergy_find_in_catalog(
+    list(card_name = "Ledger Saint", format = "commander", max_results = 5, top_k = 3, package_top_n = 2),
+    catalog
+  )
+
+  expect_true(isTRUE(out$ok))
+  expect_identical(out$pipeline$catalog_size, length(catalog))
+  expect_identical(out$pipeline$candidate_filter_count, length(catalog) - 1L)
+  expect_identical(out$pipeline$cheap_scan_count, length(catalog) - 1L)
+  expect_identical(out$pipeline$deep_score_count, 3L)
+  expect_identical(out$pipeline$top_k_used, 3L)
+  expect_lte(out$pipeline$package_candidate_count, 2L)
+  expect_true(all(c(
+    "precompute_load_ms",
+    "candidate_filter_ms",
+    "cheap_scan_ms",
+    "deep_scoring_ms",
+    "bucket_assembly_ms",
+    "package_detection_ms",
+    "response_assembly_ms",
+    "total_ms"
+  ) %in% names(out$timings)))
+})
+
+test_that("staged candidate generation keeps indirect engine candidates alive", {
+  catalog <- list(
+    list(
+      id = "seed",
+      name = "Ledger Saint",
+      oracle_text = "Whenever you draw a card, gain 1 life.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 3,
+      legalities = list(commander = "legal")
+    ),
+    list(
+      id = "direct",
+      name = "Thought Current",
+      oracle_text = "Draw two cards.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 2,
+      legalities = list(commander = "legal")
+    ),
+    list(
+      id = "indirect",
+      name = "Rooftop Conniver",
+      oracle_text = "Whenever you attack, target attacking creature connives 1.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 3,
+      legalities = list(commander = "legal")
+    ),
+    list(
+      id = "noise-a",
+      name = "Timber Filler",
+      oracle_text = "Target land becomes a creature until end of turn.",
+      colors = c("G"),
+      color_identity = c("G"),
+      cmc = 3,
+      legalities = list(commander = "legal")
+    ),
+    list(
+      id = "noise-b",
+      name = "Stone Filler",
+      oracle_text = "Create a tapped colorless land token.",
+      colors = c("C"),
+      color_identity = c("C"),
+      cmc = 4,
+      legalities = list(commander = "legal")
+    )
+  )
+
+  out <- mtgcodex.api:::query_synergy_find_in_catalog(
+    list(card_name = "Ledger Saint", format = "commander", max_results = 4, top_k = 2, package_top_n = 2),
+    catalog
+  )
+
+  result_names <- vapply(out$best_matches, function(entry) entry$name, character(1))
+  expect_true("Rooftop Conniver" %in% result_names)
+  expect_true(any(vapply(out$buckets$indirect_engines$results, function(entry) identical(entry$name, "Rooftop Conniver"), logical(1))))
+})
+
+test_that("precomputed catalog cache persists normalized profiles for canonical sources", {
+  catalog <- list(
+    list(
+      id = "seed",
+      name = "Ledger Saint",
+      oracle_text = "Whenever you draw a card, gain 1 life.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 3,
+      legalities = list(commander = "legal")
+    ),
+    list(
+      id = "direct",
+      name = "Thought Current",
+      oracle_text = "Draw two cards.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 2,
+      legalities = list(commander = "legal")
+    ),
+    list(
+      id = "warning",
+      name = "Closed Archive",
+      oracle_text = "If you would draw a card, exile the top card of your library instead.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 2,
+      legalities = list(commander = "legal")
+    )
+  )
+
+  cache_dir <- file.path(tempdir(), paste0("synergy-precompute-", as.integer(Sys.time())))
+  dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
+  attr(catalog, "synergy_source") <- "scryfall_oracle_cards"
+  attr(catalog, "synergy_cache_key") <- mtgcodex.api:::query_synergy_catalog_cache_key(catalog, source = "scryfall_oracle_cards")
+
+  precomputed <- mtgcodex.api:::query_synergy_get_precomputed_catalog(
+    catalog = catalog,
+    force_refresh = TRUE,
+    cache_dir = cache_dir
+  )
+
+  paths <- mtgcodex.api:::query_synergy_cache_paths(cache_dir)
+  expect_true(file.exists(paths$precomputed_rds_file))
+  expect_identical(length(precomputed$normalized), length(catalog))
+  expect_identical(length(precomputed$profiles), length(catalog))
+})
+
+test_that("progress callback reports backend-linked staged progress", {
+  catalog <- list(
+    list(
+      id = "seed",
+      name = "Ledger Saint",
+      oracle_text = "Whenever you draw a card, gain 1 life.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 3,
+      legalities = list(commander = "legal")
+    ),
+    list(
+      id = "direct",
+      name = "Thought Current",
+      oracle_text = "Draw two cards.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 2,
+      legalities = list(commander = "legal")
+    ),
+    list(
+      id = "indirect",
+      name = "Rooftop Conniver",
+      oracle_text = "Whenever you attack, target attacking creature connives 1.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 3,
+      legalities = list(commander = "legal")
+    ),
+    list(
+      id = "warning",
+      name = "Closed Archive",
+      oracle_text = "If you would draw a card, exile the top card of your library instead.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 2,
+      legalities = list(commander = "legal")
+    )
+  )
+
+  progress_log <- list()
+  callback <- function(progress) {
+    progress_log[[length(progress_log) + 1L]] <<- progress
+  }
+
+  out <- mtgcodex.api:::query_synergy_find_in_catalog(
+    list(card_name = "Ledger Saint", format = "commander", max_results = 4, top_k = 2, package_top_n = 2),
+    catalog,
+    progress_callback = callback
+  )
+
+  expect_true(isTRUE(out$ok))
+  expect_gte(length(progress_log), 5)
+
+  percents <- vapply(progress_log, function(entry) as.integer(round(as.numeric(entry$percent))), integer(1))
+  stages <- vapply(progress_log, function(entry) as.character(entry$stage), character(1))
+
+  expect_true(all(diff(percents) >= 0))
+  expect_identical(utils::tail(percents, 1), 100L)
+  expect_true(any(grepl("Scanning full catalog", stages, fixed = TRUE)))
+  expect_true(any(grepl("Deep scoring top candidates", stages, fixed = TRUE)))
+  expect_true(any(grepl("Detecting package lines", stages, fixed = TRUE)))
 })

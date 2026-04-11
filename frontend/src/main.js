@@ -5,7 +5,8 @@ import {
   getStoredCollection,
   deleteStoredCollection,
   fetchLotusNoirPosts as fetchLotusNoirPostsApi,
-  fetchSpellbookVariants
+  fetchSpellbookVariants,
+  fetchSynergyFind
 } from "./api.js";
 import {
   renderCollection,
@@ -2435,6 +2436,29 @@ import {
     state.strategy.groupLimit = groupLimit;
 
     const resolvedSeed = resolveSeedCard(seedCard.name, activeModel.cards) || seedCard;
+    const synergyPayload = buildStrategySynergyPayload(resolvedSeed, activeModel.cards, directLimit, groupLimit);
+
+    strategyNodes.status.textContent = currentUiLanguage() === "fr"
+      ? `Analyse mecanique backend en cours pour ${resolvedSeed.name}...`
+      : `Running backend mechanical analysis for ${resolvedSeed.name}...`;
+    const synergyResult = await fetchSynergyFind(synergyPayload);
+    if (runToken !== state.strategy.runToken) {
+      return;
+    }
+    if (synergyResult?.ok) {
+      renderBackendDirectSynergyCards(synergyResult, resolvedSeed.name, activeModel.cards, directLimit);
+      renderBackendSynergyBuckets(synergyResult, resolvedSeed.name, activeModel.cards, groupLimit);
+
+      const bucketCount = Object.values(synergyResult?.buckets || {}).reduce((sum, bucket) => {
+        const count = Number(bucket?.count || (Array.isArray(bucket?.results) ? bucket.results.length : 0));
+        return sum + (Number.isFinite(count) ? count : 0);
+      }, 0);
+      strategyNodes.status.textContent = currentUiLanguage() === "fr"
+        ? `${resolvedSeed.name}: ${Number(synergyResult?.count || 0)} cartes classees, ${bucketCount} elements bucketes, ${Number(synergyResult?.package_count || 0)} packages backend.`
+        : `${resolvedSeed.name}: ${Number(synergyResult?.count || 0)} ranked cards, ${bucketCount} bucketed entries, ${Number(synergyResult?.package_count || 0)} backend packages.`;
+      return;
+    }
+
     let spellbookContext = {
       boostByKey: new Map(),
       refsByKey: new Map(),
@@ -2547,6 +2571,319 @@ import {
       }
       return cardColors.every((code) => selected.has(code));
     });
+  }
+
+  function parseStrategyColorCodes(value) {
+    if (Array.isArray(value)) {
+      return [...new Set(value.map((entry) => String(entry || "").toUpperCase()).filter((entry) => "WUBRGC".includes(entry)))];
+    }
+    const text = String(value || "").toUpperCase();
+    if (!text) {
+      return [];
+    }
+    const matches = text.match(/[WUBRGC]/g) || [];
+    return [...new Set(matches)];
+  }
+
+  function parseStrategyKeywordList(value) {
+    if (Array.isArray(value)) {
+      return value.map((entry) => String(entry || "").trim()).filter(Boolean);
+    }
+    return String(value || "")
+      .split(/[;,|/]+/)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  function toStrategySynergyCardPayload(card) {
+    const row = card?.row && typeof card.row === "object" ? card.row : {};
+    const oracleText = rowValue(row, ["oracle_text", "printed_text", "card_text", "rules_text", "description"]);
+    const typeLine = rowValue(row, ["type_line", "type"]);
+    const keywords = parseStrategyKeywordList(rowValue(row, ["keywords", "abilities", "keyword"]));
+    const colors = parseStrategyColorCodes(Array.isArray(card?.colors) ? card.colors : rowValue(row, ["colors"]));
+    const colorIdentity = parseStrategyColorCodes(rowValue(row, ["color_identity"]));
+    const cmcRaw = rowValue(row, ["cmc", "mana_value", "mv"]);
+    const cmcValue = Number(cmcRaw);
+
+    const payload = {
+      id: String(card?.scryfallId || card?.key || card?.name || "").trim(),
+      name: String(card?.name || "").trim(),
+      oracle_text: oracleText,
+      type_line: typeLine,
+      colors,
+      color_identity: colorIdentity.length > 0 ? colorIdentity : colors,
+      keywords
+    };
+    if (Number.isFinite(cmcValue)) {
+      payload.cmc = cmcValue;
+    }
+    return payload;
+  }
+
+  function buildStrategySynergyPayload(seedCard, cards, directLimit, groupLimit) {
+    const safeCards = Array.isArray(cards) ? cards.map(toStrategySynergyCardPayload).filter((card) => card.name) : [];
+    return {
+      card_name: String(seedCard?.name || "").trim(),
+      format: "commander",
+      max_results: Math.max(Number(directLimit) || 0, (Number(groupLimit) || 0) * 2, 12),
+      cards: safeCards
+    };
+  }
+
+  function buildStrategySynergyLookup(cards) {
+    const byId = new Map();
+    const byKey = new Map();
+    const byName = new Map();
+
+    (Array.isArray(cards) ? cards : []).forEach((card) => {
+      if (!card) {
+        return;
+      }
+      const rawId = String(card?.scryfallId || card?.key || "").trim();
+      const key = normalizeStrategyName(card?.key || card?.name || rawId);
+      const nameKey = normalizeStrategyName(card?.name || "");
+      if (rawId) {
+        byId.set(rawId, card);
+      }
+      if (key) {
+        byKey.set(key, card);
+      }
+      if (nameKey) {
+        byName.set(nameKey, card);
+      }
+    });
+
+    return { byId, byKey, byName };
+  }
+
+  function createStrategyApiPlaceholderCard(entry) {
+    const name = String(entry?.name || entry?.id || "Carte API").trim();
+    const key = normalizeStrategyName(entry?.id || name) || name;
+    const oracleText = String(entry?.explanation_text || (Array.isArray(entry?.reasons) ? entry.reasons.join(" ") : "")).trim();
+    const typeLine = Array.isArray(entry?.roles) && entry.roles.length > 0
+      ? entry.roles.join(" / ")
+      : "Synergy result";
+
+    return {
+      key,
+      name,
+      row: {
+        oracle_text: oracleText,
+        type_line: typeLine
+      },
+      quantity: 1,
+      features: {},
+      semantics: {},
+      colors: [],
+      scryfallId: "",
+      source: "api"
+    };
+  }
+
+  function resolveStrategySynergyCard(entry, lookup) {
+    const rawId = String(entry?.id || "").trim();
+    const key = normalizeStrategyName(rawId);
+    const nameKey = normalizeStrategyName(entry?.name || "");
+    const matched = (rawId && lookup?.byId?.get(rawId)) || (key && lookup?.byKey?.get(key)) || (nameKey && lookup?.byName?.get(nameKey)) || null;
+    if (!matched) {
+      return createStrategyApiPlaceholderCard(entry);
+    }
+
+    const mergedRow = {
+      ...(matched.row && typeof matched.row === "object" ? matched.row : {})
+    };
+    if (!rowValue(mergedRow, ["oracle_text", "printed_text", "card_text", "rules_text", "description"])) {
+      mergedRow.oracle_text = String(entry?.explanation_text || "").trim();
+    }
+    return {
+      ...matched,
+      row: mergedRow
+    };
+  }
+
+  function formatSynergyAxisValue(value) {
+    const safe = Number(value);
+    if (!Number.isFinite(safe)) {
+      return "0.00";
+    }
+    return safe.toFixed(2);
+  }
+
+  function formatSynergyEntryMeta(entry, rank = 0) {
+    const score = Math.round(Number(entry?.total_score || entry?.score || 0));
+    const bucketLabel = String(entry?.bucket_label || entry?.bucket || "").trim();
+    const prefix = rank > 0 ? `#${rank} | ` : "";
+    return `${prefix}score ${score}${bucketLabel ? ` | ${bucketLabel}` : ""}`;
+  }
+
+  function formatSynergyEntryTitle(entry) {
+    const axes = entry?.axis_scores || {};
+    const roles = Array.isArray(entry?.roles) ? entry.roles.join(", ") : "";
+    const lines = [
+      String(entry?.explanation_text || "").trim(),
+      `direct ${formatSynergyAxisValue(axes.direct_event_score)} | indirect ${formatSynergyAxisValue(axes.indirect_engine_score)} | reciprocal ${formatSynergyAxisValue(axes.reciprocal_value_score)}`,
+      `package ${formatSynergyAxisValue(axes.package_score)} | anti ${formatSynergyAxisValue(axes.anti_synergy_score)} | cadence ${formatSynergyAxisValue(axes.cadence_score)} | role ${formatSynergyAxisValue(axes.role_complementarity_score)}`,
+      roles ? `roles: ${roles}` : ""
+    ].filter(Boolean);
+    return lines.join("\n");
+  }
+
+  function renderBackendDirectSynergyCards(result, seedName, cards, limit) {
+    const target = nodes.strategy.directList;
+    if (!target) {
+      return;
+    }
+
+    const lookup = buildStrategySynergyLookup(cards);
+    const directBucket = Array.isArray(result?.buckets?.direct_enablers?.results)
+      ? result.buckets.direct_enablers.results
+      : [];
+    const fallbackEntries = Array.isArray(result?.best_matches) ? result.best_matches : [];
+    const entries = (directBucket.length > 0 ? directBucket : fallbackEntries).slice(0, Math.max(1, Number(limit) || 1));
+    if (entries.length === 0) {
+      target.innerHTML = `<p class="muted">Aucune synergie directe calculee pour ${escapeHtml(seedName)}.</p>`;
+      return;
+    }
+
+    target.innerHTML = "";
+    const fragment = document.createDocumentFragment();
+    entries.forEach((entry, index) => {
+      const card = resolveStrategySynergyCard(entry, lookup);
+      fragment.appendChild(
+        createStrategyCardElement(
+          card,
+          formatSynergyEntryMeta(entry, index + 1),
+          {
+            metaTitle: formatSynergyEntryTitle(entry),
+            badge: String(entry?.bucket_label || "").trim() || "Direct"
+          }
+        )
+      );
+    });
+    target.appendChild(fragment);
+  }
+
+  function appendBackendBucketSection(container, bucket, cards, options = {}) {
+    const results = Array.isArray(bucket?.results) ? bucket.results : [];
+    if (results.length === 0) {
+      return;
+    }
+
+    const lookup = buildStrategySynergyLookup(cards);
+    const article = document.createElement("article");
+    article.className = "strategy-group is-heuristic";
+
+    const title = document.createElement("p");
+    title.className = "strategy-group-title";
+    title.textContent = `${String(bucket?.label || bucket?.key || "Bucket").trim()} | ${results.length}`;
+    article.appendChild(title);
+
+    const detail = document.createElement("p");
+    detail.className = "strategy-group-line";
+    detail.textContent = String(options.description || "Classement backend par structure mecanique.").trim();
+    article.appendChild(detail);
+
+    const grid = document.createElement("div");
+    grid.className = "strategy-card-grid";
+    results.slice(0, Math.max(1, Number(options.limit) || 6)).forEach((entry) => {
+      const card = resolveStrategySynergyCard(entry, lookup);
+      grid.appendChild(
+        createStrategyCardElement(
+          card,
+          formatSynergyEntryMeta(entry),
+          {
+            compact: true,
+            metaTitle: formatSynergyEntryTitle(entry),
+            badge: String(entry?.bucket_label || bucket?.label || "").trim()
+          }
+        )
+      );
+    });
+
+    article.appendChild(grid);
+    container.appendChild(article);
+  }
+
+  function appendBackendPackageSection(container, packages, cards, limit = 6) {
+    const results = Array.isArray(packages) ? packages : [];
+    if (results.length === 0) {
+      return;
+    }
+
+    const lookup = buildStrategySynergyLookup(cards);
+    const article = document.createElement("article");
+    article.className = "strategy-group is-heuristic";
+
+    const title = document.createElement("p");
+    title.className = "strategy-group-title";
+    title.textContent = `Top packages / groups | ${results.length}`;
+    article.appendChild(title);
+
+    results.slice(0, Math.max(1, Number(limit) || 6)).forEach((pkg, index) => {
+      const block = document.createElement("div");
+      block.className = "strategy-group-section is-core";
+
+      const line = document.createElement("p");
+      line.className = "strategy-group-line";
+      line.textContent = `#${index + 1} | score ${Math.round(Number(pkg?.score || 0))} | ${String(pkg?.archetype || "package").trim()}`;
+      block.appendChild(line);
+
+      const reason = document.createElement("p");
+      reason.className = "strategy-group-line";
+      reason.textContent = Array.isArray(pkg?.reasons) && pkg.reasons.length > 0
+        ? String(pkg.reasons[0]).trim()
+        : "Package mecanique detecte.";
+      block.appendChild(reason);
+
+      const grid = document.createElement("div");
+      grid.className = "strategy-card-grid";
+      [pkg?.cards?.setup, pkg?.cards?.converter, pkg?.cards?.payoff].filter(Boolean).forEach((entry) => {
+        const card = resolveStrategySynergyCard(entry, lookup);
+        grid.appendChild(
+          createStrategyCardElement(card, String(entry?.name || "").trim(), {
+            compact: true,
+            badge: String(pkg?.archetype || "package").trim()
+          })
+        );
+      });
+
+      block.appendChild(grid);
+      article.appendChild(block);
+    });
+
+    container.appendChild(article);
+  }
+
+  function renderBackendSynergyBuckets(result, seedName, cards, limit = 6) {
+    const target = nodes.strategy.groupList;
+    if (!target) {
+      return;
+    }
+
+    const buckets = result?.buckets && typeof result.buckets === "object" ? result.buckets : {};
+    target.innerHTML = "";
+
+    const fragment = document.createDocumentFragment();
+    appendBackendBucketSection(fragment, buckets.indirect_engines, cards, {
+      limit,
+      description: "Engines indirects repetables, convertisseurs ou bridges"
+    });
+    appendBackendBucketSection(fragment, buckets.reciprocal_value_cards, cards, {
+      limit,
+      description: "Cartes a valeur reciproque plutot que payoff unilateral"
+    });
+    appendBackendBucketSection(fragment, buckets.anti_synergy_warnings, cards, {
+      limit,
+      description: "Avertissements de conflits mecaniques et de plans"
+    });
+    appendBackendPackageSection(fragment, result?.packages, cards, limit);
+
+    if (!fragment.childNodes.length) {
+      target.innerHTML = `<p class="muted">Aucun groupe genere pour ${escapeHtml(seedName)}.</p>`;
+      return;
+    }
+
+    target.appendChild(fragment);
   }
 
   function resetStrategyKnownCardsCache() {

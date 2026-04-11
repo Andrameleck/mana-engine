@@ -279,6 +279,15 @@
           </div>
 
           <div id="calculdev-status" class="muted">En attente de calcul.</div>
+          <div id="calculdev-progress-wrap" class="strategy-progress is-hidden" aria-live="polite">
+            <div class="strategy-progress-head">
+              <span id="calculdev-progress-text">Preparation du calcul...</span>
+              <span id="calculdev-progress-value">0%</span>
+            </div>
+            <div class="strategy-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-labelledby="calculdev-progress-text">
+              <span id="calculdev-progress-bar" class="strategy-progress-bar" style="width:0%"></span>
+            </div>
+          </div>
 
           <div class="strategy-results-grid">
             <section class="strategy-result-block">

@@ -75,6 +75,8 @@ Build output is written to `inst/www/`, which is what `/ui` and `/ui/static/<fil
 - `GET /reference/mtgjson/cards?q=<optional>&set_code=<optional>&collector_number=<optional>&uuid=<optional>&limit=<1-200>`
 - `POST /cards/normalize` (symbolic normalization for one card or a list of cards)
 - `POST /synergy/find` (mechanical synergy search from atomic gameplay events)
+- `POST /synergy/jobs/start` (start a background synergy computation with progress)
+- `GET /synergy/jobs/<job_id>` (poll background synergy status/result)
 - `GET /cards/<card_id>?include_normalized=true|false`
 - `GET /events` (atomic event vocabulary)
 - `GET /mechanics` (mechanic decomposition rules)
@@ -92,6 +94,11 @@ raw Oracle text similarity alone.
   expand into explicit event primitives
 - Scoring model: combines event matching, shared plan tags, setup/finisher
   overlap, color/tempo/format fit, and anti-synergy penalties
+- Performance pipeline: full-catalog lightweight scan, top-K deep scoring,
+  then package detection on a smaller top-N subset
+- Precompute/cache layer: normalized card profiles are cached so the engine
+  preserves exhaustive catalog coverage without rebuilding the entire catalog
+  on every request
 - Explainability: each match returns reasons and relation classes
 
 Implementation details are documented in

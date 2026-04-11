@@ -248,7 +248,11 @@ import {
       loading: false,
       error: "",
       payload: null,
-      runToken: 0
+      runToken: 0,
+      progressValue: 0,
+      progressLabel: "",
+      progressTimer: null,
+      progressStartedAt: 0
     }
   };
 
@@ -353,6 +357,10 @@ import {
       status: document.getElementById("calculdev-status"),
       directList: document.getElementById("calculdev-direct-list"),
       groupList: document.getElementById("calculdev-group-list"),
+      progressWrap: document.getElementById("calculdev-progress-wrap"),
+      progressText: document.getElementById("calculdev-progress-text"),
+      progressValue: document.getElementById("calculdev-progress-value"),
+      progressBar: document.getElementById("calculdev-progress-bar"),
       previewTitle: document.getElementById("calculdev-card-preview-title"),
       previewText: document.getElementById("calculdev-card-preview-text"),
       previewImage: document.getElementById("calculdev-card-preview-image"),
@@ -760,6 +768,7 @@ import {
         : "Sandbox mode: direct mechanical scoring via /synergy/find.";
       calculNodes.sourceMeta.style.display = "block";
     }
+    resetCalculDevProgress();
     resetCalculDevPreview();
     calculNodes.directList.innerHTML = `<p class="muted">${escapeHtml(currentUiLanguage() === "fr" ? "Lance un calcul pour voir les synergies directes." : "Run a computation to see direct synergies.")}</p>`;
     calculNodes.groupList.innerHTML = `<p class="muted">${escapeHtml(currentUiLanguage() === "fr" ? "Lance un calcul pour afficher les details techniques." : "Run a computation to show technical details.")}</p>`;
@@ -795,6 +804,165 @@ import {
     calculNodes.runButton.addEventListener("click", () => {
       runCalculDevComputation();
     });
+  }
+
+  function setCalculDevProgress(percent, label = "", visible = true) {
+    const calculNodes = nodes.calculdev;
+    const safePercent = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+    state.calculdev.progressValue = safePercent;
+    state.calculdev.progressLabel = String(label || "");
+
+    if (calculNodes.progressWrap) {
+      calculNodes.progressWrap.classList.toggle("is-hidden", visible !== true);
+    }
+    if (calculNodes.progressText) {
+      calculNodes.progressText.textContent = state.calculdev.progressLabel || (currentUiLanguage() === "fr" ? "Calcul en cours..." : "Computation in progress...");
+    }
+    if (calculNodes.progressValue) {
+      calculNodes.progressValue.textContent = `${safePercent}%`;
+    }
+    if (calculNodes.progressBar) {
+      calculNodes.progressBar.style.width = `${safePercent}%`;
+      const track = calculNodes.progressBar.parentElement;
+      if (track) {
+        track.setAttribute("aria-valuenow", String(safePercent));
+      }
+    }
+  }
+
+  function resetCalculDevProgress() {
+    if (state.calculdev.progressTimer) {
+      window.clearInterval(state.calculdev.progressTimer);
+      state.calculdev.progressTimer = null;
+    }
+    state.calculdev.progressStartedAt = 0;
+    setCalculDevProgress(0, currentUiLanguage() === "fr" ? "En attente du calcul..." : "Waiting for computation...", false);
+  }
+
+  function startCalculDevProgress() {
+    resetCalculDevProgress();
+    state.calculdev.progressStartedAt = Date.now();
+    setCalculDevProgress(
+      1,
+      currentUiLanguage() === "fr"
+        ? "Job cree, attente du serveur..."
+        : "Job created, waiting for server...",
+      true
+    );
+  }
+
+  function finishCalculDevProgress(payload, success = true, statusPayload = null) {
+    const timings = payload?.timings && typeof payload.timings === "object" ? payload.timings : {};
+    const totalMs = Number(timings.total_ms || timings.totalMs || 0);
+    const totalSeconds = totalMs > 0 ? (totalMs / 1000).toFixed(1) : "";
+
+    if (success) {
+      const label = currentUiLanguage() === "fr"
+        ? (totalSeconds ? `Calcul termine en ${totalSeconds}s` : "Calcul termine")
+        : (totalSeconds ? `Completed in ${totalSeconds}s` : "Completed");
+      setCalculDevProgress(100, label, true);
+      return;
+    }
+
+    const backendPercent = Number(statusPayload?.progress?.percent || state.calculdev.progressValue || 0);
+    const backendStage = String(statusPayload?.progress?.stage || "").trim();
+    const fallbackLabel = currentUiLanguage() === "fr"
+      ? "Calcul interrompu"
+      : "Computation stopped";
+    const detailLabel = totalSeconds
+      ? `${fallbackLabel} (${totalSeconds}s)`
+      : (backendStage || fallbackLabel);
+    setCalculDevProgress(Math.max(0, Math.min(99, backendPercent)), detailLabel, true);
+  }
+
+  function sleepMs(durationMs = 0) {
+    const safeDuration = Math.max(0, Number(durationMs) || 0);
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, safeDuration);
+    });
+  }
+
+  async function pollCalculDevJob(jobId, runToken, cardName = "") {
+    const calculNodes = nodes.calculdev;
+    if (!jobId) {
+      throw new Error(currentUiLanguage() === "fr" ? "Job backend introuvable." : "Missing backend job.");
+    }
+
+    while (runToken === state.calculdev.runToken) {
+      const statusPayload = typeof window.fetchSynergyJobStatus === "function"
+        ? await window.fetchSynergyJobStatus(jobId)
+        : { ok: false, error: "Missing fetchSynergyJobStatus helper." };
+
+      if (runToken !== state.calculdev.runToken) {
+        return null;
+      }
+
+      if (!statusPayload || statusPayload.ok !== true) {
+        throw new Error(String(statusPayload?.error || "Unable to fetch synergy job status."));
+      }
+
+      const progress = statusPayload.progress && typeof statusPayload.progress === "object"
+        ? statusPayload.progress
+        : {};
+      const percent = Number(progress.percent || 0);
+      const stage = String(progress.stage || "").trim();
+      if (stage || Number.isFinite(percent)) {
+        setCalculDevProgress(percent, stage || (currentUiLanguage() === "fr" ? "Calcul en cours..." : "Computation in progress..."), true);
+        if (calculNodes.status) {
+          calculNodes.status.textContent = currentUiLanguage() === "fr"
+            ? `${stage || "Calcul en cours..."} (${Math.round(Math.max(0, Math.min(100, percent || 0)))}%)`
+            : `${stage || "Computation in progress..."} (${Math.round(Math.max(0, Math.min(100, percent || 0)))}%)`;
+        }
+      }
+
+      const jobStatus = String(statusPayload.status || "").toLowerCase();
+      if (jobStatus === "completed") {
+        return statusPayload.result || null;
+      }
+      if (jobStatus === "error") {
+        finishCalculDevProgress(null, false, statusPayload);
+        throw new Error(String(statusPayload.error || (currentUiLanguage() === "fr" ? "Le job backend a echoue." : "Background job failed.")));
+      }
+
+      await sleepMs(700);
+    }
+
+    return null;
+  }
+
+  function formatCalculDevStatus(count, cardName, payload = null) {
+    const safeCount = Number(count || 0);
+    const timings = payload?.timings && typeof payload.timings === "object" ? payload.timings : {};
+    const pipeline = payload?.pipeline && typeof payload.pipeline === "object" ? payload.pipeline : {};
+    const totalMs = Number(timings.total_ms || 0);
+    const totalSeconds = totalMs > 0 ? (totalMs / 1000).toFixed(1) : "";
+
+    const parts = currentUiLanguage() === "fr"
+      ? [`${safeCount} resultat(s) pour "${cardName}".`]
+      : [`${safeCount} result(s) for "${cardName}".`];
+
+    if (pipeline.catalog_size) {
+      parts.push(currentUiLanguage() === "fr"
+        ? `catalogue scanne: ${pipeline.catalog_size}`
+        : `catalog scanned: ${pipeline.catalog_size}`);
+    }
+    if (pipeline.deep_score_count) {
+      parts.push(currentUiLanguage() === "fr"
+        ? `scoring profond: ${pipeline.deep_score_count}`
+        : `deep scoring: ${pipeline.deep_score_count}`);
+    }
+    if (pipeline.package_candidate_count) {
+      parts.push(currentUiLanguage() === "fr"
+        ? `packages: ${pipeline.package_candidate_count}`
+        : `packages: ${pipeline.package_candidate_count}`);
+    }
+    if (totalSeconds) {
+      parts.push(currentUiLanguage() === "fr"
+        ? `temps: ${totalSeconds}s`
+        : `time: ${totalSeconds}s`);
+    }
+
+    return parts.join(" | ");
   }
 
   async function runCalculDevComputation() {
@@ -837,9 +1005,13 @@ import {
     const runToken = ++state.calculdev.runToken;
     state.calculdev.loading = true;
     state.calculdev.error = "";
+    if (calculNodes.runButton) {
+      calculNodes.runButton.disabled = true;
+    }
     calculNodes.status.textContent = currentUiLanguage() === "fr"
       ? `Calcul mecanique en cours pour "${cardName}"...`
       : `Mechanical scoring in progress for "${cardName}"...`;
+    startCalculDevProgress();
     calculNodes.directList.innerHTML = `<p class="muted">${currentUiLanguage() === "fr" ? "Chargement..." : "Loading..."}</p>`;
     calculNodes.groupList.innerHTML = `<p class="muted">${currentUiLanguage() === "fr" ? "Chargement..." : "Loading..."}</p>`;
     resetCalculDevPreview();
@@ -854,20 +1026,15 @@ import {
     }
 
     try {
-      const response = await fetch("/synergy/find", {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
-      const out = await response.json().catch(() => ({}));
+      const jobStart = typeof window.startSynergyJob === "function"
+        ? await window.startSynergyJob(payload)
+        : { ok: false, error: "Missing startSynergyJob helper." };
       if (runToken !== state.calculdev.runToken) {
         return;
       }
-      if (!response.ok || out?.ok !== true) {
-        state.calculdev.error = String(out?.error || `HTTP ${response.status}`);
+      if (!jobStart || jobStart.ok !== true || !jobStart.job_id) {
+        state.calculdev.error = String(jobStart?.error || (currentUiLanguage() === "fr" ? "Impossible de lancer le job backend." : "Unable to start backend job."));
+        finishCalculDevProgress(null, false, jobStart);
         calculNodes.status.textContent = currentUiLanguage() === "fr"
           ? `Erreur: ${state.calculdev.error}`
           : `Error: ${state.calculdev.error}`;
@@ -876,18 +1043,29 @@ import {
         return;
       }
 
+      setCalculDevProgress(
+        Number(jobStart?.progress?.percent || 2),
+        String(jobStart?.progress?.stage || (currentUiLanguage() === "fr" ? "Job backend lance..." : "Background job started...")),
+        true
+      );
+
+      const out = await pollCalculDevJob(jobStart.job_id, runToken, cardName);
+      if (runToken !== state.calculdev.runToken || !out) {
+        return;
+      }
+
       state.calculdev.payload = out;
       state.calculdev.error = "";
       renderCalculDevResults(out.best_matches, cardName);
       const count = Array.isArray(out.best_matches) ? out.best_matches.length : 0;
-      calculNodes.status.textContent = currentUiLanguage() === "fr"
-        ? `${count} resultat(s) pour "${cardName}".`
-        : `${count} result(s) for "${cardName}".`;
+      finishCalculDevProgress(out, true);
+      calculNodes.status.textContent = formatCalculDevStatus(count, cardName, out);
     } catch (error) {
       if (runToken !== state.calculdev.runToken) {
         return;
       }
       state.calculdev.error = String(error?.message || error || "unexpected error");
+      finishCalculDevProgress(null, false);
       calculNodes.status.textContent = currentUiLanguage() === "fr"
         ? `Erreur: ${state.calculdev.error}`
         : `Error: ${state.calculdev.error}`;
@@ -896,6 +1074,9 @@ import {
     } finally {
       if (runToken === state.calculdev.runToken) {
         state.calculdev.loading = false;
+        if (calculNodes.runButton) {
+          calculNodes.runButton.disabled = false;
+        }
       }
     }
   }
