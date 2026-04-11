@@ -411,8 +411,8 @@ function() {
 #* UI entrypoint
 #* @serializer contentType list(type="text/html; charset=utf-8")
 #* @get /ui
-function() {
-  query_call("query_ui_index_html")
+function(res) {
+  query_call("query_ui_index_html", res = res)
 }
 
 #* Static assets for Web UI

@@ -259,6 +259,8 @@ async function fetchSynergyFind(payload = {}) {
     fallback: {
       best_matches: [],
       buckets: {},
+      synergy_groups: [],
+      package_lines: [],
       packages: []
     }
   });

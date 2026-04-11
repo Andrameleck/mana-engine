@@ -86,21 +86,55 @@ query_synergy_new_job_id <- function() {
 }
 
 query_synergy_job_runner_path <- function() {
-  installed <- tryCatch(system.file("jobs", "run_synergy_job.R", package = "mtgcodex.api"), error = function(e) "")
-  if (nzchar(installed) && file.exists(installed)) {
-    return(installed)
-  }
-
   candidates <- c(
     file.path(getwd(), "inst", "jobs", "run_synergy_job.R"),
     file.path(getwd(), "..", "inst", "jobs", "run_synergy_job.R")
   )
   existing <- candidates[file.exists(candidates)]
   if (length(existing) > 0L) {
-    return(existing[[1]])
+    return(normalizePath(existing[[1]], winslash = "/", mustWork = TRUE))
+  }
+
+  installed <- tryCatch(system.file("jobs", "run_synergy_job.R", package = "mtgcodex.api"), error = function(e) "")
+  if (nzchar(installed) && file.exists(installed)) {
+    return(normalizePath(installed, winslash = "/", mustWork = TRUE))
   }
 
   ""
+}
+
+query_synergy_detect_repo_root <- function(hint_path = "", fallback_dir = "") {
+  hint <- trimws(as.character(hint_path))
+  fallback <- trimws(as.character(fallback_dir))
+  if (!nzchar(fallback)) {
+    fallback <- getwd()
+  }
+
+  candidates <- c(
+    fallback,
+    getwd(),
+    file.path(getwd(), "..")
+  )
+
+  if (nzchar(hint)) {
+    hint_root <- normalizePath(hint, winslash = "/", mustWork = FALSE)
+    candidates <- c(
+      dirname(dirname(dirname(hint_root))),
+      dirname(dirname(hint_root)),
+      dirname(hint_root),
+      candidates
+    )
+  }
+
+  candidates <- unique(Filter(function(path) nzchar(trimws(as.character(path))), candidates))
+  for (candidate in candidates) {
+    root <- normalizePath(candidate, winslash = "/", mustWork = FALSE)
+    if (dir.exists(file.path(root, "R")) && file.exists(file.path(root, "inst", "jobs", "run_synergy_job.R"))) {
+      return(root)
+    }
+  }
+
+  normalizePath(fallback, winslash = "/", mustWork = FALSE)
 }
 
 query_synergy_write_job_json <- function(path, payload) {
@@ -165,7 +199,7 @@ query_synergy_start_job <- function(req = NULL) {
 
   job_id <- query_synergy_new_job_id()
   paths <- query_synergy_job_paths(job_id)
-  repo_root <- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
+  repo_root <- query_synergy_detect_repo_root(runner_path, fallback_dir = getwd())
 
   query_synergy_write_job_json(paths$payload_file, data)
   query_synergy_write_job_json(
@@ -226,6 +260,13 @@ query_synergy_get_job_status <- function(job_id = "") {
     result_payload <- query_synergy_read_job_json(paths$result_file)
     if (is.list(result_payload)) {
       status_payload$result <- result_payload
+    } else {
+      status_payload$status <- "running"
+      if (!is.list(status_payload$progress)) {
+        status_payload$progress <- list()
+      }
+      status_payload$progress$percent <- 99L
+      status_payload$progress$stage <- "Finalizing result"
     }
   }
 
@@ -361,8 +402,18 @@ query_synergy_find_in_catalog <- function(payload = list(),
 
   format_name <- tolower(query_api_scalar(payload$format, default = "commander"))
   max_results <- query_synergy_as_int(payload$max_results, default = 50L, min_value = 1L, max_value = 200L)
-  top_k <- query_synergy_as_int(payload$top_k, default = max(200L, min(500L, max_results * 6L)), min_value = 1L, max_value = 2000L)
+  top_k <- query_synergy_as_int(payload$top_k, default = max(64L, min(120L, max_results * 4L)), min_value = 1L, max_value = 2000L)
+  cheap_scan_cap <- query_synergy_as_int(payload$cheap_scan_cap, default = 0L, min_value = 0L, max_value = 50000L)
   package_top_n <- query_synergy_as_int(payload$package_top_n, default = min(12L, top_k), min_value = 2L, max_value = 200L)
+  max_groups <- query_synergy_as_int(payload$max_groups, default = min(10L, max_results), min_value = 1L, max_value = 50L)
+  max_group_size <- query_synergy_as_int(payload$max_group_size, default = 4L, min_value = 3L, max_value = 5L)
+  max_group_paths <- query_synergy_as_int(payload$max_group_paths, default = max(96L, package_top_n * max_group_size * 4L), min_value = 10L, max_value = 500L)
+  group_branching_cap <- query_synergy_as_int(
+    payload$group_branching_cap,
+    default = max(4L, min(8L, max_group_size + 1L)),
+    min_value = 2L,
+    max_value = 20L
+  )
   color_filter <- query_synergy_parse_color_identity(payload$color_identity)
 
   registry <- query_synergy_event_registry_default()
@@ -382,7 +433,12 @@ query_synergy_find_in_catalog <- function(payload = list(),
   query_synergy_emit_progress(progress_callback, 32, "Prepared normalized target")
 
   stage_start <- proc.time()[["elapsed"]]
-  candidate_indexes <- Filter(function(index) {
+  indexed_candidate_indexes <- query_synergy_collect_indexed_candidate_indexes(
+    target = target_profile,
+    precomputed = precomputed,
+    top_k = top_k
+  )
+  eligible_candidate_indexes <- Filter(function(index) {
     profile <- precomputed$profiles[[index]]
     candidate_id <- query_api_scalar(profile$id, default = "")
     if (!nzchar(candidate_id) || identical(candidate_id, target_normalized$id)) {
@@ -396,8 +452,23 @@ query_synergy_find_in_catalog <- function(payload = list(),
     candidate_colors <- query_synergy_to_vector(profile$color_identity)
     length(intersect(candidate_colors, color_filter)) > 0L
   }, seq_along(precomputed$profiles))
+  indexed_candidate_count <- length(intersect(indexed_candidate_indexes, eligible_candidate_indexes))
+  candidate_filter_count <- length(eligible_candidate_indexes)
+  candidate_indexes <- eligible_candidate_indexes
+  if (cheap_scan_cap > 0L && length(candidate_indexes) > cheap_scan_cap) {
+    prioritized_indexes <- c(
+      intersect(indexed_candidate_indexes, candidate_indexes),
+      setdiff(candidate_indexes, indexed_candidate_indexes)
+    )
+    candidate_indexes <- prioritized_indexes[seq_len(cheap_scan_cap)]
+  }
+  cheap_scan_cap_used <- if (cheap_scan_cap > 0L) min(cheap_scan_cap, candidate_filter_count) else candidate_filter_count
+  full_catalog_light_scan <- cheap_scan_cap <= 0L || candidate_filter_count <= cheap_scan_cap
   timings$candidate_filter_ms <- query_synergy_elapsed_ms(stage_start)
-  query_synergy_emit_progress(progress_callback, 36, "Filtered candidate pool", list(candidates = length(candidate_indexes)))
+  query_synergy_emit_progress(progress_callback, 36, "Filtered candidate pool", list(
+    candidates = candidate_filter_count,
+    cheap_scan_candidates = length(candidate_indexes)
+  ))
 
   stage_start <- proc.time()[["elapsed"]]
   light_scores <- vector("list", length(candidate_indexes))
@@ -474,15 +545,28 @@ query_synergy_find_in_catalog <- function(payload = list(),
       color_identity = color_filter,
       best_matches = list(),
       buckets = ranked$buckets,
+      synergy_groups = list(),
+      group_count = 0L,
+      package_lines = list(),
+      package_line_count = 0L,
       packages = list(),
       package_count = 0L,
       pipeline = list(
         catalog_size = length(precomputed$profiles),
-        candidate_filter_count = length(candidate_indexes),
+        candidate_filter_count = candidate_filter_count,
         cheap_scan_count = length(candidate_indexes),
         deep_score_count = length(scored_all),
         package_candidate_count = 0L,
+        group_graph_node_count = 0L,
+        group_graph_edge_count = 0L,
+        group_path_count = 0L,
+        group_graph_pair_count = 0L,
+        indexed_candidate_count = indexed_candidate_count,
+        cheap_scan_cap_used = cheap_scan_cap_used,
+        full_catalog_light_scan = isTRUE(full_catalog_light_scan),
         top_k_used = min(top_k, length(candidate_indexes)),
+        group_branching_cap_used = group_branching_cap,
+        max_group_size_used = max_group_size,
         package_top_n_used = 0L
       ),
       timings = c(timings, list(total_ms = round(sum(unlist(timings), na.rm = TRUE), 1)))
@@ -514,15 +598,31 @@ query_synergy_find_in_catalog <- function(payload = list(),
 
   package_pool <- lapply(utils::head(scored_positive, package_top_n), function(entry) entry$card)
   stage_start <- proc.time()[["elapsed"]]
-  packages <- query_synergy_detect_packages_for_target(
-    target = target_normalized,
+  groups_out <- query_synergy_detect_groups_for_seed(
+    seed = target_normalized,
     candidates = package_pool,
     format_name = format_name,
-    max_packages = min(10L, max_results),
+    max_groups = max_groups,
+    max_group_size = max_group_size,
+    max_paths = max_group_paths,
+    max_branching = group_branching_cap,
     progress_callback = progress_callback,
     progress_range = c(88, 97)
   )
   timings$package_detection_ms <- query_synergy_elapsed_ms(stage_start)
+  packages <- query_synergy_to_list(groups_out$groups)
+  synergy_groups <- query_synergy_to_list(groups_out$groups)
+  package_lines <- query_synergy_to_list(groups_out$package_lines)
+  ranked$buckets$synergy_groups <- query_synergy_build_group_bucket(
+    synergy_groups,
+    "synergy_groups",
+    limit = min(max_groups, max_results)
+  )
+  ranked$buckets$package_lines <- query_synergy_build_group_bucket(
+    package_lines,
+    "package_lines",
+    limit = min(max_groups, max_results)
+  )
   ranked$buckets$packages <- list(
     key = "packages",
     label = query_synergy_bucket_labels()$packages,
@@ -533,11 +633,20 @@ query_synergy_find_in_catalog <- function(payload = list(),
   stage_start <- proc.time()[["elapsed"]]
   response_pipeline <- list(
     catalog_size = length(precomputed$profiles),
-    candidate_filter_count = length(candidate_indexes),
+    candidate_filter_count = candidate_filter_count,
     cheap_scan_count = length(candidate_indexes),
     deep_score_count = length(scored_all),
     package_candidate_count = length(package_pool),
+    group_graph_node_count = query_synergy_as_int(groups_out$meta$node_count, default = 0L, min_value = 0L, max_value = 1000L),
+    group_graph_edge_count = query_synergy_as_int(groups_out$meta$edge_count, default = 0L, min_value = 0L, max_value = 10000L),
+    group_path_count = query_synergy_as_int(groups_out$meta$path_count, default = 0L, min_value = 0L, max_value = 10000L),
+    group_graph_pair_count = query_synergy_as_int(groups_out$meta$pair_count, default = 0L, min_value = 0L, max_value = 100000L),
+    indexed_candidate_count = indexed_candidate_count,
+    cheap_scan_cap_used = cheap_scan_cap_used,
+    full_catalog_light_scan = isTRUE(full_catalog_light_scan),
     top_k_used = min(top_k, length(candidate_indexes)),
+    group_branching_cap_used = query_synergy_as_int(groups_out$meta$branching_cap, default = group_branching_cap, min_value = 1L, max_value = 20L),
+    max_group_size_used = max_group_size,
     package_top_n_used = length(package_pool)
   )
   timings$response_assembly_ms <- query_synergy_elapsed_ms(stage_start)
@@ -559,6 +668,10 @@ query_synergy_find_in_catalog <- function(payload = list(),
     best_matches = ranked$flat,
     legacy_best_matches = matches,
     buckets = ranked$buckets,
+    synergy_groups = synergy_groups,
+    group_count = length(synergy_groups),
+    package_lines = package_lines,
+    package_line_count = length(package_lines),
     packages = packages,
     package_count = length(packages),
     pipeline = response_pipeline,
@@ -566,16 +679,250 @@ query_synergy_find_in_catalog <- function(payload = list(),
   )
 }
 
-query_synergy_detect_packages_for_target <- function(target,
-                                                     candidates,
-                                                     format_name = "commander",
-                                                     max_packages = 10L,
-                                                     min_edge_score = 35L,
-                                                     progress_callback = NULL,
-                                                     progress_range = c(88, 97)) {
-  cards <- query_synergy_to_list(candidates)
-  if (!is.list(target) || length(cards) < 2L) {
+query_synergy_group_edge_key <- function(from_id, to_id) {
+  sprintf(
+    "%s=>%s",
+    query_api_scalar(from_id, default = ""),
+    query_api_scalar(to_id, default = "")
+  )
+}
+
+query_synergy_group_card_summary <- function(card) {
+  list(
+    id = query_api_scalar(card$id, default = ""),
+    name = query_api_scalar(card$name, default = "")
+  )
+}
+
+query_synergy_unique_cards_by_id <- function(cards) {
+  items <- query_synergy_to_list(cards)
+  if (length(items) == 0L) {
     return(list())
+  }
+
+  seen <- new.env(parent = emptyenv(), hash = TRUE)
+  out <- list()
+  for (card in items) {
+    key <- query_api_scalar(card$id, default = query_api_scalar(card$name, default = ""))
+    if (!nzchar(key) || exists(key, envir = seen, inherits = FALSE)) {
+      next
+    }
+    assign(key, TRUE, envir = seen)
+    out[[length(out) + 1L]] <- card
+  }
+
+  out
+}
+
+query_synergy_resources_compatible <- function(left, right) {
+  left_value <- query_api_scalar(left, default = "")
+  right_value <- query_api_scalar(right, default = "")
+  if (!nzchar(left_value) || !nzchar(right_value) || identical(left_value, right_value)) {
+    return(TRUE)
+  }
+
+  pair_key <- paste(sort(c(left_value, right_value)), collapse = "|")
+  pair_key %in% c(
+    "card|permanent",
+    "card|spell",
+    "creature|permanent",
+    "creature|token",
+    "permanent|token"
+  )
+}
+
+query_synergy_group_transition_key <- function(transition) {
+  paste(
+    query_api_scalar(transition$kind, default = ""),
+    query_api_scalar(transition$via, default = ""),
+    query_api_scalar(transition$resource, default = ""),
+    query_api_scalar(transition$from, default = ""),
+    query_api_scalar(transition$to, default = ""),
+    query_api_scalar(transition$source_event, default = query_api_scalar(transition$event, default = "")),
+    query_api_scalar(transition$target_event, default = query_api_scalar(transition$event, default = "")),
+    sep = "|"
+  )
+}
+
+query_synergy_collect_resource_transitions <- function(source,
+                                                       target,
+                                                       registry = query_synergy_event_registry_default()) {
+  source_card <- if (is.list(source)) source else list()
+  target_card <- if (is.list(target)) target else list()
+  source_moves <- query_synergy_to_list(source_card$moves)
+  if (length(source_moves) == 0L) {
+    source_moves <- query_synergy_build_move_records(source_card$produced_events, registry)
+  }
+  target_moves <- query_synergy_build_move_records(target_card$consumed_events, registry)
+
+  out <- list()
+  shared_events <- intersect(
+    query_synergy_to_vector(source_card$produced_events),
+    query_synergy_to_vector(target_card$consumed_events)
+  )
+  for (event_id in shared_events) {
+    event_def <- registry$events[[event_id]]
+    zones <- if (is.list(event_def$zones)) event_def$zones else list()
+    out[[length(out) + 1L]] <- list(
+      kind = "event_bridge",
+      via = event_id,
+      event = event_id,
+      resource = query_api_scalar(event_def$resource, default = ""),
+      from = query_api_scalar(zones$from, default = ""),
+      to = query_api_scalar(zones$to, default = "")
+    )
+  }
+
+  for (source_move in source_moves) {
+    source_to <- query_api_scalar(source_move$to, default = "")
+    if (!nzchar(source_to)) {
+      next
+    }
+
+    for (target_move in target_moves) {
+      target_from <- query_api_scalar(target_move$from, default = "")
+      if (!nzchar(target_from) || !identical(source_to, target_from)) {
+        next
+      }
+      if (!query_synergy_resources_compatible(source_move$resource, target_move$resource)) {
+        next
+      }
+
+      out[[length(out) + 1L]] <- list(
+        kind = "zone_chain",
+        via = source_to,
+        resource = query_api_scalar(target_move$resource, default = query_api_scalar(source_move$resource, default = "")),
+        from = query_api_scalar(source_move$from, default = ""),
+        to = query_api_scalar(target_move$to, default = ""),
+        source_event = query_api_scalar(source_move$event, default = ""),
+        target_event = query_api_scalar(target_move$event, default = "")
+      )
+    }
+  }
+
+  if (length(out) == 0L) {
+    return(list())
+  }
+
+  seen <- new.env(parent = emptyenv(), hash = TRUE)
+  deduped <- list()
+  for (transition in out) {
+    key <- query_synergy_group_transition_key(transition)
+    if (!nzchar(key) || exists(key, envir = seen, inherits = FALSE)) {
+      next
+    }
+    assign(key, TRUE, envir = seen)
+    deduped[[length(deduped) + 1L]] <- transition
+  }
+
+  deduped
+}
+
+query_synergy_build_group_edge <- function(source,
+                                           target,
+                                           format_name = "commander",
+                                           min_edge_score = 28L,
+                                           registry = query_synergy_event_registry_default()) {
+  pair <- query_synergy_score_pair(target, source, format_name)
+  source_moves <- query_synergy_to_list(source$moves)
+  if (length(source_moves) == 0L) {
+    source_moves <- query_synergy_build_move_records(source$produced_events, registry)
+  }
+  transitions <- query_synergy_collect_resource_transitions(source, target, registry = registry)
+  bridge_links <- query_synergy_indirect_resource_bridges(source, target)
+  terminal_bridge_links <- unique(vapply(Filter(function(move) {
+    identical(query_api_scalar(move$to, default = ""), "battlefield")
+  }, source_moves), function(move) {
+    query_api_scalar(move$event, default = "")
+  }, character(1)))
+  if (!any(query_synergy_to_vector(target$roles) %in% c("target", "finisher", "payoff"))) {
+    terminal_bridge_links <- character(0)
+  }
+  matched_events <- unique(c(
+    query_synergy_to_vector(pair$matched_events$enabler_to_payoff),
+    query_synergy_to_vector(pair$matched_events$indirect_engine),
+    query_synergy_to_vector(pair$matched_events$setup_finisher),
+    query_synergy_to_vector(pair$matched_events$package_links),
+    bridge_links,
+    terminal_bridge_links
+  ))
+  role_pairs <- query_synergy_to_vector(pair$matched_events$role_pairs)
+  continuity_score <- min(1,
+    0.45 * suppressWarnings(as.numeric(pair$score_norm)) +
+      0.2 * min(1, length(matched_events) / 3) +
+      0.2 * min(1, length(transitions) / 2) +
+    0.1 * min(1, length(role_pairs) / 2) +
+    0.025 * min(1, length(bridge_links) / 2) +
+    0.025 * min(1, length(terminal_bridge_links) / 2)
+  )
+  if (!is.finite(continuity_score) || is.na(continuity_score)) {
+    continuity_score <- 0
+  }
+
+  hard_conflict <- length(unique(c(
+    query_synergy_to_vector(pair$matched_events$replaces_payoff),
+    query_synergy_to_vector(pair$matched_events$prevents_payoff)
+  ))) > 0L
+  valid <- !hard_conflict && (
+    suppressWarnings(as.integer(pair$score)) >= query_synergy_as_int(min_edge_score, default = 28L, min_value = 1L, max_value = 100L) ||
+      continuity_score >= 0.34 ||
+        length(bridge_links) > 0L ||
+        (length(terminal_bridge_links) > 0L && suppressWarnings(as.numeric(pair$axis_scores$role_complementarity_score)) >= 0.1) ||
+      (length(transitions) > 0L && suppressWarnings(as.numeric(pair$axis_scores$role_complementarity_score)) >= 0.1) ||
+      length(matched_events) > 0L
+  )
+
+  list(
+    id = query_synergy_group_edge_key(source$id, target$id),
+    from = query_synergy_group_card_summary(source),
+    to = query_synergy_group_card_summary(target),
+    score = suppressWarnings(as.integer(pair$score)),
+    score_norm = suppressWarnings(as.numeric(pair$score_norm)),
+    continuity_score = round(continuity_score, 4),
+    axis_scores = pair$axis_scores,
+    bucket_scores = pair$bucket_scores,
+    primary_bucket = pair$primary_bucket,
+    matched_events = list(
+      direct = query_synergy_to_vector(pair$matched_events$enabler_to_payoff),
+      indirect = query_synergy_to_vector(pair$matched_events$indirect_engine),
+      setup_finisher = query_synergy_to_vector(pair$matched_events$setup_finisher),
+      package_links = query_synergy_to_vector(pair$matched_events$package_links),
+      resource_bridges = bridge_links,
+      terminal_bridges = terminal_bridge_links,
+      role_pairs = role_pairs
+    ),
+    matched_resource_transitions = transitions,
+    anti_conflicts = unique(c(
+      query_synergy_to_vector(pair$matched_events$replaces_payoff),
+      query_synergy_to_vector(pair$matched_events$prevents_payoff),
+      query_synergy_to_vector(pair$matched_events$anti_conflicts)
+    )),
+    anti_synergy_score = suppressWarnings(as.numeric(pair$axis_scores$anti_synergy_score)),
+    relation_classes = query_synergy_to_vector(pair$relation_classes),
+    reasons = unique(utils::head(query_synergy_to_vector(pair$reasons), 3L)),
+    directional = pair$directional,
+    valid = isTRUE(valid)
+  )
+}
+
+query_synergy_build_group_graph <- function(seed,
+                                            candidates,
+                                            format_name = "commander",
+                                            min_edge_score = 28L,
+                                            progress_callback = NULL,
+                                            progress_range = c(88, 97),
+                                            registry = query_synergy_event_registry_default()) {
+  cards <- query_synergy_unique_cards_by_id(c(list(seed), query_synergy_to_list(candidates)))
+  if (length(cards) < 3L) {
+    return(list(
+      seed_id = query_api_scalar(seed$id, default = ""),
+      nodes = list(),
+      adjacency = list(),
+      edge_lookup = list(),
+      node_count = length(cards),
+      edge_count = 0L,
+      pair_count = 0L
+    ))
   }
 
   progress_start <- suppressWarnings(as.numeric(progress_range[[1]]))
@@ -586,135 +933,786 @@ query_synergy_detect_packages_for_target <- function(target,
   if (!is.finite(progress_end) || is.na(progress_end)) {
     progress_end <- 97
   }
-  total_pairs <- length(cards) * max(0L, length(cards) - 1L)
-  pair_index <- 0L
-  progress_stride <- max(1L, ceiling(max(1L, total_pairs) / 25L))
 
-  out <- list()
+  total_pairs <- length(cards) * max(0L, length(cards) - 1L)
+  stride <- max(1L, ceiling(max(1L, total_pairs) / 25L))
+  pair_index <- 0L
+  edge_count <- 0L
+  node_lookup <- list()
+  adjacency <- list()
+  edge_lookup <- list()
+
+  for (card in cards) {
+    node_lookup[[query_api_scalar(card$id, default = query_api_scalar(card$name, default = ""))]] <- card
+  }
+
   for (i in seq_along(cards)) {
-    setup <- cards[[i]]
+    source <- cards[[i]]
+    source_id <- query_api_scalar(source$id, default = "")
+    if (!nzchar(source_id)) {
+      next
+    }
+
     for (j in seq_along(cards)) {
       if (i == j) {
         next
       }
+
       pair_index <- pair_index + 1L
-      if (is.function(progress_callback) && (pair_index == 1L || pair_index == total_pairs || (pair_index %% progress_stride) == 0L)) {
+      if (is.function(progress_callback) && (pair_index == 1L || pair_index == total_pairs || (pair_index %% stride) == 0L)) {
         percent <- progress_start + ((pair_index / max(1L, total_pairs)) * (progress_end - progress_start))
         query_synergy_emit_progress(progress_callback, percent, "Detecting package lines", list(processed = pair_index, total = total_pairs))
       }
-      converter <- cards[[j]]
 
-      setup_to_converter <- query_synergy_score_pair(converter, setup, format_name)
-      converter_to_target <- query_synergy_score_pair(target, converter, format_name)
-      setup_to_target <- query_synergy_score_pair(target, setup, format_name)
-
-      effective_edge_threshold <- if (any(query_synergy_to_vector(converter$roles) %in% c("converter", "bridge", "engine"))) {
-        max(15L, as.integer(min_edge_score) - 10L)
-      } else {
-        as.integer(min_edge_score)
-      }
-      chain <- query_synergy_match_indirect_chain(setup, converter, target)
-      if (!isTRUE(chain$valid)) {
+      edge <- query_synergy_build_group_edge(
+        source = source,
+        target = cards[[j]],
+        format_name = format_name,
+        min_edge_score = min_edge_score,
+        registry = registry
+      )
+      edge_lookup[[query_api_scalar(edge$id, default = "")]] <- edge
+      if (!isTRUE(edge$valid)) {
         next
       }
 
-      if (converter_to_target$score < effective_edge_threshold && (chain$score * 100) < effective_edge_threshold) {
-        next
-      }
-
-      package_events <- unique(c(
-        chain$step1_events,
-        chain$step1_bridges,
-        chain$step2_events,
-        chain$step2_family,
-        setup_to_target$matched_events$package_links
-      ))
-      archetype <- query_synergy_package_archetype(package_events)
-
-      score_norm <- min(1,
-        0.35 * chain$score +
-          0.2 * (setup_to_converter$axis_scores$package_score %||% 0) +
-          0.2 * (converter_to_target$axis_scores$indirect_engine_score %||% 0) +
-          0.15 * (converter_to_target$axis_scores$direct_event_score %||% 0) +
-          0.1 * (setup_to_target$axis_scores$shared_plan_score %||% 0)
-      )
-      score_value <- as.integer(round(score_norm * 100))
-
-      package_id <- sprintf("%s|%s|%s", setup$id, converter$id, target$id)
-      out[[length(out) + 1L]] <- list(
-        id = package_id,
-        archetype = archetype,
-        score = score_value,
-        cards = list(
-          setup = list(id = setup$id, name = setup$name),
-          converter = list(id = converter$id, name = converter$name),
-          payoff = list(id = target$id, name = target$name)
-        ),
-        matched_events = package_events,
-        reasons = unique(c(
-          sprintf("Setup to converter: %s", setup_to_converter$directional$candidate_to_target$reason),
-          sprintf("Converter to payoff: %s", converter_to_target$directional$candidate_to_target$reason),
-          sprintf("Package line: %s -> %s -> %s", setup$name, converter$name, target$name)
-        )),
-        edges = list(
-          setup_to_converter = list(
-            score = setup_to_converter$score,
-            events = setup_to_converter$matched_events$enabler_to_payoff
-          ),
-          converter_to_payoff = list(
-            score = converter_to_target$score,
-            events = converter_to_target$matched_events$enabler_to_payoff
-          ),
-          setup_to_payoff = list(
-            score = setup_to_target$score,
-            events = setup_to_target$matched_events$enabler_to_payoff
-          )
-        )
-      )
+      adjacency[[source_id]] <- c(adjacency[[source_id]], list(edge))
+      edge_count <- edge_count + 1L
     }
   }
 
-  if (length(out) == 0L) {
-    return(list())
-  }
-
-  key_seen <- new.env(parent = emptyenv(), hash = TRUE)
-  deduped <- list()
-  for (entry in out) {
-    key <- query_api_scalar(entry$id, default = "")
-    if (!nzchar(key) || exists(key, envir = key_seen, inherits = FALSE)) {
+  for (node_id in names(adjacency)) {
+    edges <- query_synergy_to_list(adjacency[[node_id]])
+    if (length(edges) == 0L) {
       next
     }
-    assign(key, TRUE, envir = key_seen)
-    deduped[[length(deduped) + 1L]] <- entry
+    ord <- order(vapply(edges, function(edge) {
+      continuity <- suppressWarnings(as.numeric(edge$continuity_score))
+      score_norm <- suppressWarnings(as.numeric(edge$score_norm))
+      if (!is.finite(continuity) || is.na(continuity)) {
+        continuity <- 0
+      }
+      if (!is.finite(score_norm) || is.na(score_norm)) {
+        score_norm <- 0
+      }
+      (0.6 * continuity) + (0.4 * score_norm)
+    }, numeric(1)), decreasing = TRUE)
+    adjacency[[node_id]] <- edges[ord]
   }
 
-  ord <- order(vapply(deduped, function(entry) entry$score, numeric(1)), decreasing = TRUE)
+  list(
+    seed_id = query_api_scalar(seed$id, default = ""),
+    nodes = node_lookup,
+    adjacency = adjacency,
+    edge_lookup = edge_lookup,
+    node_count = length(cards),
+    edge_count = edge_count,
+    pair_count = total_pairs
+  )
+}
+
+query_synergy_search_local_group_paths <- function(seed_id,
+                                                   graph,
+                                                   max_group_size = 4L,
+                                                   max_paths = 120L,
+                                                   max_outgoing_per_node = 6L) {
+  node_ids <- names(graph$nodes)
+  if (!nzchar(query_api_scalar(seed_id, default = "")) || length(node_ids) < 3L) {
+    return(list(paths = list(), path_count = 0L))
+  }
+
+  cap <- query_synergy_as_int(max_group_size, default = 4L, min_value = 3L, max_value = 5L)
+  path_budget <- query_synergy_as_int(max_paths, default = 120L, min_value = 10L, max_value = 500L)
+  branch_cap <- query_synergy_as_int(max_outgoing_per_node, default = 6L, min_value = 1L, max_value = 25L)
+  seen <- new.env(parent = emptyenv(), hash = TRUE)
+  out <- list()
+  path_count <- 0L
+
+  explore <- function(current_id, path_ids) {
+    if (path_count >= path_budget) {
+      return(invisible(NULL))
+    }
+    if (length(path_ids) >= cap) {
+      return(invisible(NULL))
+    }
+
+    edges <- graph$adjacency[[current_id]]
+    if (!is.list(edges) || length(edges) == 0L) {
+      return(invisible(NULL))
+    }
+    if (length(edges) > branch_cap) {
+      edges <- edges[seq_len(branch_cap)]
+    }
+
+    for (edge in edges) {
+      if (path_count >= path_budget) {
+        break
+      }
+
+      next_id <- query_api_scalar(edge$to$id, default = "")
+      if (!nzchar(next_id) || next_id %in% path_ids) {
+        next
+      }
+
+      next_path <- c(path_ids, next_id)
+      path_count <<- path_count + 1L
+      if (length(next_path) >= 3L && seed_id %in% next_path) {
+        key <- paste(next_path, collapse = ">")
+        if (!exists(key, envir = seen, inherits = FALSE)) {
+          assign(key, TRUE, envir = seen)
+          out[[length(out) + 1L]] <<- next_path
+        }
+      }
+
+      if (length(next_path) < cap) {
+        if (!(seed_id %in% next_path) && length(next_path) >= (cap - 1L)) {
+          next
+        }
+        explore(next_id, next_path)
+      }
+    }
+
+    invisible(NULL)
+  }
+
+  for (start_id in node_ids) {
+    if (path_count >= path_budget) {
+      break
+    }
+    explore(start_id, c(start_id))
+  }
+
+  list(paths = out, path_count = path_count)
+}
+
+query_synergy_infer_group_member_role <- function(card,
+                                                  position_index,
+                                                  member_count,
+                                                  incoming_edge = NULL,
+                                                  outgoing_edge = NULL) {
+  roles <- query_synergy_to_vector(card$roles)
+  if (position_index >= member_count) {
+    terminal_roles <- c("finisher", "payoff", "target", "engine", "bridge")
+    matched <- terminal_roles[terminal_roles %in% roles]
+    if (length(matched) > 0L) {
+      return(matched[[1]])
+    }
+    return("target")
+  }
+
+  if (position_index <= 1L) {
+    if ("setup" %in% roles) {
+      return("setup")
+    }
+    if ("engine" %in% roles) {
+      return("engine")
+    }
+    if ("producer" %in% roles && !any(roles %in% c("payoff", "finisher", "target"))) {
+      return("fuel")
+    }
+    opening_roles <- c("bridge", "converter", "amplifier")
+    matched <- opening_roles[opening_roles %in% roles]
+    if (length(matched) > 0L) {
+      return(matched[[1]])
+    }
+    return("fuel")
+  }
+
+  if ("amplifier" %in% roles) {
+    return("amplifier")
+  }
+  if ("engine" %in% roles && isTRUE(card$cadence$repeatable)) {
+    return("engine")
+  }
+  if ("converter" %in% roles) {
+    return("converter")
+  }
+  if ("bridge" %in% roles) {
+    return("bridge")
+  }
+  if ("engine" %in% roles) {
+    return("engine")
+  }
+  if ("producer" %in% roles && length(query_synergy_to_list(outgoing_edge$matched_resource_transitions)) > 0L) {
+    return("fuel")
+  }
+  if ("setup" %in% roles) {
+    return("setup")
+  }
+  if ("payoff" %in% roles) {
+    return("payoff")
+  }
+  if ("target" %in% roles) {
+    return("target")
+  }
+  "bridge"
+}
+
+query_synergy_group_role_coverage_score <- function(member_roles) {
+  roles <- query_synergy_to_vector(member_roles)
+  if (length(roles) == 0L) {
+    return(0)
+  }
+
+  start_ok <- roles[[1]] %in% c("setup", "fuel", "engine", "bridge", "converter")
+  end_ok <- roles[[length(roles)]] %in% c("payoff", "finisher", "target")
+  middle_roles <- if (length(roles) > 2L) roles[2:(length(roles) - 1L)] else character(0)
+  middle_ok <- if (length(middle_roles) == 0L) {
+    1
+  } else {
+    sum(middle_roles %in% c("engine", "converter", "bridge", "amplifier", "fuel")) / length(middle_roles)
+  }
+  diversity <- min(1, length(unique(roles)) / min(length(roles), 4L))
+
+  round(min(1,
+    0.3 * as.numeric(start_ok) +
+      0.3 * as.numeric(end_ok) +
+      0.25 * middle_ok +
+      0.15 * diversity
+  ), 4)
+}
+
+query_synergy_group_category <- function(member_roles,
+                                         member_count,
+                                         anti_synergy_penalty = 0,
+                                         resource_transitions = list()) {
+  roles <- query_synergy_to_vector(member_roles)
+  if (anti_synergy_penalty >= 0.45) {
+    return("conflicted_group")
+  }
+  if (member_count >= 4L) {
+    return("multi_step_package_line")
+  }
+  if ("amplifier" %in% roles && any(c("finisher", "payoff") %in% roles)) {
+    return("amplifier_finish_line")
+  }
+  if ("setup" %in% roles && "converter" %in% roles && any(c("payoff", "finisher", "target") %in% roles)) {
+    return("setup_converter_payoff")
+  }
+  if ("fuel" %in% roles && "engine" %in% roles && any(c("payoff", "finisher", "target") %in% roles)) {
+    return("fuel_engine_payoff")
+  }
+  if ("bridge" %in% roles) {
+    return("bridge_line")
+  }
+  if (length(query_synergy_to_list(resource_transitions)) > 0L) {
+    return("resource_flow_line")
+  }
+  "general_synergy_group"
+}
+
+query_synergy_group_pair_penalty <- function(path_ids, graph) {
+  ids <- query_synergy_to_vector(path_ids)
+  if (length(ids) < 2L) {
+    return(list(penalty = 0, conflicts = character(0)))
+  }
+
+  anti_scores <- numeric(0)
+  conflicts <- character(0)
+  for (i in seq_len(length(ids) - 1L)) {
+    for (j in seq.int(i + 1L, length(ids))) {
+      edge_keys <- c(
+        query_synergy_group_edge_key(ids[[i]], ids[[j]]),
+        query_synergy_group_edge_key(ids[[j]], ids[[i]])
+      )
+      for (edge_key in edge_keys) {
+        edge <- graph$edge_lookup[[edge_key]]
+        if (!is.list(edge)) {
+          next
+        }
+        anti_value <- suppressWarnings(as.numeric(edge$anti_synergy_score))
+        if (is.finite(anti_value) && !is.na(anti_value)) {
+          anti_scores <- c(anti_scores, anti_value)
+        }
+        conflicts <- c(conflicts, query_synergy_to_vector(edge$anti_conflicts))
+      }
+    }
+  }
+
+  penalty <- if (length(anti_scores) > 0L) {
+    min(1, mean(anti_scores) + if (length(conflicts) > 0L) 0.18 else 0)
+  } else {
+    0
+  }
+
+  list(penalty = round(penalty, 4), conflicts = unique(conflicts))
+}
+
+query_synergy_group_reason_lines <- function(cards,
+                                             member_roles,
+                                             matched_events,
+                                             resource_transitions,
+                                             score_breakdown,
+                                             anti_conflicts) {
+  role_line <- paste(vapply(seq_along(cards), function(index) {
+    sprintf(
+      "%s as %s",
+      query_api_scalar(cards[[index]]$name, default = sprintf("Card %s", index)),
+      query_api_scalar(member_roles[[index]], default = "bridge")
+    )
+  }, character(1)), collapse = " -> ")
+
+  reasons <- c(sprintf("Package line: %s", role_line))
+  if (length(matched_events) > 0L) {
+    reasons <- c(reasons, sprintf(
+      "Chain continuity via %s",
+      paste(utils::head(query_synergy_to_vector(matched_events), 5L), collapse = ", ")
+    ))
+  }
+  if (length(query_synergy_to_list(resource_transitions)) > 0L) {
+    transition_text <- paste(vapply(utils::head(query_synergy_to_list(resource_transitions), 3L), function(transition) {
+      via <- query_api_scalar(transition$via, default = query_api_scalar(transition$resource, default = "resource"))
+      from <- query_api_scalar(transition$from, default = "")
+      to <- query_api_scalar(transition$to, default = "")
+      if (nzchar(from) || nzchar(to)) {
+        sprintf("%s (%s -> %s)", via, if (nzchar(from)) from else "?", if (nzchar(to)) to else "?")
+      } else {
+        via
+      }
+    }, character(1)), collapse = "; ")
+    reasons <- c(reasons, sprintf("Resource flow through %s", transition_text))
+  }
+
+  strengths <- character(0)
+  if (suppressWarnings(as.numeric(score_breakdown$role_coverage)) >= 0.35) {
+    strengths <- c(strengths, "role coverage")
+  }
+  if (suppressWarnings(as.numeric(score_breakdown$strategic_coherence)) >= 0.28) {
+    strengths <- c(strengths, "strategic coherence")
+  }
+  if (suppressWarnings(as.numeric(score_breakdown$repetition_potential)) >= 0.28) {
+    strengths <- c(strengths, "repetition potential")
+  }
+  if (suppressWarnings(as.numeric(score_breakdown$finisher_quality)) >= 0.3) {
+    strengths <- c(strengths, "finisher quality")
+  }
+  if (length(strengths) > 0L) {
+    reasons <- c(reasons, sprintf("Scores well because of %s", paste(strengths, collapse = ", ")))
+  }
+  if (length(anti_conflicts) > 0L) {
+    reasons <- c(reasons, sprintf(
+      "Anti-synergy penalty from %s",
+      paste(utils::head(query_synergy_to_vector(anti_conflicts), 4L), collapse = ", ")
+    ))
+  }
+
+  unique(reasons)
+}
+
+query_synergy_build_synergy_group <- function(path_ids,
+                                              seed_id,
+                                              graph,
+                                              registry = query_synergy_event_registry_default()) {
+  ids <- query_synergy_to_vector(path_ids)
+  if (length(ids) < 3L || !(seed_id %in% ids)) {
+    return(NULL)
+  }
+
+  cards <- lapply(ids, function(id) graph$nodes[[id]])
+  if (any(!vapply(cards, is.list, logical(1)))) {
+    return(NULL)
+  }
+
+  edges <- vector("list", max(0L, length(ids) - 1L))
+  for (index in seq_len(length(ids) - 1L)) {
+    edge <- graph$edge_lookup[[query_synergy_group_edge_key(ids[[index]], ids[[index + 1L]])]]
+    if (!is.list(edge) || !isTRUE(edge$valid)) {
+      return(NULL)
+    }
+    edges[[index]] <- edge
+  }
+
+  member_roles <- vapply(seq_along(cards), function(index) {
+    incoming_edge <- if (index > 1L) edges[[index - 1L]] else NULL
+    outgoing_edge <- if (index <= length(edges)) edges[[index]] else NULL
+    query_synergy_infer_group_member_role(
+      cards[[index]],
+      position_index = index,
+      member_count = length(cards),
+      incoming_edge = incoming_edge,
+      outgoing_edge = outgoing_edge
+    )
+  }, character(1))
+
+  if (!(member_roles[[1]] %in% c("setup", "fuel", "engine", "bridge", "converter")) ||
+      !(member_roles[[length(member_roles)]] %in% c("payoff", "finisher", "target"))) {
+    return(NULL)
+  }
+
+  edge_continuity <- vapply(edges, function(edge) {
+    value <- suppressWarnings(as.numeric(edge$continuity_score))
+    if (!is.finite(value) || is.na(value)) 0 else value
+  }, numeric(1))
+  edge_shared_plan <- vapply(edges, function(edge) {
+    value <- suppressWarnings(as.numeric(edge$axis_scores$shared_plan_score))
+    if (!is.finite(value) || is.na(value)) 0 else value
+  }, numeric(1))
+  cadence_values <- vapply(cards, function(card) {
+    value <- suppressWarnings(as.numeric(card$cadence$strength))
+    if (!is.finite(value) || is.na(value)) 0 else value
+  }, numeric(1))
+
+  resource_transitions <- unique(unlist(lapply(edges, function(edge) {
+    query_synergy_to_list(edge$matched_resource_transitions)
+  }), recursive = FALSE), use.names = FALSE)
+  matched_events <- unique(c(
+    unlist(lapply(edges, function(edge) query_synergy_to_vector(edge$matched_events$direct)), use.names = FALSE),
+    unlist(lapply(edges, function(edge) query_synergy_to_vector(edge$matched_events$indirect)), use.names = FALSE),
+    unlist(lapply(edges, function(edge) query_synergy_to_vector(edge$matched_events$setup_finisher)), use.names = FALSE),
+    unlist(lapply(edges, function(edge) query_synergy_to_vector(edge$matched_events$package_links)), use.names = FALSE),
+    unlist(lapply(edges, function(edge) query_synergy_to_vector(edge$matched_events$resource_bridges)), use.names = FALSE),
+    unlist(lapply(edges, function(edge) query_synergy_to_vector(edge$matched_events$terminal_bridges)), use.names = FALSE)
+  ))
+
+  resource_flow_quality <- if (length(edges) > 0L) {
+    mean(vapply(edges, function(edge) {
+      event_links <- unique(c(
+        query_synergy_to_vector(edge$matched_events$direct),
+        query_synergy_to_vector(edge$matched_events$indirect),
+        query_synergy_to_vector(edge$matched_events$setup_finisher),
+        query_synergy_to_vector(edge$matched_events$resource_bridges),
+        query_synergy_to_vector(edge$matched_events$terminal_bridges)
+      ))
+      min(1,
+        0.55 * min(1, length(query_synergy_to_list(edge$matched_resource_transitions)) / 2) +
+          0.45 * min(1, length(event_links) / 2)
+      )
+    }, numeric(1)))
+  } else {
+    0
+  }
+  chain_continuity <- if (length(edge_continuity) > 0L) {
+    min(1, 0.5 * mean(edge_continuity) + 0.3 * min(edge_continuity) + 0.2 * resource_flow_quality)
+  } else {
+    0
+  }
+
+  strategy_tags <- lapply(cards, function(card) unique(query_synergy_to_vector(card$strategy_tags)))
+  tag_union <- unique(unlist(strategy_tags, use.names = FALSE))
+  tag_intersection <- if (length(strategy_tags) > 0L) Reduce(intersect, strategy_tags) else character(0)
+  strategic_coherence <- min(1,
+    0.65 * if (length(edge_shared_plan) > 0L) mean(edge_shared_plan) else 0 +
+      0.35 * if (length(tag_union) > 0L) length(tag_intersection) / length(tag_union) else 0
+  )
+  role_coverage <- query_synergy_group_role_coverage_score(member_roles)
+  engine_related <- member_roles %in% c("engine", "converter", "bridge", "amplifier")
+  cadence_pool <- if (any(engine_related)) cadence_values[engine_related] else cadence_values
+  repetition_potential <- min(1,
+    if (length(cadence_pool) > 0L) mean(utils::head(sort(cadence_pool, decreasing = TRUE), 2L)) else 0 +
+      min(0.15, sum(vapply(cards, function(card) isTRUE(card$cadence$repeatable), logical(1))) * 0.05)
+  )
+  amplification_bonus <- if ("amplifier" %in% member_roles) {
+    min(1, 0.45 + 0.15 * sum(member_roles %in% c("engine", "converter", "bridge")) + 0.2 * repetition_potential)
+  } else {
+    0
+  }
+  final_edge <- if (length(edges) > 0L) edges[[length(edges)]] else NULL
+  finisher_quality <- if (is.list(final_edge)) {
+    min(1,
+      0.45 * as.numeric(member_roles[[length(member_roles)]] %in% c("payoff", "finisher", "target")) +
+        0.4 * max(0, suppressWarnings(as.numeric(final_edge$score_norm))) +
+        0.15 * min(1, length(unique(c(
+          query_synergy_to_vector(final_edge$matched_events$direct),
+          query_synergy_to_vector(final_edge$matched_events$indirect)
+        ))) / 2)
+    )
+  } else {
+    0
+  }
+
+  pair_penalty <- query_synergy_group_pair_penalty(ids, graph)
+  role_duplication <- sum(pmax(0L, as.integer(table(member_roles)) - 1L)) / max(1, length(member_roles))
+  event_duplication <- {
+    event_table <- table(matched_events)
+    if (length(event_table) == 0L) 0 else sum(pmax(0L, as.integer(event_table) - 1L)) / max(1, length(event_table))
+  }
+  redundancy_penalty <- min(1, 0.65 * role_duplication + 0.35 * event_duplication)
+  complexity_penalty <- min(1,
+    if (length(cards) <= 3L) {
+      0.04 + (1 - chain_continuity) * 0.04
+    } else {
+      0.12 + ((length(cards) - 4L) * 0.06) + (1 - chain_continuity) * 0.08
+    }
+  )
+
+  score_breakdown <- list(
+    chain_continuity = round(chain_continuity, 4),
+    role_coverage = round(role_coverage, 4),
+    strategic_coherence = round(strategic_coherence, 4),
+    resource_flow_quality = round(resource_flow_quality, 4),
+    repetition_potential = round(repetition_potential, 4),
+    amplification_bonus = round(amplification_bonus, 4),
+    finisher_quality = round(finisher_quality, 4),
+    anti_synergy_penalty = round(pair_penalty$penalty, 4),
+    redundancy_penalty = round(redundancy_penalty, 4),
+    complexity_penalty = round(complexity_penalty, 4)
+  )
+
+  score_norm <-
+    0.22 * score_breakdown$chain_continuity +
+    0.14 * score_breakdown$role_coverage +
+    0.12 * score_breakdown$strategic_coherence +
+    0.14 * score_breakdown$resource_flow_quality +
+    0.1 * score_breakdown$repetition_potential +
+    0.08 * score_breakdown$amplification_bonus +
+    0.12 * score_breakdown$finisher_quality -
+    0.12 * score_breakdown$anti_synergy_penalty -
+    0.08 * score_breakdown$redundancy_penalty -
+    0.08 * score_breakdown$complexity_penalty
+  score_norm <- max(0, min(1, score_norm))
+  if (score_norm <= 0.14 || chain_continuity <= 0.16) {
+    return(NULL)
+  }
+
+  category <- query_synergy_group_category(
+    member_roles = member_roles,
+    member_count = length(cards),
+    anti_synergy_penalty = pair_penalty$penalty,
+    resource_transitions = resource_transitions
+  )
+  bucket <- if (length(cards) >= 4L) "package_lines" else "synergy_groups"
+  members <- lapply(seq_along(cards), function(index) {
+    card <- cards[[index]]
+    list(
+      id = query_api_scalar(card$id, default = ""),
+      name = query_api_scalar(card$name, default = ""),
+      inferred_role = query_api_scalar(member_roles[[index]], default = "bridge"),
+      roles = query_synergy_to_vector(card$roles),
+      target_roles = query_synergy_to_vector(card$target_roles),
+      position = index,
+      is_seed = identical(query_api_scalar(card$id, default = ""), query_api_scalar(seed_id, default = ""))
+    )
+  })
+  intermediate_members <- if (length(members) > 2L) {
+    members[2:(length(members) - 1L)]
+  } else {
+    list()
+  }
+  package_structure <- list(
+    start_member = members[[1]],
+    end_member = members[[length(members)]],
+    intermediate_members = intermediate_members,
+    intermediate_count = length(intermediate_members),
+    line_signature = paste(member_roles, collapse = " -> ")
+  )
+  reasons <- query_synergy_group_reason_lines(
+    cards = cards,
+    member_roles = member_roles,
+    matched_events = matched_events,
+    resource_transitions = resource_transitions,
+    score_breakdown = score_breakdown,
+    anti_conflicts = pair_penalty$conflicts
+  )
+  line_edges <- lapply(edges, function(edge) {
+    list(
+      from = edge$from,
+      to = edge$to,
+      score = edge$score,
+      continuity_score = edge$continuity_score,
+      matched_events = unique(c(
+        query_synergy_to_vector(edge$matched_events$direct),
+        query_synergy_to_vector(edge$matched_events$indirect),
+        query_synergy_to_vector(edge$matched_events$setup_finisher),
+        query_synergy_to_vector(edge$matched_events$package_links),
+        query_synergy_to_vector(edge$matched_events$resource_bridges),
+        query_synergy_to_vector(edge$matched_events$terminal_bridges)
+      )),
+      matched_resource_transitions = query_synergy_to_list(edge$matched_resource_transitions),
+      relation_classes = query_synergy_to_vector(edge$relation_classes)
+    )
+  })
+
+  list(
+    id = paste(ids, collapse = "|"),
+    group_type = if (length(cards) >= 4L) "package_line" else "synergy_group",
+    bucket = bucket,
+    bucket_label = query_api_scalar(query_synergy_bucket_labels()[[bucket]], default = bucket),
+    package_bucket = bucket,
+    category = category,
+    package_category = category,
+    archetype = category,
+    score = as.integer(round(score_norm * 100)),
+    total_score = as.integer(round(score_norm * 100)),
+    score_norm = round(score_norm, 4),
+    score_breakdown = score_breakdown,
+    members = members,
+    cards = stats::setNames(lapply(members, function(member) list(id = member$id, name = member$name)), make.unique(member_roles)),
+    chain = list(
+      member_ids = ids,
+      member_names = vapply(cards, function(card) query_api_scalar(card$name, default = ""), character(1)),
+      role_sequence = member_roles,
+      edge_count = length(edges)
+    ),
+    edges = line_edges,
+    package_structure = package_structure,
+    line = list(
+      member_ids = ids,
+      edges = line_edges
+    ),
+    matched_events = matched_events,
+    matched_resource_transitions = resource_transitions,
+    anti_conflicts = pair_penalty$conflicts,
+    reasons = reasons,
+    explanation_text = paste(utils::head(reasons, 3L), collapse = " ")
+  )
+}
+
+query_synergy_build_group_bucket <- function(groups, bucket_key, limit = 10L) {
+  labels <- query_synergy_bucket_labels()
+  pool <- query_synergy_to_list(groups)
+  if (identical(bucket_key, "package_lines")) {
+    pool <- Filter(function(entry) identical(query_api_scalar(entry$bucket, default = ""), "package_lines"), pool)
+  }
+
+  if (length(pool) == 0L) {
+    return(list(
+      key = bucket_key,
+      label = query_api_scalar(labels[[bucket_key]], default = bucket_key),
+      count = 0L,
+      results = list()
+    ))
+  }
+
+  ord <- order(
+    vapply(pool, function(entry) suppressWarnings(as.numeric(entry$total_score)), numeric(1)),
+    vapply(pool, function(entry) -length(query_synergy_to_vector(entry$chain$member_ids)), numeric(1)),
+    decreasing = TRUE
+  )
+  pool <- pool[ord]
+  cap <- query_synergy_as_int(limit, default = 10L, min_value = 1L, max_value = 50L)
+  if (length(pool) > cap) {
+    pool <- pool[seq_len(cap)]
+  }
+
+  list(
+    key = bucket_key,
+    label = query_api_scalar(labels[[bucket_key]], default = bucket_key),
+    count = length(pool),
+    results = pool
+  )
+}
+
+query_synergy_detect_groups_for_seed <- function(seed,
+                                                 candidates,
+                                                 format_name = "commander",
+                                                 max_groups = 10L,
+                                                 min_edge_score = 28L,
+                                                 max_group_size = 4L,
+                                                 max_paths = 120L,
+                                                 max_branching = 6L,
+                                                 progress_callback = NULL,
+                                                 progress_range = c(88, 97),
+                                                 registry = query_synergy_event_registry_default()) {
+  cards <- query_synergy_to_list(candidates)
+  if (!is.list(seed) || length(cards) < 2L) {
+    return(list(
+      groups = list(),
+      package_lines = list(),
+      meta = list(node_count = 0L, edge_count = 0L, path_count = 0L, pair_count = 0L, branching_cap = 0L)
+    ))
+  }
+
+  graph <- query_synergy_build_group_graph(
+    seed = seed,
+    candidates = cards,
+    format_name = format_name,
+    min_edge_score = min_edge_score,
+    progress_callback = progress_callback,
+    progress_range = progress_range,
+    registry = registry
+  )
+  search_out <- query_synergy_search_local_group_paths(
+    seed_id = query_api_scalar(seed$id, default = ""),
+    graph = graph,
+    max_group_size = max_group_size,
+    max_paths = max_paths,
+    max_outgoing_per_node = max_branching
+  )
+
+  groups <- list()
+  for (path_ids in search_out$paths) {
+    group <- query_synergy_build_synergy_group(
+      path_ids = path_ids,
+      seed_id = query_api_scalar(seed$id, default = ""),
+      graph = graph,
+      registry = registry
+    )
+    if (!is.list(group)) {
+      next
+    }
+    groups[[length(groups) + 1L]] <- group
+  }
+
+  if (length(groups) == 0L) {
+    return(list(
+      groups = list(),
+      package_lines = list(),
+      meta = list(
+        node_count = graph$node_count,
+        edge_count = graph$edge_count,
+        path_count = search_out$path_count,
+        pair_count = graph$pair_count,
+        branching_cap = query_synergy_as_int(max_branching, default = 6L, min_value = 1L, max_value = 25L)
+      )
+    ))
+  }
+
+  seen <- new.env(parent = emptyenv(), hash = TRUE)
+  deduped <- list()
+  for (group in groups) {
+    key <- query_api_scalar(group$id, default = "")
+    if (!nzchar(key) || exists(key, envir = seen, inherits = FALSE)) {
+      next
+    }
+    assign(key, TRUE, envir = seen)
+    deduped[[length(deduped) + 1L]] <- group
+  }
+
+  ord <- order(
+    vapply(deduped, function(entry) suppressWarnings(as.numeric(entry$total_score)), numeric(1)),
+    vapply(deduped, function(entry) suppressWarnings(as.numeric(entry$score_breakdown$chain_continuity)), numeric(1)),
+    decreasing = TRUE
+  )
   deduped <- deduped[ord]
-  limit <- query_synergy_as_int(max_packages, default = 10L, min_value = 1L, max_value = 50L)
+  limit <- query_synergy_as_int(max_groups, default = 10L, min_value = 1L, max_value = 50L)
   if (length(deduped) > limit) {
     deduped <- deduped[seq_len(limit)]
   }
 
-  deduped
+  list(
+    groups = deduped,
+    package_lines = Filter(function(entry) identical(query_api_scalar(entry$bucket, default = ""), "package_lines"), deduped),
+    meta = list(
+      node_count = graph$node_count,
+      edge_count = graph$edge_count,
+      path_count = search_out$path_count,
+      pair_count = graph$pair_count,
+      branching_cap = query_synergy_as_int(max_branching, default = 6L, min_value = 1L, max_value = 25L)
+    )
+  )
 }
 
-query_synergy_package_archetype <- function(events) {
-  event_ids <- unique(query_synergy_to_vector(events))
-  if (length(intersect(event_ids, c("MILL_CARD", "REANIMATE", "GRAVEYARD_TO_HAND"))) > 0L) {
-    return("graveyard_setup_converter_payoff")
-  }
-  if (length(intersect(event_ids, c("CREATE_TOKEN", "SACRIFICE_PERMANENT", "DIES", "CREATURE_DIES", "TOKEN_CREATED"))) > 0L ||
-      (all(c("BATTLEFIELD_RESOURCE", "GRAVEYARD_FLOW") %in% event_ids))) {
-    return("tokens_sacrifice_payoff")
-  }
-  if (length(intersect(event_ids, c("DRAW_CARD", "DISCARD_CARD", "SELF_DRAW_CARD"))) > 0L) {
-    return("draw_discard_engine")
-  }
-  if (length(intersect(event_ids, c("CAST_SPELL", "NONCREATURE_SPELL_CAST"))) > 0L) {
-    return("spell_chain")
-  }
-  "general_setup_converter_payoff"
+query_synergy_detect_packages_for_target <- function(target,
+                                                     candidates,
+                                                     format_name = "commander",
+                                                     max_packages = 10L,
+                                                     min_edge_score = 35L,
+                                                     progress_callback = NULL,
+                                                     progress_range = c(88, 97)) {
+  group_out <- query_synergy_detect_groups_for_seed(
+    seed = target,
+    candidates = candidates,
+    format_name = format_name,
+    max_groups = max_packages,
+    min_edge_score = min_edge_score,
+    max_group_size = 4L,
+    max_paths = max(96L, length(query_synergy_to_list(candidates)) * 12L),
+    max_branching = 6L,
+    progress_callback = progress_callback,
+    progress_range = progress_range
+  )
+
+  query_synergy_to_list(group_out$groups)
 }
 
 query_synergy_elapsed_ms <- function(start_elapsed) {
@@ -740,10 +1738,60 @@ query_synergy_precompute_version <- function() {
   "synergy_precompute_v1"
 }
 
-query_synergy_catalog_cache_key <- function(cards, source = "") {
+query_synergy_card_signature <- function(card) {
+  paste(
+    query_synergy_card_id(card),
+    query_api_scalar(card$name, default = ""),
+    query_api_scalar(card$oracle_text, default = query_api_scalar(card$printed_text, default = "")),
+    query_api_scalar(card$type_line, default = ""),
+    query_api_scalar(card$cmc, default = ""),
+    paste(query_synergy_card_color_identity(card), collapse = ""),
+    paste(query_synergy_to_vector(card$keywords), collapse = ","),
+    sep = "|"
+  )
+}
+
+query_synergy_catalog_fingerprint <- function(cards) {
+  values <- query_synergy_to_list(cards)
+  if (length(values) == 0L) {
+    return("empty")
+  }
+
+  acc_a <- 0
+  acc_b <- 1
+  modulus <- 2147483647
+  for (index in seq_along(values)) {
+    chars <- utf8ToInt(query_synergy_card_signature(values[[index]]))
+    if (length(chars) == 0L) {
+      next
+    }
+
+    weighted_sum <- sum(chars * (((seq_along(chars) - 1L) %% 31L) + 1L))
+    acc_a <- (acc_a + weighted_sum + (index * 17L)) %% modulus
+    acc_b <- ((acc_b * 131) + sum(chars) + (index * 97L)) %% modulus
+  }
+
+  sprintf("%08x%08x", as.integer(round(acc_a)), as.integer(round(acc_b)))
+}
+
+query_synergy_catalog_cache_key <- function(cards, source = "", source_signature = "") {
   values <- query_synergy_to_list(cards)
   if (length(values) == 0L) {
     return("")
+  }
+
+  source_name <- query_api_scalar(source, default = "catalog")
+  signature <- query_api_scalar(
+    source_signature,
+    default = query_api_scalar(attr(cards, "synergy_source_signature"), default = "")
+  )
+  if (identical(source_name, "scryfall_oracle_cards") && nzchar(signature)) {
+    return(sprintf(
+      "%s|%s|%s",
+      query_synergy_precompute_version(),
+      source_name,
+      signature
+    ))
   }
 
   ids <- vapply(values, query_synergy_card_id, character(1))
@@ -751,12 +1799,29 @@ query_synergy_catalog_cache_key <- function(cards, source = "") {
   first_id <- if (length(ids) > 0L) ids[[1]] else ""
   last_id <- if (length(ids) > 0L) ids[[length(ids)]] else ""
   sprintf(
-    "%s|%s|%s|%s",
+    "%s|%s|%s|%s|%s",
     query_synergy_precompute_version(),
-    query_api_scalar(source, default = "catalog"),
+    source_name,
     length(values),
-    paste(first_id, last_id, sep = "::")
+    paste(first_id, last_id, sep = "::"),
+    query_synergy_catalog_fingerprint(values)
   )
+}
+
+query_synergy_file_signature <- function(path) {
+  file_path <- trimws(as.character(path))
+  if (!nzchar(file_path) || !file.exists(file_path)) {
+    return("")
+  }
+
+  info <- file.info(file_path)
+  size_value <- suppressWarnings(as.numeric(info$size[[1]]))
+  mtime_value <- suppressWarnings(as.numeric(as.POSIXct(info$mtime[[1]], tz = "UTC")))
+  if (!is.finite(size_value) || is.na(size_value) || !is.finite(mtime_value) || is.na(mtime_value)) {
+    return("")
+  }
+
+  sprintf("%s::%s", as.integer(round(size_value)), as.integer(round(mtime_value)))
 }
 
 query_synergy_build_compact_profile <- function(card, registry = query_synergy_event_registry_default()) {
@@ -797,13 +1862,154 @@ query_synergy_build_compact_profile <- function(card, registry = query_synergy_e
   )
 }
 
+query_synergy_build_profile_index_map <- function(profiles, selector) {
+  items <- query_synergy_to_list(profiles)
+  index_env <- new.env(parent = emptyenv(), hash = TRUE)
+
+  for (i in seq_along(items)) {
+    values <- unique(query_synergy_to_vector(selector(items[[i]])))
+    if (length(values) == 0L) {
+      next
+    }
+
+    for (value in values) {
+      key <- query_api_scalar(value, default = "")
+      if (!nzchar(key)) {
+        next
+      }
+
+      if (exists(key, envir = index_env, inherits = FALSE)) {
+        assign(key, c(get(key, envir = index_env, inherits = FALSE), i), envir = index_env)
+      } else {
+        assign(key, i, envir = index_env)
+      }
+    }
+  }
+
+  out <- as.list(index_env, all.names = TRUE)
+  lapply(out, function(entry) unique(as.integer(entry)))
+}
+
+query_synergy_build_profile_indexes <- function(profiles) {
+  items <- query_synergy_to_list(profiles)
+  if (length(items) == 0L) {
+    return(list())
+  }
+
+  list(
+    produced_events = query_synergy_build_profile_index_map(items, function(profile) profile$produced_events),
+    consumed_events = query_synergy_build_profile_index_map(items, function(profile) profile$consumed_events),
+    replaced_events = query_synergy_build_profile_index_map(items, function(profile) profile$replaced_events),
+    prevented_events = query_synergy_build_profile_index_map(items, function(profile) profile$prevented_events),
+    setup_events = query_synergy_build_profile_index_map(items, function(profile) profile$setup_events),
+    finisher_events = query_synergy_build_profile_index_map(items, function(profile) profile$finisher_events),
+    produced_families = query_synergy_build_profile_index_map(items, function(profile) profile$produced_families),
+    consumed_families = query_synergy_build_profile_index_map(items, function(profile) profile$consumed_families),
+    strategy_tags = query_synergy_build_profile_index_map(items, function(profile) profile$strategy_tags),
+    roles = query_synergy_build_profile_index_map(items, function(profile) profile$roles),
+    anti_tags = query_synergy_build_profile_index_map(items, function(profile) profile$anti_tags)
+  )
+}
+
+query_synergy_index_lookup <- function(index_map, keys) {
+  if (!is.list(index_map) || length(index_map) == 0L) {
+    return(integer(0))
+  }
+
+  values <- unique(query_synergy_to_vector(keys))
+  if (length(values) == 0L) {
+    return(integer(0))
+  }
+
+  hits <- unlist(lapply(values, function(value) {
+    key <- query_api_scalar(value, default = "")
+    if (!nzchar(key) || is.null(index_map[[key]])) {
+      return(integer(0))
+    }
+    as.integer(index_map[[key]])
+  }), use.names = FALSE)
+
+  unique(hits[hits > 0L])
+}
+
+query_synergy_candidate_roles_for_target <- function(target_roles = character(0), target_target_roles = character(0)) {
+  target_values <- unique(query_synergy_to_vector(target_roles))
+  if (length(query_synergy_to_vector(target_target_roles)) > 0L && !"target" %in% target_values) {
+    target_values <- c(target_values, "target")
+  }
+
+  candidate_roles <- character(0)
+  if ("payoff" %in% target_values) {
+    candidate_roles <- c(candidate_roles, "producer", "engine", "converter", "bridge", "amplifier")
+  }
+  if ("target" %in% target_values) {
+    candidate_roles <- c(candidate_roles, "producer", "engine")
+  }
+  if ("finisher" %in% target_values) {
+    candidate_roles <- c(candidate_roles, "setup", "converter", "bridge")
+  }
+  if ("setup" %in% target_values) {
+    candidate_roles <- c(candidate_roles, "finisher", "converter", "bridge")
+  }
+  if ("producer" %in% target_values) {
+    candidate_roles <- c(candidate_roles, "payoff", "target", "amplifier")
+  }
+  if ("engine" %in% target_values) {
+    candidate_roles <- c(candidate_roles, "payoff", "target", "amplifier")
+  }
+  if ("bridge" %in% target_values) {
+    candidate_roles <- c(candidate_roles, "payoff", "finisher")
+  }
+
+  if (length(candidate_roles) == 0L) {
+    candidate_roles <- c("producer", "payoff", "engine", "setup", "converter", "bridge", "amplifier", "target", "finisher")
+  }
+
+  unique(candidate_roles)
+}
+
+query_synergy_collect_indexed_candidate_indexes <- function(target,
+                                                            precomputed,
+                                                            top_k = 50L) {
+  indexes <- if (is.list(precomputed$indexes)) precomputed$indexes else list()
+  if (length(indexes) == 0L || !is.list(target)) {
+    return(integer(0))
+  }
+
+  target_roles <- query_synergy_candidate_roles_for_target(target$roles, target$target_roles)
+  signal_hits <- c(
+    query_synergy_index_lookup(indexes$produced_events, target$consumed_events),
+    query_synergy_index_lookup(indexes$produced_events, target$consumed_events),
+    query_synergy_index_lookup(indexes$consumed_events, target$produced_events),
+    query_synergy_index_lookup(indexes$consumed_events, target$produced_events),
+    query_synergy_index_lookup(indexes$produced_families, target$consumed_families),
+    query_synergy_index_lookup(indexes$consumed_families, target$produced_families),
+    query_synergy_index_lookup(indexes$strategy_tags, target$strategy_tags),
+    query_synergy_index_lookup(indexes$roles, target_roles),
+    query_synergy_index_lookup(indexes$setup_events, target$finisher_events),
+    query_synergy_index_lookup(indexes$finisher_events, target$setup_events),
+    query_synergy_index_lookup(indexes$replaced_events, target$consumed_events),
+    query_synergy_index_lookup(indexes$prevented_events, target$consumed_events),
+    query_synergy_index_lookup(indexes$anti_tags, target$anti_tags)
+  )
+  signal_hits <- as.integer(signal_hits[signal_hits > 0L])
+  if (length(signal_hits) == 0L) {
+    return(integer(0))
+  }
+
+  ranked_counts <- sort(table(signal_hits), decreasing = TRUE)
+  ranked_indexes <- as.integer(names(ranked_counts))
+  keep_n <- min(length(ranked_indexes), max(384L, as.integer(top_k) * 16L))
+  ranked_indexes[seq_len(keep_n)]
+}
+
 query_synergy_build_precomputed_catalog <- function(catalog,
                                                     registry = query_synergy_event_registry_default(),
                                                     progress_callback = NULL,
                                                     progress_range = c(6, 30)) {
   cards <- query_synergy_to_list(catalog)
   if (length(cards) == 0L) {
-    return(list(normalized = list(), profiles = list()))
+    return(list(normalized = list(), profiles = list(), indexes = list()))
   }
 
   progress_start <- suppressWarnings(as.numeric(progress_range[[1]]))
@@ -830,7 +2036,8 @@ query_synergy_build_precomputed_catalog <- function(catalog,
 
   list(
     normalized = normalized,
-    profiles = profiles
+    profiles = profiles,
+    indexes = query_synergy_build_profile_indexes(profiles)
   )
 }
 
@@ -843,11 +2050,11 @@ query_synergy_get_precomputed_catalog <- function(catalog,
   cache_key <- query_api_scalar(attr(catalog, "synergy_cache_key"), default = "")
   source <- query_api_scalar(attr(catalog, "synergy_source"), default = "catalog")
   cache_paths <- query_synergy_cache_paths(cache_dir)
-  precomputed_file <- cache_paths$precomputed_rds_file
 
   if (!nzchar(cache_key)) {
     cache_key <- query_synergy_catalog_cache_key(cards, source = source)
   }
+  precomputed_file <- query_synergy_precomputed_cache_file(cache_paths, cache_key, source = source)
 
   if (!isTRUE(force_refresh) &&
       identical(cache_key, query_synergy_cache_env$precomputed_key) &&
@@ -857,17 +2064,43 @@ query_synergy_get_precomputed_catalog <- function(catalog,
     return(query_synergy_cache_env$precomputed_catalog)
   }
 
-  if (!isTRUE(force_refresh) &&
-      identical(source, "scryfall_oracle_cards") &&
-      file.exists(precomputed_file)) {
+  if (!isTRUE(force_refresh) && file.exists(precomputed_file)) {
     persisted <- tryCatch(readRDS(precomputed_file), error = function(e) NULL)
+    persisted_key <- query_api_scalar(persisted$cache_key, default = "")
+    persisted_version <- query_api_scalar(persisted$version, default = "")
+    persisted_data <- if (is.list(persisted$data)) persisted$data else NULL
+    canonical_cache_migration <- FALSE
+    if (identical(source, "scryfall_oracle_cards") &&
+        !identical(persisted_key, cache_key) &&
+        identical(persisted_version, query_synergy_precompute_version()) &&
+        is.list(persisted_data) &&
+        length(persisted_data$profiles) == length(cards) &&
+        file.exists(cache_paths$rds_file)) {
+      raw_info <- file.info(cache_paths$rds_file)
+      pre_info <- file.info(precomputed_file)
+      canonical_cache_migration <- isTRUE(pre_info$mtime[[1]] >= raw_info$mtime[[1]])
+    }
+
     if (is.list(persisted) &&
-        identical(query_api_scalar(persisted$cache_key, default = ""), cache_key) &&
-        identical(query_api_scalar(persisted$version, default = ""), query_synergy_precompute_version())) {
+        identical(persisted_version, query_synergy_precompute_version()) &&
+        (identical(persisted_key, cache_key) || canonical_cache_migration)) {
       precomputed <- persisted$data
       query_synergy_cache_env$precomputed_catalog <- precomputed
       query_synergy_cache_env$precomputed_key <- cache_key
       query_synergy_cache_env$precomputed_loaded_at <- Sys.time()
+      if (canonical_cache_migration) {
+        invisible(tryCatch({
+          saveRDS(
+            list(
+              version = query_synergy_precompute_version(),
+              cache_key = cache_key,
+              data = precomputed
+            ),
+            precomputed_file
+          )
+          TRUE
+        }, error = function(e) FALSE))
+      }
       query_synergy_emit_progress(progress_callback, 30, "Loaded precomputed catalog from disk cache")
       return(precomputed)
     }
@@ -883,19 +2116,17 @@ query_synergy_get_precomputed_catalog <- function(catalog,
   query_synergy_cache_env$precomputed_key <- cache_key
   query_synergy_cache_env$precomputed_loaded_at <- Sys.time()
 
-  if (identical(source, "scryfall_oracle_cards")) {
-    invisible(tryCatch({
-      saveRDS(
-        list(
-          version = query_synergy_precompute_version(),
-          cache_key = cache_key,
-          data = precomputed
-        ),
-        precomputed_file
-      )
-      TRUE
-    }, error = function(e) FALSE))
-  }
+  invisible(tryCatch({
+    saveRDS(
+      list(
+        version = query_synergy_precompute_version(),
+        cache_key = cache_key,
+        data = precomputed
+      ),
+      precomputed_file
+    )
+    TRUE
+  }, error = function(e) FALSE))
 
   precomputed
 }
@@ -1106,15 +2337,16 @@ query_synergy_event_family_keys <- function(events, registry = query_synergy_eve
 
   out <- character(0)
   for (event_id in event_ids) {
-    lineage <- character(0)
-    current <- event_id
-    visited <- character(0)
-    while (nzchar(current) && !current %in% visited) {
-      lineage <- c(lineage, current)
-      visited <- c(visited, current)
-      current <- query_api_scalar(registry$events[[current]]$parent, default = "")
+    lineage <- if (is.list(registry$lineage_cache) && !is.null(registry$lineage_cache[[event_id]])) {
+      query_synergy_to_vector(registry$lineage_cache[[event_id]])
+    } else {
+      query_synergy_build_event_lineage_for_id(event_id, registry$events)
     }
-    descendants <- query_synergy_expand_event_family(event_id, registry)
+    descendants <- if (is.list(registry$family_cache) && !is.null(registry$family_cache[[event_id]])) {
+      query_synergy_to_vector(registry$family_cache[[event_id]])
+    } else {
+      query_synergy_expand_event_family(event_id, registry)
+    }
     out <- c(out, lineage, descendants)
   }
 
@@ -1589,6 +2821,8 @@ query_synergy_bucket_labels <- function() {
     direct_enablers = "Top direct enablers",
     indirect_engines = "Top indirect engines",
     reciprocal_value_cards = "Top reciprocal value cards",
+    synergy_groups = "Top synergy groups",
+    package_lines = "Top package lines",
     packages = "Top packages / groups",
     anti_synergy_warnings = "Top anti-synergy warnings"
   )
@@ -2692,6 +3926,46 @@ query_synergy_event_registry_seed <- function() {
   )
 }
 
+query_synergy_build_event_lineage_for_id <- function(event_id, events) {
+  lineage <- character(0)
+  current <- query_api_scalar(event_id, default = "")
+  visited <- character(0)
+
+  while (nzchar(current) && !current %in% visited) {
+    lineage <- c(lineage, current)
+    visited <- c(visited, current)
+    current <- query_api_scalar(events[[current]]$parent, default = "")
+  }
+
+  unique(lineage)
+}
+
+query_synergy_build_event_family_for_id <- function(event_id, children_by_parent = list()) {
+  family <- character(0)
+  queue <- query_synergy_to_vector(event_id)
+
+  while (length(queue) > 0L) {
+    current <- queue[[1]]
+    if (length(queue) == 1L) {
+      queue <- character(0)
+    } else {
+      queue <- queue[-1]
+    }
+
+    if (!nzchar(current) || current %in% family) {
+      next
+    }
+
+    family <- c(family, current)
+    children <- setdiff(query_synergy_to_vector(children_by_parent[[current]]), family)
+    if (length(children) > 0L) {
+      queue <- c(queue, children)
+    }
+  }
+
+  unique(family)
+}
+
 query_synergy_build_event_registry <- function(events = list(), base_registry = NULL) {
   if (is.list(base_registry) && is.list(base_registry$events)) {
     merged <- base_registry$events
@@ -2720,7 +3994,32 @@ query_synergy_build_event_registry <- function(events = list(), base_registry = 
     }
   }
 
-  list(events = merged, alias_to_id = alias_to_id)
+  children_by_parent <- list()
+  for (event_id in names(merged)) {
+    parent_id <- query_api_scalar(merged[[event_id]]$parent, default = "")
+    if (!nzchar(parent_id)) {
+      next
+    }
+    children_by_parent[[parent_id]] <- unique(c(query_synergy_to_vector(children_by_parent[[parent_id]]), event_id))
+  }
+
+  lineage_cache <- lapply(names(merged), function(event_id) {
+    query_synergy_build_event_lineage_for_id(event_id, merged)
+  })
+  names(lineage_cache) <- names(merged)
+
+  family_cache <- lapply(names(merged), function(event_id) {
+    query_synergy_build_event_family_for_id(event_id, children_by_parent)
+  })
+  names(family_cache) <- names(merged)
+
+  list(
+    events = merged,
+    alias_to_id = alias_to_id,
+    children_by_parent = children_by_parent,
+    lineage_cache = lineage_cache,
+    family_cache = family_cache
+  )
 }
 
 query_synergy_normalize_event_definition <- function(event_id, definition) {
@@ -4036,17 +5335,35 @@ query_synergy_expand_event_family <- function(events, registry = query_synergy_e
     return(character(0))
   }
 
-  all_events <- names(registry$events)
-  family <- seeds
-  changed <- TRUE
-  while (isTRUE(changed)) {
-    changed <- FALSE
-    for (event_id in all_events) {
-      parent <- query_api_scalar(registry$events[[event_id]]$parent, default = "")
-      if (nzchar(parent) && parent %in% family && !event_id %in% family) {
-        family <- c(family, event_id)
-        changed <- TRUE
-      }
+  if (is.list(registry$family_cache) && length(registry$family_cache) > 0L) {
+    cached <- unique(unlist(lapply(seeds, function(event_id) {
+      query_synergy_to_vector(registry$family_cache[[event_id]])
+    }), use.names = FALSE))
+    if (length(cached) > 0L) {
+      return(unique(cached))
+    }
+  }
+
+  children_by_parent <- if (is.list(registry$children_by_parent)) registry$children_by_parent else list()
+  family <- character(0)
+  queue <- seeds
+
+  while (length(queue) > 0L) {
+    current <- queue[[1]]
+    if (length(queue) == 1L) {
+      queue <- character(0)
+    } else {
+      queue <- queue[-1]
+    }
+
+    if (!nzchar(current) || current %in% family) {
+      next
+    }
+
+    family <- c(family, current)
+    children <- setdiff(query_synergy_to_vector(children_by_parent[[current]]), family)
+    if (length(children) > 0L) {
+      queue <- c(queue, children)
     }
   }
 
@@ -4178,7 +5495,12 @@ query_synergy_get_catalog <- function(force_refresh = FALSE, cache_hours = 24L, 
       cards <- tryCatch(readRDS(paths$rds_file), error = function(e) NULL)
       if (is.list(cards) && length(cards) > 0L) {
         attr(cards, "synergy_source") <- "scryfall_oracle_cards"
-        attr(cards, "synergy_cache_key") <- query_synergy_catalog_cache_key(cards, source = "scryfall_oracle_cards")
+        attr(cards, "synergy_source_signature") <- query_synergy_file_signature(paths$rds_file)
+        attr(cards, "synergy_cache_key") <- query_synergy_catalog_cache_key(
+          cards,
+          source = "scryfall_oracle_cards",
+          source_signature = attr(cards, "synergy_source_signature")
+        )
         query_synergy_cache_env$catalog <- cards
         query_synergy_cache_env$catalog_loaded_at <- now
         query_synergy_cache_env$catalog_source <- "scryfall_oracle_cards"
@@ -4265,7 +5587,12 @@ query_synergy_get_catalog <- function(force_refresh = FALSE, cache_hours = 24L, 
   query_synergy_cache_env$catalog_loaded_at <- now
   query_synergy_cache_env$catalog_source <- "scryfall_oracle_cards"
   attr(query_synergy_cache_env$catalog, "synergy_source") <- "scryfall_oracle_cards"
-  attr(query_synergy_cache_env$catalog, "synergy_cache_key") <- query_synergy_catalog_cache_key(cards, source = "scryfall_oracle_cards")
+  attr(query_synergy_cache_env$catalog, "synergy_source_signature") <- query_synergy_file_signature(paths$rds_file)
+  attr(query_synergy_cache_env$catalog, "synergy_cache_key") <- query_synergy_catalog_cache_key(
+    cards,
+    source = "scryfall_oracle_cards",
+    source_signature = attr(query_synergy_cache_env$catalog, "synergy_source_signature")
+  )
   query_synergy_cache_env$catalog_cache_key <- attr(query_synergy_cache_env$catalog, "synergy_cache_key")
 
   list(ok = TRUE, source = "scryfall_oracle_cards", cards = query_synergy_cache_env$catalog)
@@ -4274,7 +5601,10 @@ query_synergy_get_catalog <- function(force_refresh = FALSE, cache_hours = 24L, 
 query_synergy_cache_paths <- function(cache_dir = "") {
   base_dir <- trimws(as.character(cache_dir))
   if (!nzchar(base_dir)) {
-    base_dir <- file.path(tempdir(), "mtgcodex_synergy_cache")
+    base_dir <- tryCatch(tools::R_user_dir("mtgcodex.api", which = "cache"), error = function(e) "")
+  }
+  if (!nzchar(base_dir)) {
+    base_dir <- file.path(path.expand("~"), ".mtgcodex.api", "cache")
   }
 
   if (!dir.exists(base_dir)) {
@@ -4286,6 +5616,32 @@ query_synergy_cache_paths <- function(cache_dir = "") {
     json_file = file.path(base_dir, "scryfall_oracle_cards.json"),
     rds_file = file.path(base_dir, "scryfall_oracle_cards.rds"),
     precomputed_rds_file = file.path(base_dir, "scryfall_oracle_cards.precomputed.rds")
+  )
+}
+
+query_synergy_cache_key_slug <- function(value, default = "catalog") {
+  slug <- query_api_scalar(value, default = default)
+  slug <- gsub("[^A-Za-z0-9._-]+", "_", slug)
+  slug <- gsub("_+", "_", slug)
+  slug <- gsub("^_+|_+$", "", slug)
+  if (!nzchar(slug)) {
+    slug <- default
+  }
+  if (nchar(slug) > 160L) {
+    slug <- substr(slug, 1L, 160L)
+  }
+  slug
+}
+
+query_synergy_precomputed_cache_file <- function(cache_paths, cache_key = "", source = "") {
+  source_key <- query_api_scalar(source, default = "catalog")
+  if (identical(source_key, "scryfall_oracle_cards")) {
+    return(cache_paths$precomputed_rds_file)
+  }
+
+  file.path(
+    cache_paths$base_dir,
+    sprintf("precomputed-%s.rds", query_synergy_cache_key_slug(cache_key, default = source_key))
   )
 }
 

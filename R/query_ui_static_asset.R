@@ -1,4 +1,8 @@
 query_ui_static_asset <- function(file, res) {
+  res$setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+  res$setHeader("Pragma", "no-cache")
+  res$setHeader("Expires", "0")
+
   file_name <- trimws(as.character(file))
   if (!query_ui_validate_asset_name(file_name)) {
     res$status <- 400L

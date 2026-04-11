@@ -1,4 +1,10 @@
-query_ui_index_html <- function() {
+query_ui_index_html <- function(res = NULL) {
+  if (!is.null(res)) {
+    res$setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+    res$setHeader("Pragma", "no-cache")
+    res$setHeader("Expires", "0")
+  }
+
   root <- query_ui_root_dir()
   index_file <- file.path(root, "index.html")
 

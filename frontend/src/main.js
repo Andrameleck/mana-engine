@@ -6,7 +6,9 @@ import {
   deleteStoredCollection,
   fetchLotusNoirPosts as fetchLotusNoirPostsApi,
   fetchSpellbookVariants,
-  fetchSynergyFind
+  fetchSynergyFind,
+  startSynergyJob,
+  fetchSynergyJobStatus
 } from "./api.js";
 import {
   renderCollection,
@@ -2441,7 +2443,7 @@ import {
     strategyNodes.status.textContent = currentUiLanguage() === "fr"
       ? `Analyse mecanique backend en cours pour ${resolvedSeed.name}...`
       : `Running backend mechanical analysis for ${resolvedSeed.name}...`;
-    const synergyResult = await fetchSynergyFind(synergyPayload);
+    const synergyResult = await fetchStrategySynergyResult(strategyNodes, synergyPayload, resolvedSeed.name, runToken);
     if (runToken !== state.strategy.runToken) {
       return;
     }
@@ -2453,9 +2455,13 @@ import {
         const count = Number(bucket?.count || (Array.isArray(bucket?.results) ? bucket.results.length : 0));
         return sum + (Number.isFinite(count) ? count : 0);
       }, 0);
+      const totalMs = Number(synergyResult?.timings?.total_ms || 0);
+      const durationText = Number.isFinite(totalMs) && totalMs > 0
+        ? ` ${currentUiLanguage() === "fr" ? "Temps" : "Time"}: ${(totalMs / 1000).toFixed(totalMs >= 10000 ? 0 : 1)}s.`
+        : "";
       strategyNodes.status.textContent = currentUiLanguage() === "fr"
-        ? `${resolvedSeed.name}: ${Number(synergyResult?.count || 0)} cartes classees, ${bucketCount} elements bucketes, ${Number(synergyResult?.package_count || 0)} packages backend.`
-        : `${resolvedSeed.name}: ${Number(synergyResult?.count || 0)} ranked cards, ${bucketCount} bucketed entries, ${Number(synergyResult?.package_count || 0)} backend packages.`;
+        ? `${resolvedSeed.name}: ${Number(synergyResult?.count || 0)} cartes classees, ${bucketCount} elements bucketes, ${Number(synergyResult?.package_count || 0)} packages backend.${durationText}`
+        : `${resolvedSeed.name}: ${Number(synergyResult?.count || 0)} ranked cards, ${bucketCount} bucketed entries, ${Number(synergyResult?.package_count || 0)} backend packages.${durationText}`;
       return;
     }
 
@@ -2622,12 +2628,79 @@ import {
 
   function buildStrategySynergyPayload(seedCard, cards, directLimit, groupLimit) {
     const safeCards = Array.isArray(cards) ? cards.map(toStrategySynergyCardPayload).filter((card) => card.name) : [];
+    const maxResults = Math.max(Number(directLimit) || 0, (Number(groupLimit) || 0) * 2, 12);
+    const topK = Math.max(maxResults * 4, (Number(groupLimit) || 0) * 6, 48);
+    const packageTopN = Math.max(Math.min((Number(groupLimit) || 0) * 2, 24), 6);
     return {
       card_name: String(seedCard?.name || "").trim(),
       format: "commander",
-      max_results: Math.max(Number(directLimit) || 0, (Number(groupLimit) || 0) * 2, 12),
+      max_results: maxResults,
+      top_k: topK,
+      package_top_n: packageTopN,
       cards: safeCards
     };
+  }
+
+  function waitStrategyMilliseconds(value) {
+    const milliseconds = Math.max(0, Number(value) || 0);
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, milliseconds);
+    });
+  }
+
+  async function fetchStrategySynergyResult(strategyNodes, payload, seedName, runToken) {
+    const fallbackDirect = async (message) => {
+      if (runToken !== state.strategy.runToken) {
+        return { ok: false, cancelled: true };
+      }
+      strategyNodes.status.textContent = message;
+      return fetchSynergyFind(payload);
+    };
+
+    const queued = await startSynergyJob(payload);
+    if (runToken !== state.strategy.runToken) {
+      return { ok: false, cancelled: true };
+    }
+
+    const jobId = String(queued?.job_id || "").trim();
+    if (!queued?.ok || !jobId) {
+      const message = currentUiLanguage() === "fr"
+        ? `${seedName}: job backend indisponible, repli sur /synergy/find...`
+        : `${seedName}: background job unavailable, falling back to /synergy/find...`;
+      return fallbackDirect(message);
+    }
+
+    for (let attempt = 0; attempt < 180; attempt += 1) {
+      const status = attempt === 0 ? queued : await fetchSynergyJobStatus(jobId);
+      if (runToken !== state.strategy.runToken) {
+        return { ok: false, cancelled: true };
+      }
+
+      if (status?.result?.ok) {
+        return status.result;
+      }
+
+      const statusValue = String(status?.status || "").trim().toLowerCase();
+      if (statusValue === "completed" && status?.result?.ok) {
+        return status.result;
+      }
+      if (statusValue === "error") {
+        const message = currentUiLanguage() === "fr"
+          ? `${seedName}: job backend en erreur, repli sur /synergy/find...`
+          : `${seedName}: background job failed, falling back to /synergy/find...`;
+        return fallbackDirect(message);
+      }
+
+      const percent = clampInt(status?.progress?.percent, 0, 100, 0);
+      const stage = String(status?.progress?.stage || "").trim() || (currentUiLanguage() === "fr" ? "Analyse backend" : "Backend analysis");
+      strategyNodes.status.textContent = `${seedName}: ${stage} (${percent}%)...`;
+      await waitStrategyMilliseconds(attempt < 6 ? 250 : 500);
+    }
+
+    const timeoutMessage = currentUiLanguage() === "fr"
+      ? `${seedName}: job backend trop long, repli sur /synergy/find...`
+      : `${seedName}: background job timed out, falling back to /synergy/find...`;
+    return fallbackDirect(timeoutMessage);
   }
 
   function buildStrategySynergyLookup(cards) {

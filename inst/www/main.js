@@ -11,14 +11,14 @@ import {
   fetchLotusNoirPosts as fetchLotusNoirPostsApi,
   fetchSpellbookVariants,
   fetchStrategyBridgeEquation
-} from "./api.js";
+} from "./api.js?v=20260411-synergy-groups";
 import {
   renderCollection,
   getCollectionLanguage,
   setCollectionLanguage,
   bindRowPreviewEvents,
   renderManaCostCell
-} from "./ui.js";
+} from "./ui.js?v=20260411-synergy-groups";
 
 (function bootstrap() {
   const UI_TEXT = {
@@ -505,7 +505,7 @@ import {
     setText("#spellbook-status", t("spellbook_hint"));
     setText("#tab-calculdev #calculdev-status", t("strategy_waiting"));
     setText("#tab-calculdev .strategy-result-block:nth-of-type(1) .strategy-result-head h4", t("direct_synergies"));
-    setText("#tab-calculdev .strategy-result-block:nth-of-type(2) .strategy-result-head h4", currentUiLanguage() === "fr" ? "Details techniques" : "Technical details");
+    setText("#tab-calculdev .strategy-result-block:nth-of-type(2) .strategy-result-head h4", t("card_groups"));
     setText("#tab-calculdev .panel-head h3", "Calcul_dev Playground");
     setText("#calculdev-seed-label", t("strategy_seed_label"));
     setText("#calculdev-direct-limit-label", t("strategy_direct_limit_label"));
@@ -888,6 +888,8 @@ import {
       throw new Error(currentUiLanguage() === "fr" ? "Job backend introuvable." : "Missing backend job.");
     }
 
+    let completedWithoutResultCount = 0;
+
     while (runToken === state.calculdev.runToken) {
       const statusPayload = typeof window.fetchSynergyJobStatus === "function"
         ? await window.fetchSynergyJobStatus(jobId)
@@ -917,7 +919,19 @@ import {
 
       const jobStatus = String(statusPayload.status || "").toLowerCase();
       if (jobStatus === "completed") {
-        return statusPayload.result || null;
+        if (statusPayload.result && statusPayload.result.ok === true) {
+          return statusPayload.result;
+        }
+
+        completedWithoutResultCount += 1;
+        setCalculDevProgress(99, currentUiLanguage() === "fr" ? "Finalisation du resultat..." : "Finalizing result...", true);
+        if (completedWithoutResultCount >= 8) {
+          throw new Error(currentUiLanguage() === "fr"
+            ? "Le job est termine mais le resultat reste indisponible."
+            : "The job completed but the result is still unavailable.");
+        }
+        await sleepMs(250);
+        continue;
       }
       if (jobStatus === "error") {
         finishCalculDevProgress(null, false, statusPayload);
@@ -963,6 +977,25 @@ import {
     }
 
     return parts.join(" | ");
+  }
+
+  function buildCalculDevSynergyPayload(cardName, maxResults, groupLimit, colorIdentity = []) {
+    const safeMaxResults = clampInt(maxResults, 4, 24, 12);
+    const safeGroupLimit = clampInt(groupLimit, 3, 12, 6);
+    const payload = {
+      card_name: String(cardName || "").trim(),
+      format: "commander",
+      max_results: safeMaxResults,
+      top_k: Math.max(safeMaxResults * 3, safeGroupLimit * 4, 24),
+      package_top_n: Math.max(Math.min(safeGroupLimit * 2, 16), 6),
+      max_groups: safeGroupLimit,
+      max_group_size: 4,
+      max_group_paths: Math.max(48, safeGroupLimit * 12)
+    };
+    if (Array.isArray(colorIdentity) && colorIdentity.length > 0) {
+      payload.color_identity = colorIdentity;
+    }
+    return payload;
   }
 
   async function runCalculDevComputation() {
@@ -1016,14 +1049,7 @@ import {
     calculNodes.groupList.innerHTML = `<p class="muted">${currentUiLanguage() === "fr" ? "Chargement..." : "Loading..."}</p>`;
     resetCalculDevPreview();
 
-    const payload = {
-      card_name: cardName,
-      format: formatName,
-      max_results: maxResults
-    };
-    if (colorIdentity.length > 0) {
-      payload.color_identity = colorIdentity;
-    }
+    const payload = buildCalculDevSynergyPayload(cardName, maxResults, groupLimit, colorIdentity);
 
     try {
       const jobStart = typeof window.startSynergyJob === "function"
@@ -1056,7 +1082,8 @@ import {
 
       state.calculdev.payload = out;
       state.calculdev.error = "";
-      renderCalculDevResults(out.best_matches, cardName);
+      const groupedResults = resolveCalculDevGroups(out);
+      renderCalculDevResults(out.best_matches, cardName, groupedResults);
       const count = Array.isArray(out.best_matches) ? out.best_matches.length : 0;
       finishCalculDevProgress(out, true);
       calculNodes.status.textContent = formatCalculDevStatus(count, cardName, out);
@@ -1079,6 +1106,41 @@ import {
         }
       }
     }
+  }
+
+  function resolveCalculDevGroups(payload) {
+    const out = payload && typeof payload === "object" ? payload : {};
+    const buckets = out.buckets && typeof out.buckets === "object" ? out.buckets : {};
+
+    const pools = [
+      out.synergy_groups,
+      out.package_lines,
+      out.packages,
+      buckets?.synergy_groups?.results,
+      buckets?.package_lines?.results,
+      buckets?.packages?.results
+    ];
+    const flattened = pools.flatMap((entry) => Array.isArray(entry) ? entry : []);
+    if (flattened.length === 0) {
+      return [];
+    }
+
+    const seen = new Set();
+    const deduped = [];
+    flattened.forEach((entry, index) => {
+      if (!entry || typeof entry !== "object") {
+        return;
+      }
+      const key = String(entry.id || entry.group_id || entry.chain?.member_ids?.join("|") || `group-${index}`);
+      if (!key || seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      deduped.push(entry);
+    });
+
+    deduped.sort((left, right) => Number(right?.total_score || right?.score || 0) - Number(left?.total_score || left?.score || 0));
+    return deduped;
   }
 
   function selectedCalculDevColors() {
@@ -1150,8 +1212,12 @@ import {
     `;
 
     const directList = calculNodes.directList;
+    const groupList = calculNodes.groupList;
     if (directList) {
       Array.from(directList.querySelectorAll(".row-active")).forEach((node) => node.classList.remove("row-active"));
+    }
+    if (groupList) {
+      Array.from(groupList.querySelectorAll(".row-active")).forEach((node) => node.classList.remove("row-active"));
     }
     if (cardNode && typeof cardNode.classList?.add === "function") {
       cardNode.classList.add("row-active");
@@ -1224,54 +1290,257 @@ import {
     return cardNode;
   }
 
-  function renderCalculDevResults(matches, seedName = "") {
+  function calculDevCardImageUrl(cardId, cardName, version = "art_crop") {
+    const idValue = String(cardId || "").trim();
+    if (isLikelyScryfallId(idValue)) {
+      return `https://api.scryfall.com/cards/${encodeURIComponent(idValue)}?format=image&version=${encodeURIComponent(version)}`;
+    }
+    const nameValue = String(cardName || "").trim();
+    if (!nameValue) {
+      return "";
+    }
+    const params = new URLSearchParams({
+      exact: nameValue,
+      format: "image",
+      version: String(version || "art_crop")
+    });
+    return `https://api.scryfall.com/cards/named?${params.toString()}`;
+  }
+
+  function dedupeCalculDevMembers(members) {
+    const values = Array.isArray(members) ? members : [];
+    const seen = new Set();
+    const out = [];
+    values.forEach((member, index) => {
+      if (!member || typeof member !== "object") {
+        return;
+      }
+      const key = String(member.id || member.name || `member-${index}`).trim().toLowerCase();
+      if (!key || seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      out.push(member);
+    });
+    return out;
+  }
+
+  function createCalculDevGroupMemberCard(member, group, options = {}) {
+    const tone = String(options.tone || "core").toLowerCase() === "side" ? "side" : "core";
+    const cardNode = document.createElement("article");
+    cardNode.className = "strategy-card is-compact";
+
+    const cardName = String(member?.name || "Card");
+    const cardId = String(member?.id || "");
+    const inferredRole = String(member?.inferred_role || member?.role || member?.inferredRole || "member");
+    const imageUrl = calculDevCardImageUrl(cardId, cardName, "art_crop");
+
+    const art = document.createElement("div");
+    art.className = "strategy-card-art";
+    if (imageUrl) {
+      const img = document.createElement("img");
+      img.src = imageUrl;
+      img.alt = cardName;
+      img.loading = "lazy";
+      art.appendChild(img);
+    } else {
+      const fallback = document.createElement("span");
+      fallback.className = "strategy-card-fallback";
+      fallback.textContent = currentUiLanguage() === "fr" ? "Image indisponible" : "No image";
+      art.appendChild(fallback);
+    }
+    cardNode.appendChild(art);
+
+    const body = document.createElement("div");
+    body.className = "strategy-card-body";
+
+    const nameLine = document.createElement("p");
+    nameLine.className = "strategy-card-name";
+    nameLine.textContent = cardName;
+    body.appendChild(nameLine);
+
+    const badgesLine = document.createElement("div");
+    badgesLine.className = "strategy-card-badges";
+    appendStrategyCardBadge(
+      badgesLine,
+      inferredRole || (currentUiLanguage() === "fr" ? "role inconnu" : "unknown role"),
+      tone === "side" ? "is-side" : "is-core"
+    );
+    body.appendChild(badgesLine);
+
+    const groupScore = Number(group?.total_score || group?.score || 0);
+    const scoreLine = document.createElement("p");
+    scoreLine.className = "strategy-card-meta";
+    scoreLine.textContent = `${currentUiLanguage() === "fr" ? "score groupe" : "group score"} ${formatDecimal(groupScore)}`;
+    body.appendChild(scoreLine);
+
+    const category = String(group?.category || group?.bucket_label || group?.group_type || "group");
+    const categoryLine = document.createElement("p");
+    categoryLine.className = "strategy-card-meta";
+    categoryLine.textContent = category;
+    body.appendChild(categoryLine);
+
+    cardNode.appendChild(body);
+
+    const reasonLines = Array.isArray(group?.reasons) ? group.reasons.slice(0, 3) : [];
+    const previewReasons = [
+      currentUiLanguage() === "fr"
+        ? `Role dans le groupe: ${inferredRole}`
+        : `Role in group: ${inferredRole}`,
+      ...reasonLines
+    ];
+    const previewEntry = {
+      id: cardId,
+      name: cardName,
+      score: Number(group?.total_score || group?.score || 0),
+      score_breakdown: group?.score_breakdown && typeof group.score_breakdown === "object" ? group.score_breakdown : {},
+      relation_classes: [
+        String(group?.bucket || "group"),
+        String(group?.group_type || "synergy_group")
+      ],
+      reasons: previewReasons
+    };
+
+    cardNode.addEventListener("mouseenter", () => renderCalculDevCardPreview(previewEntry, cardNode));
+    cardNode.addEventListener("click", () => renderCalculDevCardPreview(previewEntry, cardNode));
+    return cardNode;
+  }
+
+  function renderCalculDevResults(matches, seedName = "", groups = []) {
     const calculNodes = nodes.calculdev;
     if (!calculNodes.directList || !calculNodes.groupList) {
       return;
     }
 
     const safeMatches = Array.isArray(matches) ? matches : [];
-    if (safeMatches.length === 0) {
+    const safeGroups = Array.isArray(groups) ? groups : [];
+    if (safeMatches.length === 0 && safeGroups.length === 0) {
       calculNodes.directList.innerHTML = `<p class="muted">${escapeHtml(currentUiLanguage() === "fr" ? "Aucune synergie directe calculee." : "No direct synergy found.")}</p>`;
-      calculNodes.groupList.innerHTML = `<p class="muted">${escapeHtml(currentUiLanguage() === "fr" ? "Aucun detail technique disponible." : "No technical detail available.")}</p>`;
+      calculNodes.groupList.innerHTML = `<p class="muted">${escapeHtml(currentUiLanguage() === "fr" ? "Aucun groupe de synergie multicarte." : "No multi-card synergy group found.")}</p>`;
       return;
     }
 
     calculNodes.directList.innerHTML = "";
-    const directFragment = document.createDocumentFragment();
-    safeMatches.forEach((entry, index) => {
-      const cardNode = createCalculDevCardElement(entry, index);
-      directFragment.appendChild(cardNode);
-    });
-    calculNodes.directList.appendChild(directFragment);
+    if (safeMatches.length === 0) {
+      calculNodes.directList.innerHTML = `<p class="muted">${escapeHtml(currentUiLanguage() === "fr" ? "Aucune synergie directe calculee." : "No direct synergy found.")}</p>`;
+    } else {
+      const directFragment = document.createDocumentFragment();
+      safeMatches.forEach((entry, index) => {
+        const cardNode = createCalculDevCardElement(entry, index);
+        directFragment.appendChild(cardNode);
+      });
+      calculNodes.directList.appendChild(directFragment);
+    }
 
     const detailLimit = clampInt(state.calculdev.groupLimit, 3, 12, 6);
-    const detailCards = safeMatches.slice(0, Math.min(detailLimit, safeMatches.length)).map((entry, index) => {
-      const reasons = Array.isArray(entry?.reasons) ? entry.reasons : [];
-      const matched = entry?.matched_events && typeof entry.matched_events === "object"
-        ? entry.matched_events
-        : {};
-      const detailLine = [
-        `score ${Number(entry?.score || 0)}`,
-        `reasons ${reasons.length}`,
-        `events ${Object.keys(matched).length}`
-      ].join(" | ");
-      const reasonMarkup = reasons.length > 0
-        ? `<ul class="strategy-group-line">${reasons.slice(0, 4).map((reason) => `<li>${escapeHtml(String(reason || ""))}</li>`).join("")}</ul>`
-        : `<p class="strategy-group-line">${escapeHtml(currentUiLanguage() === "fr" ? "Aucune explication." : "No explanation.")}</p>`;
-      return `
-        <article class="strategy-group is-heuristic">
-          <p class="strategy-group-title">#${index + 1} ${escapeHtml(String(entry?.name || "Card"))}</p>
-          <p class="strategy-group-line">${escapeHtml(detailLine)}</p>
-          ${reasonMarkup}
-        </article>
-      `;
-    }).join("");
+    calculNodes.groupList.innerHTML = "";
 
-    calculNodes.groupList.innerHTML = detailCards || `<p class="muted">${escapeHtml(currentUiLanguage() === "fr" ? "Aucun detail technique disponible." : "No technical detail available.")}</p>`;
+    if (safeGroups.length === 0) {
+      calculNodes.groupList.innerHTML = `<p class="muted">${escapeHtml(currentUiLanguage() === "fr" ? "Aucun groupe de synergie multicarte." : "No multi-card synergy group found.")}</p>`;
+    } else {
+      const fragment = document.createDocumentFragment();
+      safeGroups.slice(0, Math.min(detailLimit, safeGroups.length)).forEach((group, index) => {
+        const article = document.createElement("article");
+        article.className = "strategy-group is-heuristic";
+
+        const title = document.createElement("p");
+        title.className = "strategy-group-title";
+        const titleLabel = `${String(group?.category || group?.bucket_label || group?.group_type || "Group")} | score ${Number(group?.total_score || group?.score || 0)}`;
+        title.textContent = `#${index + 1} ${titleLabel}`;
+        const sourceBadge = document.createElement("span");
+        sourceBadge.className = "strategy-group-source-badge is-heuristic";
+        sourceBadge.textContent = "Source: API";
+        title.appendChild(sourceBadge);
+        article.appendChild(title);
+
+        const members = Array.isArray(group?.members) ? group.members : [];
+        const roleLine = members.map((member) => {
+          const memberName = String(member?.name || "Card");
+          const inferredRole = String(member?.inferred_role || member?.role || "member");
+          return `${memberName} (${inferredRole})`;
+        }).join(" -> ");
+        const lineNode = document.createElement("p");
+        lineNode.className = "strategy-group-line";
+        lineNode.textContent = roleLine || String(group?.explanation_text || "");
+        article.appendChild(lineNode);
+
+        const matchedEvents = Array.isArray(group?.matched_events) ? group.matched_events : [];
+        const eventsNode = document.createElement("p");
+        eventsNode.className = "strategy-group-line";
+        eventsNode.textContent = matchedEvents.length > 0
+          ? `${currentUiLanguage() === "fr" ? "Events" : "Events"}: ${matchedEvents.slice(0, 6).join(", ")}`
+          : (currentUiLanguage() === "fr" ? "Aucun event capture." : "No matched events.");
+        article.appendChild(eventsNode);
+
+        const packageStructure = group?.package_structure && typeof group.package_structure === "object"
+          ? group.package_structure
+          : {};
+        const coreMembers = dedupeCalculDevMembers([
+          packageStructure?.start_member,
+          packageStructure?.end_member
+        ].filter(Boolean).length > 0
+          ? [packageStructure?.start_member, packageStructure?.end_member].filter(Boolean)
+          : [members[0], members[members.length - 1]].filter(Boolean));
+        const sideMembers = dedupeCalculDevMembers(
+          Array.isArray(packageStructure?.intermediate_members)
+            ? packageStructure.intermediate_members
+            : members.slice(1, Math.max(1, members.length - 1))
+        );
+
+        if (coreMembers.length > 0) {
+          const coreSection = document.createElement("div");
+          coreSection.className = "strategy-group-section is-core";
+          const coreSectionTitle = document.createElement("p");
+          coreSectionTitle.className = "strategy-group-section-title";
+          coreSectionTitle.textContent = currentUiLanguage() === "fr" ? "Cartes core" : "Core cards";
+          coreSection.appendChild(coreSectionTitle);
+          const coreGrid = document.createElement("div");
+          coreGrid.className = "strategy-group-cards is-core";
+          coreMembers.forEach((member) => {
+            coreGrid.appendChild(createCalculDevGroupMemberCard(member, group, { tone: "core" }));
+          });
+          coreSection.appendChild(coreGrid);
+          article.appendChild(coreSection);
+        }
+
+        if (sideMembers.length > 0) {
+          const sideSection = document.createElement("div");
+          sideSection.className = "strategy-group-section is-side";
+          const sideSectionTitle = document.createElement("p");
+          sideSectionTitle.className = "strategy-group-section-title";
+          sideSectionTitle.textContent = currentUiLanguage() === "fr" ? "Cartes intermediaires" : "Bridge cards";
+          sideSection.appendChild(sideSectionTitle);
+          const sideGrid = document.createElement("div");
+          sideGrid.className = "strategy-group-cards is-side";
+          sideMembers.forEach((member) => {
+            sideGrid.appendChild(createCalculDevGroupMemberCard(member, group, { tone: "side" }));
+          });
+          sideSection.appendChild(sideGrid);
+          article.appendChild(sideSection);
+        }
+
+        const reasons = Array.isArray(group?.reasons) ? group.reasons : [];
+        if (reasons.length > 0) {
+          const details = document.createElement("details");
+          details.className = "strategy-group-details";
+          const summary = document.createElement("summary");
+          summary.textContent = currentUiLanguage() === "fr" ? "Pourquoi ce groupe" : "Why this group";
+          details.appendChild(summary);
+          const reasonList = document.createElement("ul");
+          reasonList.className = "strategy-group-line";
+          reasonList.innerHTML = reasons.slice(0, 5).map((reason) => `<li>${escapeHtml(String(reason || ""))}</li>`).join("");
+          details.appendChild(reasonList);
+          article.appendChild(details);
+        }
+
+        fragment.appendChild(article);
+      });
+      calculNodes.groupList.appendChild(fragment);
+    }
+
     calculNodes.status.textContent = currentUiLanguage() === "fr"
-      ? `${safeMatches.length} synergie(s) calculee(s) pour ${seedName || "la seed"}.`
-      : `${safeMatches.length} synergy result(s) for ${seedName || "seed"}.`;
+      ? `${safeMatches.length} synergie(s) directe(s) et ${safeGroups.length} groupe(s) pour ${seedName || "la seed"}.`
+      : `${safeMatches.length} direct synergy result(s) and ${safeGroups.length} group(s) for ${seedName || "seed"}.`;
   }
 
   function inferDeckSourceType(fileName) {

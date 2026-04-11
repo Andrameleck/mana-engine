@@ -501,7 +501,7 @@ test_that("anti synergy detection explains graveyard tension", {
   expect_true(any(grepl("GRAVEYARD_DEPENDENT", score$matched_events$anti_conflicts, fixed = TRUE)))
 })
 
-test_that("multi-card package detection finds draw-discard line", {
+test_that("structured synergy groups detect a three card draw discard line", {
   payoff <- mtgcodex.api:::query_synergy_normalize_card(list(
     id = "payoff",
     name = "Archive Judge",
@@ -532,26 +532,155 @@ test_that("multi-card package detection finds draw-discard line", {
     legalities = list(commander = "legal")
   ))
 
-  packages <- mtgcodex.api:::query_synergy_detect_packages_for_target(
-    target = payoff,
+  groups <- mtgcodex.api:::query_synergy_detect_groups_for_seed(
+    seed = payoff,
     candidates = list(setup, converter),
     format_name = "commander",
-    min_edge_score = 10
+    min_edge_score = 10,
+    max_groups = 3,
+    max_group_size = 4,
+    max_paths = 30
   )
 
-  expect_gte(length(packages), 1)
-  expect_true(any(vapply(packages, function(pkg) pkg$archetype == "draw_discard_engine", logical(1))))
-  expect_true(any(vapply(packages, function(pkg) any(grepl("Package line", pkg$reasons, fixed = TRUE)), logical(1))))
+  expect_gte(length(groups$groups), 1)
+  group_match <- Filter(function(group) {
+    roles <- vapply(group$members, function(member) member$inferred_role, character(1))
+    length(group$members) == 3L &&
+      any(c("DRAW_CARD", "DISCARD_CARD") %in% group$matched_events) &&
+      any(roles %in% c("engine", "converter")) &&
+      utils::tail(roles, 1L) %in% c("payoff", "finisher", "target")
+  }, groups$groups)
+
+  expect_gte(length(group_match), 1)
+  expect_true(is.list(group_match[[1]]$line$edges))
+  expect_true(is.list(group_match[[1]]$package_structure))
+  expect_identical(group_match[[1]]$package_structure$intermediate_count, 1L)
+  expect_gt(group_match[[1]]$score_breakdown$chain_continuity, 0)
 })
 
-test_that("multi-archetype package detection distinguishes graveyard lines", {
+test_that("engine fuel payoff groups surface as indirect packages", {
+  payoff <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "archive-payoff",
+    name = "Archive Judge",
+    oracle_text = "Whenever you draw a card, gain 1 life.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 3,
+    legalities = list(commander = "legal")
+  ))
+
+  fuel <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "fuel",
+    name = "Frantic Research",
+    oracle_text = "Draw two cards, then discard two cards.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 2,
+    legalities = list(commander = "legal")
+  ))
+
+  engine <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "engine",
+    name = "Lore Recycler",
+    oracle_text = "Whenever you discard a card, draw a card.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 2,
+    legalities = list(commander = "legal")
+  ))
+
+  groups <- mtgcodex.api:::query_synergy_detect_groups_for_seed(
+    seed = payoff,
+    candidates = list(fuel, engine),
+    format_name = "commander",
+    min_edge_score = 10,
+    max_groups = 3,
+    max_group_size = 4,
+    max_paths = 30
+  )
+
+  expect_gte(length(groups$groups), 1)
+  expect_true(any(vapply(groups$groups, function(group) {
+    roles <- vapply(group$members, function(member) member$inferred_role, character(1))
+    any(roles %in% c("fuel", "setup")) && any(roles %in% c("engine", "converter"))
+  }, logical(1))))
+})
+
+test_that("group search supports A plus two intermediates plus B package lines", {
+  payoff <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "token-payoff",
+    name = "Token Auditor",
+    oracle_text = "Whenever you create a token, gain 1 life.",
+    colors = c("W"),
+    color_identity = c("W"),
+    cmc = 3,
+    legalities = list(commander = "legal")
+  ))
+
+  setup <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "seed-setup",
+    name = "Frantic Research",
+    oracle_text = "Draw two cards, then discard two cards.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 2,
+    legalities = list(commander = "legal")
+  ))
+
+  bridge_a <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "discard-engine",
+    name = "Lore Recycler",
+    oracle_text = "Whenever you discard a card, draw a card.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 2,
+    legalities = list(commander = "legal")
+  ))
+
+  bridge_b <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "draw-converter",
+    name = "Spark Provisioner",
+    oracle_text = "Whenever you draw a card, create a Treasure token.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 3,
+    legalities = list(commander = "legal")
+  ))
+
+  groups <- mtgcodex.api:::query_synergy_detect_groups_for_seed(
+    seed = payoff,
+    candidates = list(setup, bridge_a, bridge_b),
+    format_name = "commander",
+    min_edge_score = 8,
+    max_groups = 4,
+    max_group_size = 4,
+    max_paths = 48
+  )
+
+  expect_gte(length(groups$groups), 1)
+  expect_true(any(vapply(groups$groups, function(group) {
+    member_ids <- vapply(group$members, function(member) member$id, character(1))
+    has_all_cards <- all(c("seed-setup", "discard-engine", "draw-converter", "token-payoff") %in% member_ids)
+    has_four_cards <- length(group$members) == 4L
+    has_two_intermediates <- suppressWarnings(as.integer(group$package_structure$intermediate_count)) == 2L
+    chain_hits <- intersect(
+      c("DISCARD_CARD", "DRAW_CARD", "CREATE_TOKEN", "GRAVEYARD_FUEL", "BATTLEFIELD_RESOURCE"),
+      group$matched_events
+    )
+    has_chain <- length(chain_hits) >= 3L
+    has_all_cards && has_four_cards && has_two_intermediates && has_chain
+  }, logical(1))))
+})
+
+test_that("graveyard reanimation groups use resource and zone chains", {
   payoff <- mtgcodex.api:::query_synergy_normalize_card(list(
     id = "grave-payoff",
-    name = "Afterlife Caller",
-    oracle_text = "Whenever you cast a spell, create a token.",
+    name = "Ancient Colossus",
+    oracle_text = "",
+    type_line = "Creature - Giant",
     colors = c("B"),
     color_identity = c("B"),
-    cmc = 4,
+    cmc = 7,
     legalities = list(commander = "legal")
   ))
 
@@ -568,23 +697,28 @@ test_that("multi-archetype package detection distinguishes graveyard lines", {
   converter <- mtgcodex.api:::query_synergy_normalize_card(list(
     id = "grave-converter",
     name = "Ash Script",
-    oracle_text = "",
-    keywords = c("Flashback"),
+    oracle_text = "Return target creature card from your graveyard to the battlefield.",
     colors = c("B"),
     color_identity = c("B"),
     cmc = 2,
     legalities = list(commander = "legal")
   ))
 
-  packages <- mtgcodex.api:::query_synergy_detect_packages_for_target(
-    target = payoff,
+  groups <- mtgcodex.api:::query_synergy_detect_groups_for_seed(
+    seed = payoff,
     candidates = list(setup, converter),
     format_name = "commander",
-    min_edge_score = 10
+    min_edge_score = 10,
+    max_groups = 3,
+    max_group_size = 4,
+    max_paths = 30
   )
 
-  expect_gte(length(packages), 1)
-  expect_true(any(vapply(packages, function(pkg) pkg$archetype == "graveyard_setup_converter_payoff", logical(1))))
+  expect_gte(length(groups$groups), 1)
+  expect_true(any(vapply(groups$groups, function(group) {
+    any(c("GRAVEYARD_FUEL", "REANIMATE", "BATTLEFIELD_RESOURCE") %in% group$matched_events) &&
+      identical(utils::tail(vapply(group$members, function(member) member$inferred_role, character(1)), 1L), "target")
+  }, logical(1))))
 })
 
 test_that("synergy finder returns bucketed output with explainable axes", {
@@ -634,15 +768,17 @@ test_that("synergy finder returns bucketed output with explainable axes", {
 
   expect_true(isTRUE(out$ok))
   expect_true(is.list(out$buckets))
-  expect_true(all(c("direct_enablers", "indirect_engines", "reciprocal_value_cards", "anti_synergy_warnings", "packages") %in% names(out$buckets)))
+  expect_true(all(c("direct_enablers", "indirect_engines", "reciprocal_value_cards", "anti_synergy_warnings", "synergy_groups", "package_lines", "packages") %in% names(out$buckets)))
   expect_gte(length(out$best_matches), 1)
   expect_true(is.character(out$best_matches[[1]]$bucket))
   expect_true(is.list(out$best_matches[[1]]$axis_scores))
   expect_true(is.character(out$best_matches[[1]]$explanation_text))
   expect_true(is.character(out$best_matches[[1]]$roles))
+  expect_true(is.list(out$synergy_groups))
+  expect_true(is.numeric(out$group_count) || is.integer(out$group_count))
 })
 
-test_that("token sacrifice engines surface as indirect packages", {
+test_that("token sacrifice death groups detect converter bridge payoff", {
   payoff <- mtgcodex.api:::query_synergy_normalize_card(list(
     id = "death-payoff",
     name = "Mortuary Ledger",
@@ -673,15 +809,70 @@ test_that("token sacrifice engines surface as indirect packages", {
     legalities = list(commander = "legal")
   ))
 
-  packages <- mtgcodex.api:::query_synergy_detect_packages_for_target(
-    target = payoff,
+  groups <- mtgcodex.api:::query_synergy_detect_groups_for_seed(
+    seed = payoff,
     candidates = list(setup, converter),
     format_name = "commander",
-    min_edge_score = 10
+    min_edge_score = 10,
+    max_groups = 3,
+    max_group_size = 4,
+    max_paths = 30
   )
 
-  expect_gte(length(packages), 1)
-  expect_true(any(vapply(packages, function(pkg) pkg$archetype == "tokens_sacrifice_payoff", logical(1))))
+  expect_gte(length(groups$groups), 1)
+  expect_true(any(vapply(groups$groups, function(group) {
+    any(c("CREATE_TOKEN", "TOKEN_CREATED") %in% group$matched_events) &&
+      any(c("SACRIFICE_PERMANENT", "DIES", "CREATURE_DIES") %in% group$matched_events)
+  }, logical(1))))
+})
+
+test_that("anti synergy inside groups is penalized and explained", {
+  payoff <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "payoff",
+    name = "Archive Judge",
+    oracle_text = "Whenever you draw a card, gain 1 life.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 3,
+    legalities = list(commander = "legal")
+  ))
+
+  setup <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "setup",
+    name = "Frantic Research",
+    oracle_text = "Draw two cards, then discard two cards.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 2,
+    legalities = list(commander = "legal")
+  ))
+
+  conflicted_engine <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "conflicted-engine",
+    name = "Paradox Archivist",
+    oracle_text = "Whenever you discard a card, draw a card. If you would draw a card, exile the top card of your library instead.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 2,
+    legalities = list(commander = "legal")
+  ))
+
+  groups <- mtgcodex.api:::query_synergy_detect_groups_for_seed(
+    seed = payoff,
+    candidates = list(setup, conflicted_engine),
+    format_name = "commander",
+    min_edge_score = 5,
+    max_groups = 3,
+    max_group_size = 4,
+    max_paths = 30
+  )
+
+  expect_gte(length(groups$groups), 1)
+  flagged <- Filter(function(group) {
+    suppressWarnings(as.numeric(group$score_breakdown$anti_synergy_penalty)) > 0 &&
+      any(grepl("Anti-synergy penalty", group$reasons, fixed = TRUE))
+  }, groups$groups)
+  expect_gte(length(flagged), 1)
 })
 
 test_that("indirect engine scoring is structure driven rather than name driven", {
@@ -769,6 +960,50 @@ test_that("replacement conflicts surface in anti synergy warnings", {
   expect_true("DRAW_CARD" %in% warning_entry$matched_events$replaces_payoff)
 })
 
+test_that("catalog cache key changes when middle card content changes", {
+  catalog_a <- list(
+    list(id = "seed", name = "Seed", oracle_text = "Draw a card.", color_identity = c("U")),
+    list(id = "middle-a", name = "Middle A", oracle_text = "Mill two cards.", color_identity = c("U")),
+    list(id = "tail", name = "Tail", oracle_text = "Gain 1 life.", color_identity = c("W"))
+  )
+  catalog_b <- list(
+    list(id = "seed", name = "Seed", oracle_text = "Draw a card.", color_identity = c("U")),
+    list(id = "middle-b", name = "Middle B", oracle_text = "Create a token.", color_identity = c("W")),
+    list(id = "tail", name = "Tail", oracle_text = "Gain 1 life.", color_identity = c("W"))
+  )
+
+  key_a <- mtgcodex.api:::query_synergy_catalog_cache_key(catalog_a, source = "catalog")
+  key_b <- mtgcodex.api:::query_synergy_catalog_cache_key(catalog_b, source = "catalog")
+
+  expect_false(identical(key_a, key_b))
+})
+
+test_that("canonical catalog cache key can use cheap file signatures", {
+  catalog <- list(
+    list(id = "seed", name = "Seed", oracle_text = "Draw a card.", color_identity = c("U")),
+    list(id = "tail", name = "Tail", oracle_text = "Gain 1 life.", color_identity = c("W"))
+  )
+
+  key_a <- mtgcodex.api:::query_synergy_catalog_cache_key(
+    catalog,
+    source = "scryfall_oracle_cards",
+    source_signature = "100::200"
+  )
+  key_b <- mtgcodex.api:::query_synergy_catalog_cache_key(
+    catalog,
+    source = "scryfall_oracle_cards",
+    source_signature = "100::200"
+  )
+  key_c <- mtgcodex.api:::query_synergy_catalog_cache_key(
+    catalog,
+    source = "scryfall_oracle_cards",
+    source_signature = "100::201"
+  )
+
+  expect_identical(key_a, key_b)
+  expect_false(identical(key_a, key_c))
+})
+
 test_that("staged pipeline scans full catalog but deep scores only top k", {
   catalog <- c(
     list(list(
@@ -830,7 +1065,10 @@ test_that("staged pipeline scans full catalog but deep scores only top k", {
   expect_true(isTRUE(out$ok))
   expect_identical(out$pipeline$catalog_size, length(catalog))
   expect_identical(out$pipeline$candidate_filter_count, length(catalog) - 1L)
-  expect_identical(out$pipeline$cheap_scan_count, length(catalog) - 1L)
+  expect_gte(out$pipeline$candidate_filter_count, 3L)
+  expect_identical(out$pipeline$cheap_scan_count, out$pipeline$candidate_filter_count)
+  expect_true(isTRUE(out$pipeline$full_catalog_light_scan))
+  expect_identical(out$pipeline$cheap_scan_cap_used, out$pipeline$candidate_filter_count)
   expect_identical(out$pipeline$deep_score_count, 3L)
   expect_identical(out$pipeline$top_k_used, 3L)
   expect_lte(out$pipeline$package_candidate_count, 2L)
@@ -905,6 +1143,148 @@ test_that("staged candidate generation keeps indirect engine candidates alive", 
   expect_true(any(vapply(out$buckets$indirect_engines$results, function(entry) identical(entry$name, "Rooftop Conniver"), logical(1))))
 })
 
+test_that("explicit cheap scan cap limits lightweight scan breadth when requested", {
+  catalog <- c(
+    list(list(
+      id = "seed",
+      name = "Ledger Saint",
+      oracle_text = "Whenever you draw a card, gain 1 life.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 3,
+      legalities = list(commander = "legal")
+    )),
+    lapply(seq_len(24), function(i) {
+      list(
+        id = paste0("broad-", i),
+        name = paste("Broad", i),
+        oracle_text = "Gain 1 life.",
+        colors = c("W"),
+        color_identity = c("W"),
+        cmc = 2,
+        legalities = list(commander = "legal")
+      )
+    }),
+    list(
+      list(
+        id = "direct",
+        name = "Thought Current",
+        oracle_text = "Draw two cards.",
+        colors = c("U"),
+        color_identity = c("U"),
+        cmc = 2,
+        legalities = list(commander = "legal")
+      ),
+      list(
+        id = "indirect",
+        name = "Rooftop Conniver",
+        oracle_text = "Whenever you attack, target attacking creature connives 1.",
+        colors = c("U"),
+        color_identity = c("U"),
+        cmc = 3,
+        legalities = list(commander = "legal")
+      )
+    )
+  )
+
+  out <- mtgcodex.api:::query_synergy_find_in_catalog(
+    list(
+      card_name = "Ledger Saint",
+      format = "commander",
+      max_results = 4,
+      top_k = 2,
+      cheap_scan_cap = 8,
+      package_top_n = 2
+    ),
+    catalog
+  )
+
+  result_names <- vapply(out$best_matches, function(entry) entry$name, character(1))
+  expect_gt(out$pipeline$candidate_filter_count, out$pipeline$cheap_scan_count)
+  expect_identical(out$pipeline$cheap_scan_count, 8L)
+  expect_identical(out$pipeline$cheap_scan_cap_used, 8L)
+  expect_true("Thought Current" %in% result_names)
+})
+
+test_that("group search stays constrained to the reduced local candidate graph", {
+  catalog <- c(
+    list(list(
+      id = "seed",
+      name = "Archive Judge",
+      oracle_text = "Whenever you draw a card, gain 1 life.",
+      colors = c("U"),
+      color_identity = c("U"),
+      cmc = 3,
+      legalities = list(commander = "legal")
+    )),
+    lapply(seq_len(16), function(i) {
+      list(
+        id = paste0("noise-", i),
+        name = paste("Noise", i),
+        oracle_text = "Gain 1 life.",
+        colors = c("W"),
+        color_identity = c("W"),
+        cmc = 2,
+        legalities = list(commander = "legal")
+      )
+    }),
+    list(
+      list(
+        id = "setup",
+        name = "Frantic Research",
+        oracle_text = "Draw two cards, then discard two cards.",
+        colors = c("U"),
+        color_identity = c("U"),
+        cmc = 2,
+        legalities = list(commander = "legal")
+      ),
+      list(
+        id = "converter",
+        name = "Lore Recycler",
+        oracle_text = "Whenever you discard a card, draw a card.",
+        colors = c("U"),
+        color_identity = c("U"),
+        cmc = 2,
+        legalities = list(commander = "legal")
+      ),
+      list(
+        id = "warning",
+        name = "Closed Archive",
+        oracle_text = "If you would draw a card, exile the top card of your library instead.",
+        colors = c("U"),
+        color_identity = c("U"),
+        cmc = 2,
+        legalities = list(commander = "legal")
+      )
+    )
+  )
+
+  out <- mtgcodex.api:::query_synergy_find_in_catalog(
+    list(
+      card_name = "Archive Judge",
+      format = "commander",
+      max_results = 6,
+      top_k = 4,
+      package_top_n = 4,
+      max_groups = 3,
+      max_group_size = 4,
+      max_group_paths = 20
+    ),
+    catalog
+  )
+
+  expect_true(isTRUE(out$ok))
+  expect_lte(out$pipeline$group_graph_node_count, out$pipeline$package_candidate_count + 1L)
+  expect_lte(out$pipeline$group_path_count, 20L)
+  expect_gte(out$pipeline$group_graph_edge_count, 0L)
+  expect_lte(
+    out$pipeline$group_graph_pair_count,
+    (out$pipeline$package_candidate_count + 1L) * max(0L, out$pipeline$package_candidate_count)
+  )
+  expect_lt(out$pipeline$group_graph_pair_count, length(catalog) * max(0L, length(catalog) - 1L))
+  expect_gte(out$pipeline$group_branching_cap_used, 1L)
+})
+
 test_that("precomputed catalog cache persists normalized profiles for canonical sources", {
   catalog <- list(
     list(
@@ -951,6 +1331,7 @@ test_that("precomputed catalog cache persists normalized profiles for canonical 
   expect_true(file.exists(paths$precomputed_rds_file))
   expect_identical(length(precomputed$normalized), length(catalog))
   expect_identical(length(precomputed$profiles), length(catalog))
+  expect_true(is.list(precomputed$indexes))
 })
 
 test_that("progress callback reports backend-linked staged progress", {
@@ -1015,4 +1396,36 @@ test_that("progress callback reports backend-linked staged progress", {
   expect_true(any(grepl("Scanning full catalog", stages, fixed = TRUE)))
   expect_true(any(grepl("Deep scoring top candidates", stages, fixed = TRUE)))
   expect_true(any(grepl("Detecting package lines", stages, fixed = TRUE)))
+})
+
+test_that("completed job status waits until the result payload is readable", {
+  jobs_dir <- file.path(tempdir(), paste0("synergy-jobs-", as.integer(Sys.time()), "-", sample.int(9999, 1)))
+  mtgcodex.api:::query_synergy_jobs_dir(base_dir = jobs_dir)
+
+  job_id <- "job-finalizing"
+  paths <- mtgcodex.api:::query_synergy_job_paths(job_id)
+  mtgcodex.api:::query_synergy_write_job_json(
+    paths$status_file,
+    mtgcodex.api:::query_synergy_build_job_status(
+      job_id = job_id,
+      status = "completed",
+      percent = 100,
+      stage = "Completed"
+    )
+  )
+
+  pending <- mtgcodex.api:::query_synergy_get_job_status(job_id)
+  expect_identical(pending$status, "running")
+  expect_identical(pending$progress$percent, 99L)
+  expect_identical(pending$progress$stage, "Finalizing result")
+
+  mtgcodex.api:::query_synergy_write_job_json(
+    paths$result_file,
+    list(ok = TRUE, best_matches = list(list(id = "card-a", name = "Card A")), synergy_groups = list())
+  )
+
+  completed <- mtgcodex.api:::query_synergy_get_job_status(job_id)
+  expect_identical(completed$status, "completed")
+  expect_true(is.list(completed$result))
+  expect_true(isTRUE(completed$result$ok))
 })

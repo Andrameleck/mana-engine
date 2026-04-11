@@ -80,6 +80,8 @@ only returning a single flat ranking. Current buckets include:
 - `direct_enablers`
 - `indirect_engines`
 - `reciprocal_value_cards`
+- `synergy_groups`
+- `package_lines`
 - `packages`
 - `anti_synergy_warnings`
 
@@ -101,8 +103,11 @@ The query pipeline is staged:
 
 Current defaults are intentionally conservative:
 
-- `top_k`: `max(200, max_results * 6)` capped at `500`
+- `top_k`: `max(64, min(120, max_results * 4))`
 - `package_top_n`: `min(12, top_k)`
+- `cheap_scan_cap`: `0` (scan full eligible catalog; set a positive value to cap)
+- `max_group_size`: `4` (configurable)
+- `group_branching_cap`: `max(4, min(8, max_group_size + 1))`
 
 This preserves exhaustivity at the first-pass level while avoiding:
 
@@ -122,6 +127,8 @@ same precompute layer is built in memory.
 - `pipeline.cheap_scan_count`
 - `pipeline.deep_score_count`
 - `pipeline.package_candidate_count`
+- `pipeline.group_graph_pair_count`
+- `pipeline.full_catalog_light_scan`
 - `pipeline.top_k_used`
 - `pipeline.package_top_n_used`
 
@@ -140,14 +147,16 @@ Those routes expose:
 ## Package Detection
 
 Package detection is not card-specific. It uses normalized event flow and role-aware
-chain validation to identify generalized structures such as:
+chain validation over the local pairwise graph to identify generalized structures such as:
 
 - setup -> converter -> payoff
 - token maker -> sacrifice outlet -> death payoff
 - graveyard setup -> cast/reanimation bridge -> payoff
+- A -> X -> B
+- A -> X -> Y -> B
 
-Packages should explain both edges of the line and expose the matched events used to
-justify the package score.
+Packages expose endpoints, intermediate cards, inferred role sequence, matched events,
+matched resource transitions, and score breakdown to justify the package score.
 
 ## Mechanic Rule Extensions
 
