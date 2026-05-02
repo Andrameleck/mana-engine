@@ -1,0 +1,21 @@
+devtools::load_all(".", quiet = TRUE)
+source("dev/scritp/inspect-raffine-sheoldred-pair.R", echo = FALSE)
+# raffine, sheoldred normalized cards are in scope from the sourced script.
+
+cat("\n--- score_pair_symmetric(Raffine, Sheoldred) ---\n")
+ab <- query_synergy_score_pair_symmetric(raffine, sheoldred)
+cat("final_pair_score      : ", ab$final_pair_score, "\n", sep = "")
+cat("card_a (Raffine) role : ", ab$card_a_role, "\n", sep = "")
+cat("card_b (Sheoldred)role: ", ab$card_b_role, "\n", sep = "")
+cat("a_feeds_b_score       : ", ab$a_feeds_b_score, "\n", sep = "")
+cat("b_feeds_a_score       : ", ab$b_feeds_a_score, "\n", sep = "")
+cat("a_feeds_b_events      : ", paste(ab$a_feeds_b_events, collapse=", "), "\n", sep = "")
+cat("dominant_relationship : ", ab$dominant_relationship, "\n", sep = "")
+cat("reciprocity_bonus     : ", ab$reciprocity_bonus, "\n", sep = "")
+
+cat("\n--- score_pair_symmetric(Sheoldred, Raffine) ---\n")
+ba <- query_synergy_score_pair_symmetric(sheoldred, raffine)
+cat("final_pair_score      : ", ba$final_pair_score, "\n", sep = "")
+cat("card_a (Sheoldred)role: ", ba$card_a_role, "\n", sep = "")
+cat("card_b (Raffine) role : ", ba$card_b_role, "\n", sep = "")
+cat("dominant_relationship : ", ba$dominant_relationship, "\n", sep = "")

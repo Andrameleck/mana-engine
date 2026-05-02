@@ -1,0 +1,8 @@
+db <- file.path(tools::R_user_dir("mtgcodex.api","cache"), "all_cards.sqlite")
+con <- DBI::dbConnect(RSQLite::SQLite(), db)
+cat("--- rarity ---\n"); print(DBI::dbGetQuery(con, "SELECT rarity, COUNT(*) n FROM cards_api GROUP BY rarity ORDER BY n DESC"))
+cat("--- tokens/emblems by type_line ---\n"); print(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM cards_api WHERE type_line LIKE '%Token%' OR type_line LIKE '%Emblem%'"))
+cat("--- distinct names ---\n"); print(DBI::dbGetQuery(con, "SELECT COUNT(DISTINCT name) n FROM cards_api"))
+cat("--- distinct sets ---\n"); print(DBI::dbGetQuery(con, "SELECT COUNT(DISTINCT [set]) n FROM cards_api"))
+cat("--- non-token rows ---\n"); print(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM cards_api WHERE rarity != 'token' AND type_line NOT LIKE '%Emblem%' AND type_line NOT LIKE '%Token%'"))
+DBI::dbDisconnect(con)

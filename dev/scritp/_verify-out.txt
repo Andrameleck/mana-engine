@@ -1,0 +1,28 @@
+﻿elapsed: 45.4s
+total best_matches: 60 
+pipeline$cheap_scan_count: 1500 
+pipeline$indexed_candidate_count: 1280 
+pipeline$deep_score_count: 80 
+
+Raffine NOT in top 60 
+
+=== top 10 ===
+ 1. Well of Lost Dreams                        score= 88  bucket=reciprocal_value_cards
+ 2. Vampirism                                  score= 80  bucket=indirect_engines
+ 3. Dusk Legion Duelist                        score= 78  bucket=indirect_engines
+ 4. Wedding Ring                               score= 76  bucket=indirect_engines
+ 5. Krovikan Fetish                            score= 77  bucket=indirect_engines
+ 6. Morbid Opportunist                         score= 80  bucket=indirect_engines
+ 7. Pol Jamaar, Illusionist                    score= 76  bucket=indirect_engines
+ 8. The Archimandrite                          score= 78  bucket=direct_enablers
+ 9. Mindstorm Crown                            score= 75  bucket=indirect_engines
+10. G'raha Tia                                 score= 78  bucket=indirect_engines
+Rscript : Error: unexpected '}' in "}"
+Au caractère Ligne:1 : 1
++ Rscript dev/scritp/verify-raffine.R *>&1 | Out-File -Encoding utf8 de ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Error: unexpected '}' in "}":Stri 
+   ng) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Execution halted

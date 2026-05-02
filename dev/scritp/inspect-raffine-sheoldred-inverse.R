@@ -1,0 +1,8 @@
+source("dev/scritp/inspect-raffine-sheoldred-axes.R", echo = FALSE)
+res2 <- query_synergy_score_pair(sheoldred, raffine)
+cat("\n--- inverse direction (target=Sheoldred, candidate=Raffine) ---\n")
+cat("score: ", res2$score, "\n", sep = "")
+cat("direct_event   : ", res2$axis_scores$direct_event_score, "\n", sep = "")
+cat("reciprocal     : ", res2$axis_scores$reciprocal_value_score, "\n", sep = "")
+cat("indirect_engine: ", res2$axis_scores$indirect_engine_score, "\n", sep = "")
+cat("reliability    : ", res2$axis_scores$reliability_score, "\n", sep = "")
