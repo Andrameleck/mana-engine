@@ -126,6 +126,101 @@ Support:
 - anti-synergy
 - context-sensitive synergy
 
+### 4.1 Role-aware bidirectional pair scoring
+
+Synergy scoring must not be reduced to a single directional score such as
+`score(target, candidate)`.
+
+A card pair must be evaluated as a functional relationship between two cards,
+computed at the **pair level**, not at the seed level. Concretely the engine
+must always produce both directions and the inferred role of each card before
+combining them into a final pair score:
+
+- `candidate_feeds_seed`: candidate produces events/resources that the seed consumes, rewards, amplifies, or requires.
+- `seed_feeds_candidate`: seed produces events/resources that the candidate consumes, rewards, amplifies, or requires.
+- `mutual_feedback`: both cards feed each other in a meaningful loop or reinforcing pattern.
+- `tool_support`: one card improves the reliability, protection, mana access, recursion, tutoring, filtering, or setup of the other without necessarily producing a directly consumed event.
+- `anti_synergy`: one card prevents, replaces, competes with, or strategically undermines the other.
+
+#### Direction-invariant role inference
+
+The functional role of a card in a pair is a property of the card and the
+relationship, not a property of which card was passed in as the seed.
+
+For any pair `(A, B)`:
+
+- The role inferred for `A` must be the same whether `A` is the seed or the candidate.
+- The role inferred for `B` must be the same whether `B` is the seed or the candidate.
+- The `final_pair_score` must be symmetric up to small, documented bonuses
+  for input-context information (for example, knowing the seed's archetype
+  shell). It must not change qualitatively just because the inputs were swapped.
+
+If the engine returns very different scores for `score_pair(A, B)` and
+`score_pair(B, A)`, that asymmetry is a bug to investigate, not the intended
+behavior.
+
+The final pair score must be role-aware. It should not be a naive average of
+both directions.
+
+For example, if card A is an engine and card B is a payoff:
+
+- A may strongly feed B.
+- B may not feed A.
+- This should still be scored as a strong synergy if the functional role is clear.
+- A must be reported as `engine / enabler` and B as `payoff / reward`
+  whether the caller passed `(A, B)` or `(B, A)`.
+
+Missing reverse synergy must not strongly penalize a specialized card.
+A payoff does not need to be an engine to be synergistic with an engine.
+
+The scorer should infer possible roles for each card in the pair, such as:
+
+- engine / enabler
+- payoff / reward
+- amplifier
+- fuel
+- tool / support
+- stabilizer
+- protection
+- recursion
+- tutor / consistency piece
+- anti-synergy piece
+
+The final pair score should be based primarily on the strongest meaningful
+functional contribution, with optional bonuses for:
+
+- bidirectional reinforcement
+- role versatility
+- repeatability
+- scalability
+- archetype alignment
+- reliability in the expected shell
+
+The final pair score may be penalized for:
+
+- mana or color shell dependency
+- hard-to-satisfy conditions
+- timing mismatch
+- resource competition
+- replacement/prevention conflicts
+- strategic incoherence
+
+Do not collapse the two directions into a single unexplained value.
+Always preserve directional details in the explanation.
+
+Good pair output:
+
+- `candidate_feeds_seed_score: 71`
+- `seed_feeds_candidate_score: 56`
+- `dominant_role: candidate_as_payoff`
+- `final_pair_score: 70`
+- `reason: Seed produces SELF_DRAW_CARD via connive; candidate rewards SELF_DRAW_CARD via life gain trigger.`
+
+Bad pair output:
+
+- `score: 56`
+- `reason: Some reciprocal synergy exists.`
+
 ### 5. Pairwise and multi-card reasoning
 Do not limit the system to A <-> B card matching.
 Support:
@@ -138,6 +233,89 @@ Examples of package structures:
 - tutor + combo piece + payoff
 - graveyard setup + reanimation spell + premium target
 - engine + fuel + amplifier
+
+### 5.1 Group scoring and seed-centered package analysis
+
+For groups of three or more cards, synergy scoring must not only compare each
+candidate independently against the input seed.
+
+The system must evaluate:
+
+1. Seed-to-card interactions
+2. Card-to-seed interactions
+3. Candidate-to-candidate interactions inside the proposed group
+4. Multi-card lines where no single pair explains the whole synergy
+5. Role coverage across the package
+
+When a user provides a seed card and asks for synergistic groups, the engine
+should compute all meaningful directional interactions involving:
+
+- the seed card
+- each candidate card
+- interactions between candidates themselves
+
+For a group `G = {seed, c1, c2, c3...}`, the engine should produce:
+
+- pair scores between `seed` and each candidate
+- pair scores between candidates when relevant
+- detected package structures
+- role distribution
+- anti-synergy or tension inside the group
+- final group score
+
+The group score should account for both:
+
+- direct usefulness around the seed
+- internal coherence of the package
+
+A group should score higher when the cards form an explainable line such as:
+
+- setup -> converter -> payoff
+- engine -> fuel -> payoff
+- token maker -> sacrifice outlet -> death payoff
+- discard outlet -> graveyard setup -> reanimation payoff
+- draw engine -> life gain payoff -> life gain reward
+- tutor -> combo piece -> payoff
+- protection -> engine -> payoff
+
+A group should not score highly just because every card has some isolated
+relationship with the seed. The group must be mechanically coherent.
+
+Example:
+
+Seed:
+- Raffine, Scheming Seer
+
+Candidates:
+- Sheoldred, the Apocalypse
+- Morbid Opportunist
+- Lilianna's Standard Bearer
+
+The engine should evaluate:
+
+- Raffine -> Sheoldred:
+  Raffine produces SELF_DRAW_CARD via connive; Sheoldred rewards SELF_DRAW_CARD.
+- Morbid Opportunist -> Sheoldred:
+  Morbid Opportunist produces SELF_DRAW_CARD from CREATURE_DIES; Sheoldred rewards SELF_DRAW_CARD.
+- Creature death events -> Lilianna's Standard Bearer:
+  Lilianna's Standard Bearer converts prior CREATURE_DIES events into burst draw.
+- Internal package:
+  death/card-draw/life-gain package with multiple draw producers and one major draw payoff.
+
+The final group explanation should include the detected line, for example:
+
+`attack / death events -> draw events -> Sheoldred life gain payoff`
+
+Group scoring must preserve explainability. It should expose which interactions
+contributed to the final score and which cards are engines, payoffs, tools,
+amplifiers, or fuel.
+
+Role inference inside a group follows the same direction-invariant rule as
+pair scoring (see § 4.1): a card's role in the group must be derived from
+the card and its mechanical relationships, not from whether it happened to be
+the input seed. Swapping the seed for another member of the same group must
+not relabel a payoff as an engine or vice versa, and must not radically
+change the final group score.
 
 ### 6. Anti-synergy is first-class
 Model anti-synergy explicitly, including:
@@ -169,6 +347,30 @@ Good output:
 - “Conflicts because it replaces DRAW_CARD”
 - “Completes a graveyard setup -> reanimation -> ETB payoff line”
 
+When returning pairwise synergy results, include:
+
+- final_pair_score
+- directional scores
+- dominant functional relationship
+- inferred role of the candidate relative to the seed
+- inferred role of the seed relative to the candidate
+- matched produced/consumed/rewarded/prevented/replaced events
+- reliability and condition notes
+- shell or mana dependency notes when relevant
+
+When returning group synergy results, include:
+
+- final_group_score
+- pairwise interactions that contributed to the group score
+- internal candidate-to-candidate interactions
+- detected package lines
+- role distribution
+- anti-synergy or tension
+- explanation of why the group is coherent or not coherent
+
+Do not return only a single score for a group without showing how the score was
+assembled.
+
 ## API expectations
 
 When adding or changing endpoints:
@@ -193,6 +395,47 @@ Prioritize tests for:
 - regression tests for previously fixed cases
 
 Add tests that prove the system is not just text similarity.
+
+Add regression tests for role-aware bidirectional scoring.
+
+Required cases:
+
+1. Engine -> payoff pair
+   - If card A produces an event and card B rewards it, the pair should score
+     highly even if B does not feed A.
+   - The final score must not be a naive average of both directions.
+
+2. Payoff seed -> engine candidate
+   - If the seed is a payoff and the candidate is an engine, the candidate
+     should be recognized as `candidate_as_engine`.
+
+3. Engine seed -> payoff candidate
+   - If the seed is an engine and the candidate is a payoff, the candidate
+     should be recognized as `candidate_as_payoff`.
+
+4. Specialized role preservation
+   - A specialized payoff should not be strongly penalized for failing to act
+     as an engine.
+   - A specialized engine should not be strongly penalized for failing to act
+     as a payoff.
+
+5. Group scoring
+   - A group with setup -> converter -> payoff should score higher than a group
+     of isolated pairwise matches.
+   - Candidate-to-candidate interactions must contribute to group explanations.
+   - Anti-synergy inside a group must reduce or annotate the group score.
+
+6. Regression case
+   - Raffine, Scheming Seer and Sheoldred, the Apocalypse should produce a
+     strong role-aware pair score because Raffine produces SELF_DRAW_CARD via
+     connive and Sheoldred rewards SELF_DRAW_CARD.
+   - The explanation must identify Raffine as engine/enabler and Sheoldred as
+     payoff/reward.
+   - These role labels and the final pair score must hold regardless of which
+     of the two cards is supplied as the seed and which as the candidate.
+     `score_pair(Raffine, Sheoldred)` and `score_pair(Sheoldred, Raffine)`
+     must return the same role assignment for each card and must not differ
+     by more than a small, documented margin in `final_pair_score`.
 
 ## Performance expectations
 

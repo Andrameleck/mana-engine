@@ -1,0 +1,71 @@
+Sheoldred consumed_events:
+[1] "SELF_DRAW_CARD"     "DRAW_CARD"          "OPPONENT_DRAW_CARD"
+Sheoldred produced_events:
+[1] "GAIN_LIFE" "LOSE_LIFE"
+Raffine produced_events:
+ [1] "DRAW_CARD"            "SELF_DRAW_CARD"       "LOOT"                
+ [4] "DISCARD_CARD"         "SELF_DISCARD"         "PUT_COUNTER"         
+ [7] "PUT_PLUS_ONE_COUNTER" "CONDITIONAL_COUNTER"  "ATTACKS"             
+[10] "TARGETS_CREATURE"    
+Raffine consumed_events:
+[1] "ATTACKS"
+
+Raffine cheap score (sh=target, ra=cand): 62
+  direct_events: [1] "DRAW_CARD"      "SELF_DRAW_CARD"
+  reciprocal_events: character(0)
+
+Raffine cheap score (ra=target, sh=cand): 38
+
+Scanning all candidates...
+Scan took 139.6s
+
+Raffine's cheap-score rank (forward only): 665 / 40515  (score=62)
+
+Top 20 cheap scores (forward):
+ 1. Well of Lost Dreams                           cheap=75
+ 2. Vampirism                                     cheap=69
+ 3. Morbid Opportunist                            cheap=69
+ 4. The Convincing General                        cheap=69
+ 5. Liliana's Standard Bearer                     cheap=69
+ 6. Auntie Ool, Cursewretch                       cheap=69
+ 7. Grisly Transformation                         cheap=68
+ 8. The Odd Acorn Gang                            cheap=68
+ 9. Krovikan Fetish                               cheap=68
+10. Loreseeker's Stone                            cheap=68
+11. Scavenged Weaponry                            cheap=68
+12. The Last Ride                                 cheap=68
+13. Gravelighter                                  cheap=68
+14. Dragonweave Tapestry                          cheap=68
+15. Twinblade Assassins                           cheap=68
+16. Scourgemark                                   cheap=68
+17. Satoru, the Infiltrator                       cheap=68
+18. A-Shessra, Death's Whisper                    cheap=68
+19. Call of the Ring                              cheap=68
+20. Talion, the Kindly Lord                       cheap=68
+
+Scanning all candidates BIDIRECTIONAL (max forward/reverse)...
+Scan took 278.7s
+
+Raffine's cheap-score rank (bidirectional): 669 / 40515  (score=62)
+
+Top 20 cheap scores (bidirectional):
+ 1. Well of Lost Dreams                           cheap=75
+ 2. Vampirism                                     cheap=69
+ 3. Morbid Opportunist                            cheap=69
+ 4. The Convincing General                        cheap=69
+ 5. Liliana's Standard Bearer                     cheap=69
+ 6. Auntie Ool, Cursewretch                       cheap=69
+ 7. Grisly Transformation                         cheap=68
+ 8. The Odd Acorn Gang                            cheap=68
+ 9. Krovikan Fetish                               cheap=68
+10. Loreseeker's Stone                            cheap=68
+11. Scavenged Weaponry                            cheap=68
+12. The Last Ride                                 cheap=68
+13. Gravelighter                                  cheap=68
+14. Dragonweave Tapestry                          cheap=68
+15. Twinblade Assassins                           cheap=68
+16. Scourgemark                                   cheap=68
+17. Satoru, the Infiltrator                       cheap=68
+18. A-Shessra, Death's Whisper                    cheap=68
+19. Call of the Ring                              cheap=68
+20. Talion, the Kindly Lord                       cheap=68
