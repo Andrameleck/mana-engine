@@ -50,3 +50,7 @@ inst/extdata/*/*.rds
 .lintr
 *.rds
 .tmp*
+
+# Local/generated Scryfall databases
+inst/collection/library_scryfall.sqlite
+inst/collection/library_scryfall.sqlite-*

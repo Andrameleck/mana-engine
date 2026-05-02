@@ -9,3 +9,5 @@
 ^public/
 ^inst/\.vscode$
 ^inst/\.vscode/
+^inst/collection/library_scryfall\.sqlite$
+^inst/collection/library_scryfall\.sqlite-.*
