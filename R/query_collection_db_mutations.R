@@ -35,7 +35,7 @@ query_collection_db_import <- function(req,
   }
   rows <- normalized$rows
 
-  dedupe_enabled <- query_collection_db_parse_bool(dedupe, default = TRUE)
+  dedupe_enabled <- query_api_parse_bool(dedupe, default = TRUE)
 
   con <- NULL
   out <- tryCatch(
@@ -148,7 +148,7 @@ query_collection_db_add_card <- function(db_path = "",
   }
   rows <- rows[1, , drop = FALSE]
 
-  dedupe_enabled <- query_collection_db_parse_bool(dedupe, default = TRUE)
+  dedupe_enabled <- query_api_parse_bool(dedupe, default = TRUE)
 
   con <- NULL
   out <- tryCatch(
@@ -221,7 +221,7 @@ query_collection_db_delete_card <- function(db_path = "",
   target_collector <- trimws(as.character(collector_number))
   target_foil <- trimws(as.character(foil))
   target_lang <- trimws(as.character(language))
-  delete_all_flag <- query_collection_db_parse_bool(delete_all, default = FALSE)
+  delete_all_flag <- query_api_parse_bool(delete_all, default = FALSE)
 
   con <- NULL
   out <- tryCatch(
@@ -358,23 +358,6 @@ query_collection_db_resolve_target_path <- function(db_path = "") {
   list(ok = TRUE, path = normalized)
 }
 
-query_collection_db_parse_bool <- function(x, default = FALSE) {
-  query_api_parse_bool(x, default = default)
-}
-
-query_collection_db_parse_numeric <- function(x, default = NA_real_) {
-  raw <- trimws(as.character(x))
-  if (!nzchar(raw)) {
-    return(default)
-  }
-  raw <- gsub(",", ".", raw, fixed = TRUE)
-  out <- suppressWarnings(as.numeric(raw))
-  if (is.na(out)) {
-    return(default)
-  }
-  out
-}
-
 query_collection_db_read_source_rows <- function(source_path,
                                                  source_name = "",
                                                  source_type = "",
@@ -423,7 +406,22 @@ query_collection_db_read_source_rows <- function(source_path,
         ))
       }
 
-      selected_table <- query_collection_db_resolve_source_table(tables, source_table)
+      selected_table <- query_collection_db_find_table(tables, source_table)
+      if (!nzchar(selected_table)) {
+        preferred <- c("collection", "collection_cards", "cards")
+        preferred_matches <- vapply(
+          preferred,
+          function(candidate) query_collection_db_find_table(tables, candidate),
+          character(1)
+        )
+        preferred_matches <- preferred_matches[nzchar(preferred_matches)]
+        if (length(preferred_matches) > 0L) {
+          selected_table <- preferred_matches[[1]]
+        }
+      }
+      if (!nzchar(selected_table) && length(tables) > 0L) {
+        selected_table <- as.character(tables)[[1]]
+      }
       if (!nzchar(selected_table)) {
         return(list(
           ok = FALSE,
@@ -479,27 +477,6 @@ query_collection_db_find_table <- function(tables, target) {
     return("")
   }
   table_values[[index]]
-}
-
-query_collection_db_resolve_source_table <- function(tables, source_table = "") {
-  exact <- query_collection_db_find_table(tables, source_table)
-  if (nzchar(exact)) {
-    return(exact)
-  }
-
-  preferred <- c("collection", "collection_cards", "cards")
-  for (candidate in preferred) {
-    found <- query_collection_db_find_table(tables, candidate)
-    if (nzchar(found)) {
-      return(found)
-    }
-  }
-
-  table_values <- as.character(tables)
-  if (length(table_values) == 0L) {
-    return("")
-  }
-  table_values[[1]]
 }
 
 query_collection_db_normalize_collection_rows <- function(df) {
@@ -599,12 +576,7 @@ query_collection_db_normalize_collection_rows <- function(df) {
   card_condition[!nzchar(card_condition)] <- "near_mint"
   scryfall_id <- tolower(trimws(scryfall_id))
 
-  purchase_price <- vapply(
-    purchase_raw,
-    query_collection_db_parse_numeric,
-    numeric(1),
-    default = NA_real_
-  )
+  purchase_price <- query_collections_parse_number(purchase_raw, default = NA_real_)
 
   rows <- data.frame(
     scryfall_id = scryfall_id[keep],
@@ -861,7 +833,7 @@ query_collection_db_insert_collection_rows <- function(con, rows, dedupe_enabled
 }
 
 query_collection_db_prepare_cards_rows <- function(df) {
-  empty <- query_collection_db_empty_cards_df()
+  empty <- query_collection_db_cards_df()
   if (!is.data.frame(df) || nrow(df) == 0L) {
     return(empty)
   }
@@ -893,13 +865,13 @@ query_collection_db_prepare_cards_rows <- function(df) {
   c_released <- query_collections_find_column(df, c("released_at", "releasedat", "release_date", "released"))
 
   rows_n <- nrow(df)
-  out <- query_collection_db_init_cards_df(rows_n)
+  out <- query_collection_db_cards_df(rows_n)
   out$scryfall_id <- if (nzchar(c_scryfall)) tolower(query_collections_clean_vector(df[[c_scryfall]])) else rep("", rows_n)
   out$name <- if (nzchar(c_name)) query_collections_clean_vector(df[[c_name]]) else rep("", rows_n)
   out$oracle_text <- if (nzchar(c_oracle)) query_collections_clean_vector(df[[c_oracle]]) else rep("", rows_n)
   out$type_line <- if (nzchar(c_type)) query_collections_clean_vector(df[[c_type]]) else rep("", rows_n)
   out$mana_cost <- if (nzchar(c_mana)) query_collections_clean_vector(df[[c_mana]]) else rep("", rows_n)
-  out$cmc <- if (nzchar(c_cmc)) vapply(df[[c_cmc]], query_collection_db_parse_numeric, numeric(1), default = NA_real_) else rep(NA_real_, rows_n)
+  out$cmc <- if (nzchar(c_cmc)) query_collections_parse_number(df[[c_cmc]], default = NA_real_) else rep(NA_real_, rows_n)
   out$colors <- if (nzchar(c_colors)) query_collections_clean_vector(df[[c_colors]]) else rep("", rows_n)
   out$color_identity <- if (nzchar(c_color_identity)) query_collections_clean_vector(df[[c_color_identity]]) else rep("", rows_n)
   out$keywords <- if (nzchar(c_keywords)) query_collections_clean_vector(df[[c_keywords]]) else rep("", rows_n)
@@ -930,7 +902,7 @@ query_collection_db_prepare_cards_rows <- function(df) {
 }
 
 query_collection_db_prepare_cards_rows_from_collection <- function(rows) {
-  empty <- query_collection_db_empty_cards_df()
+  empty <- query_collection_db_cards_df()
   if (!is.data.frame(rows) || nrow(rows) == 0L) {
     return(empty)
   }
@@ -941,7 +913,7 @@ query_collection_db_prepare_cards_rows_from_collection <- function(rows) {
   }
 
   sub <- rows[keep, , drop = FALSE]
-  out <- query_collection_db_init_cards_df(nrow(sub))
+  out <- query_collection_db_cards_df(nrow(sub))
   out$scryfall_id <- sub$scryfall_id
   out$name <- sub$name
   out$rarity <- sub$rarity
@@ -953,40 +925,9 @@ query_collection_db_prepare_cards_rows_from_collection <- function(rows) {
   out
 }
 
-query_collection_db_empty_cards_df <- function() {
-  data.frame(
-    scryfall_id = character(0),
-    name = character(0),
-    oracle_text = character(0),
-    type_line = character(0),
-    mana_cost = character(0),
-    cmc = numeric(0),
-    colors = character(0),
-    color_identity = character(0),
-    keywords = character(0),
-    produced_mana = character(0),
-    power = character(0),
-    toughness = character(0),
-    loyalty = character(0),
-    rarity = character(0),
-    set_code = character(0),
-    set_name = character(0),
-    collector_number = character(0),
-    lang = character(0),
-    legalities = character(0),
-    layout = character(0),
-    card_faces = character(0),
-    image_uris = character(0),
-    prices = character(0),
-    edhrec_rank = integer(0),
-    released_at = character(0),
-    stringsAsFactors = FALSE
-  )
-}
-
-query_collection_db_init_cards_df <- function(n) {
+query_collection_db_cards_df <- function(n = 0L) {
   if (!is.numeric(n) || length(n) != 1L || is.na(n) || n <= 0) {
-    return(query_collection_db_empty_cards_df())
+    n <- 0L
   }
   data.frame(
     scryfall_id = rep("", n),
@@ -1026,7 +967,7 @@ query_collection_db_insert_cards_rows <- function(con, rows) {
     return(0L)
   }
 
-  required_cols <- colnames(query_collection_db_empty_cards_df())
+  required_cols <- colnames(query_collection_db_cards_df())
   missing_cols <- setdiff(required_cols, colnames(rows))
   if (length(missing_cols) > 0L) {
     for (col in missing_cols) {

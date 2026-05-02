@@ -16,7 +16,7 @@ query_call <- local({
       query_dir <- query_dir_candidates[which(query_dir_exists)[1]]
       query_files <- list.files(
         path = query_dir,
-        pattern = "^query_.*\\.R$",
+        pattern = "^(query_|synergy_).*\\.R$",
         full.names = TRUE
       )
       for (query_file in query_files) {
@@ -406,6 +406,32 @@ function() {
 #* @get /mechanics
 function() {
   query_call("query_synergy_list_mechanics")
+}
+
+#* Load a synergy catalog from a local SQLite database (cards_api table)
+#* @param db_path Optional absolute path to the SQLite file.
+#* @param table Optional table name (default: cards_api).
+#* @param where Optional WHERE clause without the keyword.
+#* @param limit Optional integer cap on rows returned.
+#* @serializer unboxedJSON
+#* @get /synergy/catalog/sqlite
+function(db_path = NULL, table = "cards_api", where = NULL, limit = NULL) {
+  res <- query_call(
+    "query_synergy_catalog_from_sqlite",
+    db_path = db_path,
+    table = table,
+    where = where,
+    limit = limit
+  )
+  if (is.list(res) && isFALSE(res$ok) && nzchar(query_api_scalar(res$error, default = ""))) {
+    return(res)
+  }
+  list(
+    ok = TRUE,
+    source = attr(res, "synergy_source") %||% "sqlite_cards",
+    cache_key = attr(res, "synergy_cache_key") %||% "",
+    count = length(res)
+  )
 }
 
 #* UI entrypoint

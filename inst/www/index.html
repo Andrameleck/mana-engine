@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/ui/static/apple-touch-icon.png">
   <link rel="manifest" href="/ui/static/site.webmanifest">
   <meta name="theme-color" content="#0a0d13">
-  <link rel="stylesheet" href="/ui/static/styles.css?v=20260411-synergy-groups">
+  <link rel="stylesheet" href="/ui/static/styles.css?v=20260501-calculdev-layout-fix">
 </head>
 <body>
   <div class="app-shell">
@@ -163,16 +163,22 @@
                 <span id="strategy-group-limit-label">Top groupes</span>
                 <input id="strategy-group-limit" type="number" min="3" max="12" value="6">
               </label>
+              <label for="strategy-only-collection" class="strategy-toggle">
+                <span class="strategy-toggle-row">
+                  <input id="strategy-only-collection" type="checkbox">
+                  <span id="strategy-only-collection-hint">Calculer uniquement a partir de la collection chargee</span>
+                </span>
+              </label>
               <label for="strategy-include-spellbook" class="strategy-toggle">
                 <span class="strategy-toggle-row">
                   <input id="strategy-include-spellbook" type="checkbox">
-                  <span id="strategy-include-spellbook-hint">Prioriser les cartes presentes dans les combos publics</span>
+                  <span id="strategy-include-spellbook-hint">Bonus de score pour les cartes presentes dans Commander Spellbook</span>
                 </span>
               </label>
               <label for="strategy-include-lotus" class="strategy-toggle">
                 <span class="strategy-toggle-row">
                   <input id="strategy-include-lotus" type="checkbox">
-                  <span id="strategy-include-lotus-hint">Croiser avec les decks communautaires LotusNoir (beta)</span>
+                  <span id="strategy-include-lotus-hint">Bonus de score base sur les decks LotusNoir (beta)</span>
                 </span>
               </label>
               <label class="strategy-mana-filter">
@@ -244,20 +250,6 @@
               <label for="calculdev-group-limit">
                 <span id="calculdev-group-limit-label">Top groupes</span>
                 <input id="calculdev-group-limit" type="number" min="3" max="12" value="6">
-              </label>
-
-              <label for="calculdev-include-spellbook" class="strategy-toggle">
-                <span class="strategy-toggle-row">
-                  <input id="calculdev-include-spellbook" type="checkbox">
-                  <span id="calculdev-include-spellbook-hint">Mode sandbox (option reservee)</span>
-                </span>
-              </label>
-
-              <label for="calculdev-include-lotus" class="strategy-toggle">
-                <span class="strategy-toggle-row">
-                  <input id="calculdev-include-lotus" type="checkbox">
-                  <span id="calculdev-include-lotus-hint">Mode sandbox (option reservee)</span>
-                </span>
               </label>
 
               <label class="strategy-mana-filter">
@@ -359,6 +351,6 @@
     </main>
   </div>
 
-  <script type="module" src="/ui/static/main.js?v=20260411-calculdev-group-panels"></script>
+  <script type="module" src="/ui/static/main.js?v=20260502-strategy-lotusnoir-boost"></script>
 </body>
 </html>

@@ -137,7 +137,9 @@ query_collection_load_db_rows <- function(con, selected_table, tables) {
     return(DBI::dbGetQuery(con, base_sql))
   }
 
-  cards_table <- query_collection_find_cards_table_name(tables)
+  table_values <- as.character(tables)
+  cards_index <- match("cards", tolower(table_values))
+  cards_table <- if (is.na(cards_index)) "" else table_values[[cards_index]]
   if (!nzchar(cards_table)) {
     return(DBI::dbGetQuery(con, base_sql))
   }
@@ -167,19 +169,6 @@ query_collection_load_db_rows <- function(con, selected_table, tables) {
     scryfall_column = scryfall_column,
     columns_to_add = missing_columns
   )
-}
-
-query_collection_find_cards_table_name <- function(tables) {
-  table_values <- as.character(tables)
-  if (length(table_values) == 0L) {
-    return("")
-  }
-  lower_tables <- tolower(table_values)
-  cards_index <- match("cards", lower_tables)
-  if (is.na(cards_index)) {
-    return("")
-  }
-  table_values[[cards_index]]
 }
 
 query_collection_load_collection_rows_with_cards <- function(con,
@@ -272,7 +261,7 @@ query_collection_load_csv <- function(csv_path) {
       check.names = FALSE
     ),
     error = function(e) {
-      return(list(.error = e$message))
+      list(.error = e$message)
     }
   )
 
@@ -293,7 +282,7 @@ query_collection_load_text <- function(text_path) {
   lines <- tryCatch(
     readLines(text_path, warn = FALSE, encoding = "UTF-8"),
     error = function(e) {
-      return(list(.error = e$message))
+      list(.error = e$message)
     }
   )
 
@@ -376,7 +365,7 @@ query_collection_read_delimited_text <- function(text_lines, separator) {
       comment.char = ""
     ),
     error = function(e) {
-      return(list(.error = e$message))
+      list(.error = e$message)
     }
   )
 

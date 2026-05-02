@@ -60,7 +60,7 @@ call_query <- local({
   query_dir <- file.path(repo_root, "R")
 
   if (dir.exists(query_dir)) {
-    query_files <- list.files(query_dir, pattern = "^query_.*\\.R$", full.names = TRUE)
+    query_files <- list.files(query_dir, pattern = "\\.R$", full.names = TRUE)
     for (query_file in query_files) {
       source(query_file, local = .GlobalEnv)
     }

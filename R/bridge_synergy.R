@@ -220,7 +220,19 @@ top_k_neighbors <- function(
   weights <- vapply(
     candidates,
     function(v_idx) {
-      .edge_weight(u_card, cards[[v_idx]], opts)
+      v_card <- cards[[v_idx]]
+      legal <- .card_constraints(v_card)$legal
+      if (!is.null(legal) && length(legal) > 0L && !is.na(legal[[1]]) && !isTRUE(legal[[1]])) {
+        return(0)
+      }
+      if (isTRUE(opts$enforce_color_identity)) {
+        u_colors <- .card_colors(u_card)
+        v_colors <- .card_colors(v_card)
+        if (length(v_colors) > 0L && !all(v_colors %in% u_colors)) {
+          return(0)
+        }
+      }
+      clamp01(cosine_similarity_sparse(.card_features(u_card), .card_features(v_card)))
     },
     numeric(1)
   )
@@ -374,7 +386,7 @@ propagate_scores <- function(
         score_level[c_idx] <- score_level[c_idx] + c_val
 
         if (c_val > best_contrib[c_idx] ||
-          (.num_equal(c_val, best_contrib[c_idx]) &&
+          (is.finite(c_val) && is.finite(best_contrib[c_idx]) && abs(c_val - best_contrib[c_idx]) <= 1e-12 &&
             (is.na(parents_idx[c_idx]) || p_idx < parents_idx[c_idx]))) {
           best_contrib[c_idx] <- c_val
           parents_idx[c_idx] <- p_idx
@@ -966,7 +978,27 @@ resolve_bridge_equation <- function(
   packages <- bridge_payload$packages
   if (length(packages) == 0L) {
     return(list(
-      candidates = .empty_bridge_equation_df(),
+      candidates = data.frame(
+        seedA_id = character(0),
+        seedA_name = character(0),
+        seedB_id = character(0),
+        seedB_name = character(0),
+        bridge_id = character(0),
+        bridge_name = character(0),
+        bridge_cards = character(0),
+        bridge_card_names = character(0),
+        total_cards = character(0),
+        total_card_names = character(0),
+        structural_score = numeric(0),
+        reference_adjustment = numeric(0),
+        total_score = numeric(0),
+        reference_state = character(0),
+        reference_source = character(0),
+        reference_label = character(0),
+        missing_cards = character(0),
+        missing_card_names = character(0),
+        stringsAsFactors = FALSE
+      ),
       references = refs,
       bridge_payload = bridge_payload
     ))
@@ -1332,41 +1364,6 @@ run_bridge_synergy_selftest <- function() {
   unique(vals)
 }
 
-.is_legal_card <- function(card) {
-  constraints <- .card_constraints(card)
-  legal <- constraints$legal
-  if (is.null(legal) || is.na(legal[[1]])) {
-    return(TRUE)
-  }
-  isTRUE(legal[[1]])
-}
-
-.penalty <- function(card_u, card_v, options) {
-  if (!.is_legal_card(card_v)) {
-    return(Inf)
-  }
-
-  if (isTRUE(options$enforce_color_identity)) {
-    u_colors <- .card_colors(card_u)
-    v_colors <- .card_colors(card_v)
-    if (length(v_colors) > 0L && !all(v_colors %in% u_colors)) {
-      return(Inf)
-    }
-  }
-
-  0
-}
-
-.edge_weight <- function(card_u, card_v, options) {
-  p <- .penalty(card_u, card_v, options)
-  if (!is.finite(p)) {
-    return(0)
-  }
-
-  raw <- cosine_similarity_sparse(.card_features(card_u), .card_features(card_v)) - p
-  clamp01(raw)
-}
-
 .as_sparse_named_numeric <- function(x) {
   if (is.null(x) || length(x) == 0L) {
     return(setNames(numeric(0), character(0)))
@@ -1398,13 +1395,6 @@ run_bridge_synergy_selftest <- function() {
   as.integer(max(0, floor(x)))
 }
 
-.num_equal <- function(a, b, tol = 1e-12) {
-  if (!is.finite(a) || !is.finite(b)) {
-    return(FALSE)
-  }
-  abs(a - b) <= tol
-}
-
 .merge_bridge_options <- function(options) {
   defaults <- list(
     enforce_color_identity = FALSE,
@@ -1433,30 +1423,6 @@ run_bridge_synergy_selftest <- function() {
   merged$support_k <- .as_count(merged$support_k, default = 2L)
 
   merged
-}
-
-.empty_bridge_equation_df <- function() {
-  data.frame(
-    seedA_id = character(0),
-    seedA_name = character(0),
-    seedB_id = character(0),
-    seedB_name = character(0),
-    bridge_id = character(0),
-    bridge_name = character(0),
-    bridge_cards = character(0),
-    bridge_card_names = character(0),
-    total_cards = character(0),
-    total_card_names = character(0),
-    structural_score = numeric(0),
-    reference_adjustment = numeric(0),
-    total_score = numeric(0),
-    reference_state = character(0),
-    reference_source = character(0),
-    reference_label = character(0),
-    missing_cards = character(0),
-    missing_card_names = character(0),
-    stringsAsFactors = FALSE
-  )
 }
 
 .scalar_text <- function(value, default = "") {

@@ -4,7 +4,9 @@ query_ui_static_asset <- function(file, res) {
   res$setHeader("Expires", "0")
 
   file_name <- trimws(as.character(file))
-  if (!query_ui_validate_asset_name(file_name)) {
+  if (!nzchar(file_name) ||
+      grepl("\\.\\.", file_name) ||
+      !grepl("^[A-Za-z0-9._-]+$", file_name)) {
     res$status <- 400L
     res$setHeader("Content-Type", "text/plain; charset=utf-8")
     res$body <- charToRaw("Invalid asset name")

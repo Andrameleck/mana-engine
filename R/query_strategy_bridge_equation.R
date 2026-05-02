@@ -50,17 +50,17 @@ query_strategy_bridge_equation <- function(req = NULL) {
 
   known_synergies <- query_strategy_bridge_normalize_known_synergies(payload$known_synergies)
 
-  n_value <- query_strategy_bridge_as_int(payload$n, default = 2L, min_value = 1L, max_value = 8L)
-  depth_n_value <- query_strategy_bridge_as_int(payload$depth_n, default = 3L, min_value = 1L, max_value = 8L)
-  top_k_value <- query_strategy_bridge_as_int(payload$top_k, default = 50L, min_value = 1L, max_value = 250L)
-  top_n_value <- query_strategy_bridge_as_int(payload$top_n, default = 20L, min_value = 1L, max_value = 100L)
-  max_missing_cards_value <- query_strategy_bridge_as_int(
+  n_value <- query_synergy_as_int(payload$n, default = 2L, min_value = 1L, max_value = 8L)
+  depth_n_value <- query_synergy_as_int(payload$depth_n, default = 3L, min_value = 1L, max_value = 8L)
+  top_k_value <- query_synergy_as_int(payload$top_k, default = 50L, min_value = 1L, max_value = 250L)
+  top_n_value <- query_synergy_as_int(payload$top_n, default = 20L, min_value = 1L, max_value = 100L)
+  max_missing_cards_value <- query_synergy_as_int(
     payload$max_missing_cards,
     default = 2L,
     min_value = 0L,
     max_value = 4L
   )
-  gamma_value <- query_strategy_bridge_as_num(payload$gamma, default = 0.65, min_value = 0, max_value = 1)
+  gamma_value <- query_synergy_as_num(payload$gamma, default = 0.65, min_value = 0, max_value = 1)
 
   resolve_fun <- query_strategy_bridge_get_resolver()
   if (!is.function(resolve_fun)) {
@@ -281,24 +281,4 @@ query_strategy_bridge_normalize_known_synergies <- function(raw_synergies) {
     return(list())
   }
   out[seq_len(count)]
-}
-
-query_strategy_bridge_as_int <- function(value, default = 0L, min_value = 0L, max_value = 100L) {
-  parsed <- suppressWarnings(as.integer(value))
-  if (!is.finite(parsed) || is.na(parsed)) {
-    parsed <- as.integer(default)
-  }
-  parsed <- max(as.integer(min_value), parsed)
-  parsed <- min(as.integer(max_value), parsed)
-  as.integer(parsed)
-}
-
-query_strategy_bridge_as_num <- function(value, default = 0, min_value = 0, max_value = 1) {
-  parsed <- suppressWarnings(as.numeric(value))
-  if (!is.finite(parsed) || is.na(parsed)) {
-    parsed <- as.numeric(default)
-  }
-  parsed <- max(as.numeric(min_value), parsed)
-  parsed <- min(as.numeric(max_value), parsed)
-  as.numeric(parsed)
 }

@@ -66,17 +66,17 @@ query_mtgjson_cards <- function(
     card <- payload$data
     if (is.list(card) && length(card) > 0L) {
       cards <- list(card)
-      set_name <- query_mtgjson_clean_text(card$setName, fallback = "")
+      set_name <- query_api_scalar(card$setName, default = "")
       if (!nzchar(set_code_value)) {
-        set_code_value <- toupper(query_mtgjson_clean_text(card$setCode, fallback = ""))
+        set_code_value <- toupper(query_api_scalar(card$setCode, default = ""))
       }
     }
   } else {
     set_data <- payload$data
     if (is.list(set_data) && length(set_data) > 0L) {
-      set_name <- query_mtgjson_clean_text(set_data$name, fallback = "")
+      set_name <- query_api_scalar(set_data$name, default = "")
       if (!nzchar(set_code_value)) {
-        set_code_value <- toupper(query_mtgjson_clean_text(set_data$code, fallback = ""))
+        set_code_value <- toupper(query_api_scalar(set_data$code, default = ""))
       }
       cards <- set_data$cards
       if (is.null(cards)) {
@@ -92,7 +92,7 @@ query_mtgjson_cards <- function(
   if (nzchar(query_name)) {
     cards <- Filter(
       function(card) {
-        card_name <- tolower(query_mtgjson_clean_text(card$name, fallback = ""))
+        card_name <- tolower(query_api_scalar(card$name, default = ""))
         nzchar(card_name) && grepl(query_name, card_name, fixed = TRUE)
       },
       cards
@@ -102,7 +102,7 @@ query_mtgjson_cards <- function(
   if (nzchar(collector_value)) {
     cards <- Filter(
       function(card) {
-        number_value <- query_mtgjson_clean_text(card$number, fallback = "")
+        number_value <- query_api_scalar(card$number, default = "")
         identical(number_value, collector_value)
       },
       cards
@@ -139,7 +139,6 @@ query_mtgjson_cards <- function(
     results = results
   )
 }
-
 query_mtgjson_fetch_payload <- function(url) {
   raw_text <- tryCatch(
     paste(readLines(url, warn = FALSE, encoding = "UTF-8"), collapse = "\n"),
@@ -177,47 +176,24 @@ query_mtgjson_normalize_card <- function(card, fallback_set_code = "", fallback_
   identifiers <- card$identifiers
   scryfall_id <- ""
   if (is.list(identifiers) && !is.null(identifiers$scryfallId)) {
-    scryfall_id <- query_mtgjson_clean_text(identifiers$scryfallId, fallback = "")
+    scryfall_id <- query_api_scalar(identifiers$scryfallId, default = "")
   }
 
-  keyword_values <- query_mtgjson_to_vector(card$keywords)
+  keyword_values <- query_synergy_to_vector(card$keywords)
 
   list(
-    uuid = query_mtgjson_clean_text(card$uuid, fallback = ""),
+    uuid = query_api_scalar(card$uuid, default = ""),
     scryfall_id = scryfall_id,
-    name = query_mtgjson_clean_text(card$name, fallback = ""),
-    mana_cost = query_mtgjson_clean_text(card$manaCost, fallback = ""),
-    oracle_text = query_mtgjson_clean_text(card$text, fallback = ""),
-    type_line = query_mtgjson_clean_text(card$type, fallback = ""),
+    name = query_api_scalar(card$name, default = ""),
+    mana_cost = query_api_scalar(card$manaCost, default = ""),
+    oracle_text = query_api_scalar(card$text, default = ""),
+    type_line = query_api_scalar(card$type, default = ""),
     keywords = keyword_values,
-    set_code = toupper(query_mtgjson_clean_text(card$setCode, fallback = fallback_set_code)),
-    set_name = query_mtgjson_clean_text(card$setName, fallback = fallback_set_name),
-    collector_number = query_mtgjson_clean_text(card$number, fallback = ""),
-    rarity = query_mtgjson_clean_text(card$rarity, fallback = ""),
-    language = query_mtgjson_clean_text(card$language, fallback = ""),
+    set_code = toupper(query_api_scalar(card$setCode, default = fallback_set_code)),
+    set_name = query_api_scalar(card$setName, default = fallback_set_name),
+    collector_number = query_api_scalar(card$number, default = ""),
+    rarity = query_api_scalar(card$rarity, default = ""),
+    language = query_api_scalar(card$language, default = ""),
     converted_mana_cost = suppressWarnings(as.numeric(card$manaValue))
   )
-}
-
-query_mtgjson_clean_text <- function(x, fallback = "") {
-  value <- trimws(as.character(x))
-  if (length(value) == 0L) {
-    return(fallback)
-  }
-  value[is.na(value)] <- ""
-  value <- trimws(value[[1]])
-  if (!nzchar(value)) {
-    return(fallback)
-  }
-  value
-}
-
-query_mtgjson_to_vector <- function(x) {
-  if (is.null(x)) {
-    return(character(0))
-  }
-  value <- unlist(x, use.names = FALSE)
-  value <- trimws(as.character(value))
-  value <- value[!is.na(value) & nzchar(value)]
-  unique(value)
 }

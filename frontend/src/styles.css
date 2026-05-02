@@ -1129,6 +1129,7 @@ body {
   grid-template-columns: 1fr;
   gap: 12px;
   align-items: start;
+  min-width: 0;
 }
 
 @media (min-width: 1220px) {
@@ -1152,6 +1153,7 @@ body {
   padding: 10px;
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .strategy-result-preview {
@@ -1161,6 +1163,7 @@ body {
   padding: 10px;
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .strategy-card-preview-body {
@@ -1241,6 +1244,7 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
   gap: 10px;
+  min-width: 0;
 }
 
 .strategy-card {
@@ -1250,6 +1254,7 @@ body {
   overflow: hidden;
   display: grid;
   grid-template-rows: 180px auto;
+  min-width: 0;
 }
 
 .strategy-card.is-interactive {
@@ -1310,6 +1315,7 @@ body {
   font-size: 12px;
   font-weight: 600;
   line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 #strategy-direct-list .strategy-card-name {
@@ -1480,6 +1486,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  min-width: 0;
 }
 
 .strategy-card-badge.is-core {
@@ -1506,6 +1513,8 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .strategy-card-mana.is-empty {
@@ -1532,6 +1541,7 @@ body {
 .strategy-group-list {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .strategy-group {
@@ -1541,6 +1551,7 @@ body {
   background: rgba(14, 18, 26, 0.72);
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .strategy-group.is-spellbook {
@@ -1560,6 +1571,9 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
 }
 
 .strategy-group-source-badge {
@@ -1590,6 +1604,8 @@ body {
   font-size: 11px;
   color: var(--muted);
   line-height: 1.35;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .strategy-group-details {
@@ -1597,6 +1613,7 @@ body {
   border-radius: 8px;
   padding: 6px 8px;
   background: rgba(15, 22, 34, 0.35);
+  min-width: 0;
 }
 
 .strategy-group-details summary {
@@ -1652,6 +1669,7 @@ body {
   padding: 8px;
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .strategy-group-section.is-core {
@@ -1678,6 +1696,7 @@ body {
   justify-content: start;
   align-items: stretch;
   gap: 8px;
+  min-width: 0;
 }
 
 .strategy-group-cards .strategy-card {

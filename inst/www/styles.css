@@ -1175,6 +1175,7 @@ body {
   grid-template-columns: 1fr;
   gap: 12px;
   align-items: start;
+  min-width: 0;
 }
 
 @media (min-width: 1220px) {
@@ -1198,6 +1199,7 @@ body {
   padding: 10px;
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .strategy-result-preview {
@@ -1207,6 +1209,7 @@ body {
   padding: 10px;
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .strategy-card-preview-body {
@@ -1214,25 +1217,29 @@ body {
   gap: 10px;
 }
 
-#strategy-card-preview-text {
+#strategy-card-preview-text,
+#calculdev-card-preview-text {
   margin: 0;
   line-height: 1.45;
   color: #dce8ff;
 }
 
-#strategy-card-preview-meta {
+#strategy-card-preview-meta,
+#calculdev-card-preview-meta {
   margin-top: 2px;
   grid-template-columns: 86px 1fr;
   gap: 7px 10px;
 }
 
-#strategy-card-preview-meta dt {
+#strategy-card-preview-meta dt,
+#calculdev-card-preview-meta dt {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
-#strategy-card-preview-meta dd {
+#strategy-card-preview-meta dd,
+#calculdev-card-preview-meta dd {
   color: #e7f0ff;
 }
 
@@ -1267,14 +1274,16 @@ body {
   background: rgba(16, 28, 50, 0.6);
 }
 
-#strategy-card-preview-image {
+#strategy-card-preview-image,
+#calculdev-card-preview-image {
   width: 100%;
   border-radius: 10px;
   border: 1px solid rgba(120, 140, 170, 0.35);
   background: #0b0d12;
 }
 
-#strategy-card-preview-image.is-hidden {
+#strategy-card-preview-image.is-hidden,
+#calculdev-card-preview-image.is-hidden {
   display: none;
 }
 
@@ -1287,6 +1296,7 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
   gap: 10px;
+  min-width: 0;
 }
 
 .strategy-card {
@@ -1296,6 +1306,7 @@ body {
   overflow: hidden;
   display: grid;
   grid-template-rows: 180px auto;
+  min-width: 0;
 }
 
 .strategy-card.is-interactive {
@@ -1356,9 +1367,11 @@ body {
   font-size: 12px;
   font-weight: 600;
   line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
-#strategy-direct-list .strategy-card-name {
+#strategy-direct-list .strategy-card-name,
+#calculdev-direct-list .strategy-card-name {
   min-height: 31px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1396,7 +1409,8 @@ body {
   color: var(--muted);
 }
 
-#strategy-direct-list .strategy-card-meta {
+#strategy-direct-list .strategy-card-meta,
+#calculdev-direct-list .strategy-card-meta {
   min-height: 14px;
   white-space: nowrap;
   overflow: hidden;
@@ -1487,6 +1501,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  min-width: 0;
 }
 
 .strategy-card-badge.is-core {
@@ -1513,6 +1528,8 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .strategy-card-mana.is-empty {
@@ -1539,6 +1556,7 @@ body {
 .strategy-group-list {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .strategy-group {
@@ -1548,6 +1566,7 @@ body {
   background: rgba(14, 18, 26, 0.72);
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .strategy-group.is-spellbook {
@@ -1567,6 +1586,9 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
 }
 
 .strategy-group-source-badge {
@@ -1597,6 +1619,8 @@ body {
   font-size: 11px;
   color: var(--muted);
   line-height: 1.35;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .strategy-group-details {
@@ -1604,6 +1628,7 @@ body {
   border-radius: 8px;
   padding: 6px 8px;
   background: rgba(15, 22, 34, 0.35);
+  min-width: 0;
 }
 
 .strategy-group-details summary {
@@ -1659,6 +1684,7 @@ body {
   padding: 8px;
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .strategy-group-section.is-core {
@@ -1685,6 +1711,19 @@ body {
   justify-content: start;
   align-items: stretch;
   gap: 8px;
+  min-width: 0;
+}
+
+#tab-calculdev .strategy-card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+}
+
+#tab-calculdev .strategy-group-cards {
+  grid-template-columns: repeat(auto-fit, minmax(118px, 138px));
+}
+
+#tab-calculdev .strategy-group-cards .strategy-card.is-compact {
+  height: 260px;
 }
 
 .strategy-group-cards .strategy-card {
@@ -1695,7 +1734,8 @@ body {
   height: 292px;
 }
 
-#strategy-direct-list .strategy-card {
+#strategy-direct-list .strategy-card,
+#calculdev-direct-list .strategy-card {
   height: 372px;
 }
 

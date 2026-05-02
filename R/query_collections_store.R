@@ -46,9 +46,20 @@ query_collections_import_csv <- function(req, name = "", platform = "auto", file
     collection_name <- sprintf("Collection %s", format(Sys.time(), "%Y%m%d-%H%M%S"))
   }
 
-  platform_value <- query_collections_clean_text(platform, fallback = "auto")
+  platform_value <- query_api_scalar(platform, default = "auto")
   created_at <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
-  collection_id <- query_collections_make_id(collection_name)
+  collection_slug <- tolower(gsub("[^a-z0-9]+", "-", trimws(collection_name)))
+  collection_slug <- gsub("(^-+|-+$)", "", collection_slug)
+  if (!nzchar(collection_slug)) {
+    collection_slug <- "collection"
+  }
+  collection_id <- paste0(
+    collection_slug,
+    "-",
+    as.integer(as.numeric(Sys.time())),
+    "-",
+    sample(1000:9999, size = 1L)
+  )
   store_path <- query_collections_store_path()
 
   con <- NULL
@@ -403,20 +414,11 @@ query_collections_ensure_schema <- function(con) {
   query_collections_ensure_column(con, "collection_cards", "keywords", "TEXT")
 }
 
-query_collections_make_id <- function(collection_name) {
-  slug <- tolower(gsub("[^a-z0-9]+", "-", trimws(collection_name)))
-  slug <- gsub("(^-+|-+$)", "", slug)
-  if (!nzchar(slug)) {
-    slug <- "collection"
-  }
-  paste0(slug, "-", as.integer(as.numeric(Sys.time())), "-", sample(1000:9999, size = 1L))
-}
-
 query_collections_read_csv_file <- function(path) {
   lines <- tryCatch(
     readLines(path, warn = FALSE, encoding = "UTF-8"),
     error = function(e) {
-      return(list(.error = e$message))
+      list(.error = e$message)
     }
   )
 
@@ -446,7 +448,7 @@ query_collections_read_csv_file <- function(path) {
       comment.char = ""
     ),
     error = function(e) {
-      return(list(.error = e$message))
+      list(.error = e$message)
     }
   )
 
@@ -583,26 +585,31 @@ query_collections_find_column <- function(df, candidates, partial = FALSE) {
   clean_names <- query_collections_clean_header(original_names)
   candidate_keys <- unique(query_collections_clean_header(candidates))
 
-  for (key in candidate_keys) {
-    matched <- which(clean_names == key)
-    if (length(matched) > 0L) {
-      col <- as.character(original_names[[matched[[1]]]])
+  pick_column <- function(indexes) {
+    indexes <- indexes[!is.na(indexes)]
+    for (idx in indexes) {
+      col <- as.character(original_names[[idx]])
       if (nzchar(col)) {
         return(col)
       }
     }
+    ""
+  }
+
+  exact <- pick_column(match(candidate_keys, clean_names))
+  if (nzchar(exact)) {
+    return(exact)
   }
 
   if (isTRUE(partial)) {
     partial_keys <- candidate_keys[nchar(candidate_keys) >= 5L]
-    for (key in partial_keys) {
+    partial_matches <- vapply(partial_keys, function(key) {
       matched <- which(grepl(key, clean_names, fixed = TRUE))
-      if (length(matched) > 0L) {
-        col <- as.character(original_names[[matched[[1]]]])
-        if (nzchar(col)) {
-          return(col)
-        }
-      }
+      if (length(matched) > 0L) matched[[1]] else NA_integer_
+    }, integer(1))
+    partial_match <- pick_column(partial_matches)
+    if (nzchar(partial_match)) {
+      return(partial_match)
     }
   }
 
@@ -687,20 +694,12 @@ query_collections_clean_vector <- function(x) {
   trimws(y)
 }
 
-query_collections_parse_number <- function(x) {
+query_collections_parse_number <- function(x, default = 1) {
   y <- as.character(x)
-  y[is.na(y)] <- "1"
+  y[is.na(y)] <- as.character(default)
   y <- gsub(",", ".", y, fixed = TRUE)
   out <- suppressWarnings(as.numeric(y))
   out
-}
-
-query_collections_clean_text <- function(x, fallback = "") {
-  value <- trimws(as.character(x))
-  if (!nzchar(value)) {
-    return(fallback)
-  }
-  value
 }
 
 query_collections_normalize_client_id <- function(client_id = "") {
@@ -834,11 +833,11 @@ query_collections_lookup_card_details <- function(ref_con, row_df) {
   }
 
   row <- as.list(row_df[1, , drop = FALSE])
-  name <- query_collections_clean_text(row$name, fallback = "")
-  set_code <- tolower(query_collections_clean_text(row$set_code, fallback = ""))
-  collector_number <- query_collections_clean_text(row$collector_number, fallback = "")
-  language <- tolower(query_collections_clean_text(row$language, fallback = ""))
-  scryfall_id <- query_collections_clean_text(row$scryfall_id, fallback = "")
+  name <- query_api_scalar(row$name, default = "")
+  set_code <- tolower(query_api_scalar(row$set_code, default = ""))
+  collector_number <- query_api_scalar(row$collector_number, default = "")
+  language <- tolower(query_api_scalar(row$language, default = ""))
+  scryfall_id <- query_api_scalar(row$scryfall_id, default = "")
 
   read_one <- function(sql, params = list()) {
     out <- DBI::dbGetQuery(ref_con, sql, params = params)
@@ -922,9 +921,9 @@ query_collections_lookup_card_details <- function(ref_con, row_df) {
   }
 
   list(
-    scryfall_id = query_collections_clean_text(hit$scryfall_id[[1]], fallback = ""),
-    mana_cost = query_collections_clean_text(hit$mana_cost[[1]], fallback = ""),
-    oracle_text = query_collections_clean_text(hit$oracle_text[[1]], fallback = ""),
-    keywords = query_collections_clean_text(hit$keywords[[1]], fallback = "")
+    scryfall_id = query_api_scalar(hit$scryfall_id[[1]], default = ""),
+    mana_cost = query_api_scalar(hit$mana_cost[[1]], default = ""),
+    oracle_text = query_api_scalar(hit$oracle_text[[1]], default = ""),
+    keywords = query_api_scalar(hit$keywords[[1]], default = "")
   )
 }

@@ -1257,8 +1257,9 @@ async function resolveCardManaCostFromApi(scryfallId, cardName) {
 
 function cardImageUrlFromRow(rowData) {
   const scryfallId = formatCellValue(readFirstCellValue(rowData, ["scryfall_id", "scry_fall_id"])).trim();
-  if (scryfallId) {
-    return `https://api.scryfall.com/cards/${encodeURIComponent(scryfallId)}?format=image&version=art_crop`;
+  const scryfallImageUrl = scryfallCdnImageUrl(scryfallId, "art_crop");
+  if (scryfallImageUrl) {
+    return scryfallImageUrl;
   }
 
   const inferred = inferDeckEntryFromRow(rowData);
@@ -1279,6 +1280,20 @@ function cardImageUrlFromRow(rowData) {
   }
 
   return `https://api.scryfall.com/cards/named?${params.toString()}`;
+}
+
+function isLikelyScryfallId(value) {
+  const raw = String(value || "").trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw);
+}
+
+// Direct CDN URLs avoid browser blocking on api.scryfall.com image redirects.
+function scryfallCdnImageUrl(scryfallId, version = "normal") {
+  const id = String(scryfallId || "").trim().toLowerCase();
+  if (!isLikelyScryfallId(id)) {
+    return "";
+  }
+  return `https://cards.scryfall.io/${version}/front/${id[0]}/${id[1]}/${id}.jpg`;
 }
 
 function escapeHtml(value) {

@@ -59,8 +59,9 @@ import {
       strategy_direct_limit_label: "Top direct synergies",
       strategy_group_limit_label: "Top groups",
       strategy_include_spellbook_label: "Include combo references (Commander Spellbook)",
-      strategy_include_spellbook_hint: "Prioritize cards present in public combos",
+      strategy_include_spellbook_hint: "Prioritize cards present in public combos (adds a score bonus)",
       strategy_include_lotus_hint: "Cross-check with LotusNoir community decks (beta)",
+      strategy_only_collection_hint: "Restrict the calculator to cards from the loaded collection",
       strategy_mana_filter_label: "Mana filter (allowed colors)",
       direct_synergies: "Direct synergies",
       card_groups: "Card groups",
@@ -113,8 +114,9 @@ import {
       strategy_direct_limit_label: "Top synergies directes",
       strategy_group_limit_label: "Top groupes",
       strategy_include_spellbook_label: "Inclure reference combos (Commander Spellbook)",
-      strategy_include_spellbook_hint: "Prioriser les cartes presentes dans les combos publics",
+      strategy_include_spellbook_hint: "Prioriser les cartes presentes dans les combos publics (ajoute un bonus de score)",
       strategy_include_lotus_hint: "Croiser avec les decks communautaires LotusNoir (beta)",
+      strategy_only_collection_hint: "Limiter le calcul aux cartes de la collection chargee",
       strategy_mana_filter_label: "Filtre mana (couleurs autorisees)",
       direct_synergies: "Synergies directes",
       card_groups: "Groupes de cartes",
@@ -206,6 +208,7 @@ import {
       includeKnownCards: true,
       includeSpellbookCombos: true,
       includeLotusSignals: false,
+      useCollectionOnly: false,
       knownCardsModel: null,
       knownCardsModelKey: "",
       knownCardsModelPromise: null,
@@ -281,6 +284,7 @@ import {
       groupLimitInput: document.getElementById("strategy-group-limit"),
       includeSpellbookInput: document.getElementById("strategy-include-spellbook"),
       includeLotusInput: document.getElementById("strategy-include-lotus"),
+      onlyCollectionInput: document.getElementById("strategy-only-collection"),
       manaFilterInputs: Array.from(document.querySelectorAll("input[data-strategy-mana]")),
       runButton: document.getElementById("strategy-run-btn"),
       status: document.getElementById("strategy-status"),
@@ -435,6 +439,7 @@ import {
     setText("#strategy-include-spellbook-label", t("strategy_include_spellbook_label"));
     setText("#strategy-include-spellbook-hint", t("strategy_include_spellbook_hint"));
     setText("#strategy-include-lotus-hint", t("strategy_include_lotus_hint"));
+    setText("#strategy-only-collection-hint", t("strategy_only_collection_hint"));
     setText("#strategy-mana-filter-label", t("strategy_mana_filter_label"));
     setText("#tab-strategy .strategy-result-block:nth-of-type(1) .strategy-result-head h4", t("direct_synergies"));
     setText("#tab-strategy .strategy-result-block:nth-of-type(2) .strategy-result-head h4", t("card_groups"));
@@ -553,6 +558,13 @@ import {
         const payload = collectionId ? state.collectionPayloadById[collectionId] : null;
         const meta = state.collections.find((entry) => entry.id === collectionId);
         renderStrategyPanel(payload, meta);
+      });
+    }
+
+    if (strategyNodes.onlyCollectionInput) {
+      strategyNodes.onlyCollectionInput.checked = isStrategyUseCollectionOnlyEnabled();
+      strategyNodes.onlyCollectionInput.addEventListener("change", () => {
+        state.strategy.useCollectionOnly = strategyNodes.onlyCollectionInput.checked === true;
       });
     }
 
@@ -1563,8 +1575,9 @@ import {
     titleNode.textContent = cardName;
     textNode.innerHTML = strategyOracleTextToHtml(oracle || t("strategy_preview_oracle_fallback"));
 
-    if (scryfallId) {
-      imageNode.src = `https://api.scryfall.com/cards/${encodeURIComponent(scryfallId)}?format=image&version=normal`;
+    const previewImageUrl = scryfallCdnImageUrl(scryfallId, "normal");
+    if (previewImageUrl) {
+      imageNode.src = previewImageUrl;
       imageNode.alt = `Apercu ${cardName}`;
       imageNode.classList.remove("is-hidden");
     } else {
@@ -2296,6 +2309,20 @@ import {
     return `https://api.scryfall.com/cards/named?${params.toString()}`;
   }
 
+  function isLikelyScryfallId(value) {
+    const raw = String(value || "").trim();
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw);
+  }
+
+  // Direct CDN URLs avoid browser blocking on api.scryfall.com image redirects.
+  function scryfallCdnImageUrl(scryfallId, version = "normal") {
+    const id = String(scryfallId || "").trim().toLowerCase();
+    if (!isLikelyScryfallId(id)) {
+      return "";
+    }
+    return `https://cards.scryfall.io/${version}/front/${id[0]}/${id[1]}/${id}.jpg`;
+  }
+
   function spellbookEntryNames(entries, objectPath) {
     if (!Array.isArray(entries) || entries.length === 0) {
       return [];
@@ -2344,7 +2371,8 @@ import {
     const model = payload && payload.ok === true
       ? getStrategyModelForCollection(collectionId, payload)
       : { cards: [] };
-    const includeKnown = isStrategyIncludeKnownEnabled();
+    const onlyCollection = isStrategyUseCollectionOnlyEnabled();
+    const includeKnown = !onlyCollection && isStrategyIncludeKnownEnabled();
     executeStrategyComputation(strategyNodes, model, rawSeedFromUi(strategyNodes), includeKnown, runToken)
       .catch((error) => {
         if (runToken !== state.strategy.runToken) {
@@ -2363,7 +2391,14 @@ import {
       return;
     }
     if (!model.cards.length && !includeKnown) {
-      strategyNodes.status.textContent = "Collection vide ou cartes non reconnues.";
+      const onlyCollection = isStrategyUseCollectionOnlyEnabled();
+      if (onlyCollection) {
+        strategyNodes.status.textContent = currentUiLanguage() === "fr"
+          ? "Aucune collection chargee: decoche \"Limiter a la collection\" ou charge une collection dans l'onglet 1."
+          : "No collection loaded: uncheck \"Restrict to collection\" or load a collection in tab 1.";
+      } else {
+        strategyNodes.status.textContent = "Collection vide ou cartes non reconnues.";
+      }
       strategyNodes.directList.innerHTML = '<p class="muted">Aucun resultat.</p>';
       strategyNodes.groupList.innerHTML = '<p class="muted">Aucun resultat.</p>';
       return;
@@ -2448,6 +2483,18 @@ import {
       return;
     }
     if (synergyResult?.ok) {
+      let spellbookBoostApplied = 0;
+      if (isStrategyIncludeSpellbookEnabled()) {
+        try {
+          const spellbookContext = await getStrategySpellbookContext(resolvedSeed);
+          if (runToken !== state.strategy.runToken) {
+            return;
+          }
+          spellbookBoostApplied = applySpellbookBoostToBackendResult(synergyResult, spellbookContext);
+        } catch (error) {
+          // Boost is best-effort: keep backend results untouched on failure.
+        }
+      }
       renderBackendDirectSynergyCards(synergyResult, resolvedSeed.name, activeModel.cards, directLimit);
       renderBackendSynergyBuckets(synergyResult, resolvedSeed.name, activeModel.cards, groupLimit);
 
@@ -2459,9 +2506,14 @@ import {
       const durationText = Number.isFinite(totalMs) && totalMs > 0
         ? ` ${currentUiLanguage() === "fr" ? "Temps" : "Time"}: ${(totalMs / 1000).toFixed(totalMs >= 10000 ? 0 : 1)}s.`
         : "";
+      const boostText = spellbookBoostApplied > 0
+        ? (currentUiLanguage() === "fr"
+          ? ` Bonus Spellbook applique a ${spellbookBoostApplied} entree(s).`
+          : ` Spellbook bonus applied to ${spellbookBoostApplied} entr${spellbookBoostApplied > 1 ? "ies" : "y"}.`)
+        : "";
       strategyNodes.status.textContent = currentUiLanguage() === "fr"
-        ? `${resolvedSeed.name}: ${Number(synergyResult?.count || 0)} cartes classees, ${bucketCount} elements bucketes, ${Number(synergyResult?.package_count || 0)} packages backend.${durationText}`
-        : `${resolvedSeed.name}: ${Number(synergyResult?.count || 0)} ranked cards, ${bucketCount} bucketed entries, ${Number(synergyResult?.package_count || 0)} backend packages.${durationText}`;
+        ? `${resolvedSeed.name}: ${Number(synergyResult?.count || 0)} cartes classees, ${bucketCount} elements bucketes, ${Number(synergyResult?.package_count || 0)} packages backend.${durationText}${boostText}`
+        : `${resolvedSeed.name}: ${Number(synergyResult?.count || 0)} ranked cards, ${bucketCount} bucketed entries, ${Number(synergyResult?.package_count || 0)} backend packages.${durationText}${boostText}`;
       return;
     }
 
@@ -2545,6 +2597,10 @@ import {
 
   function isStrategyIncludeLotusEnabled() {
     return state.strategy.includeLotusSignals === true;
+  }
+
+  function isStrategyUseCollectionOnlyEnabled() {
+    return state.strategy.useCollectionOnly === true;
   }
 
   function getActiveStrategyManaFilterCodes() {
@@ -2957,6 +3013,111 @@ import {
     }
 
     target.appendChild(fragment);
+  }
+
+  // Apply a Commander Spellbook bonus to backend synergy entries whose card name
+  // appears in a public combo featuring the seed. Mutates `result` in place and
+  // re-sorts the impacted lists so the UI renders the boosted ranking.
+  function applySpellbookBoostToBackendResult(result, spellbookContext) {
+    if (!result || typeof result !== "object") {
+      return 0;
+    }
+    const boostByKey = spellbookContext?.boostByKey;
+    if (!(boostByKey instanceof Map) || boostByKey.size === 0) {
+      return 0;
+    }
+    // Backend `total_score` typically falls in the 0..100 range. Spellbook boost
+    // is in 0..1.2; multiplying by 18 keeps the bonus meaningful (max ~22 pts)
+    // without dwarfing the underlying mechanical signal.
+    const SCORE_SCALE = 18;
+
+    const boostEntry = (entry) => {
+      if (!entry || typeof entry !== "object") {
+        return false;
+      }
+      const nameKey = normalizeStrategyName(entry?.name || entry?.id || "");
+      if (!nameKey) {
+        return false;
+      }
+      const boost = Number(boostByKey.get(nameKey) || 0);
+      if (!(boost > 0)) {
+        return false;
+      }
+      const baseTotal = Number(entry.total_score || entry.score || 0);
+      const baseRaw = Number(entry.score || entry.total_score || 0);
+      const bonus = boost * SCORE_SCALE;
+      entry.spellbook_boost = boost;
+      entry.spellbook_bonus = bonus;
+      entry.total_score = (Number.isFinite(baseTotal) ? baseTotal : 0) + bonus;
+      entry.score = (Number.isFinite(baseRaw) ? baseRaw : 0) + bonus;
+      const reason = `Commander Spellbook combo bonus (+${bonus.toFixed(1)})`;
+      if (Array.isArray(entry.reasons)) {
+        if (!entry.reasons.includes(reason)) {
+          entry.reasons = [reason, ...entry.reasons];
+        }
+      } else {
+        entry.reasons = [reason];
+      }
+      return true;
+    };
+
+    const sortByScoreDesc = (list) => {
+      list.sort((a, b) => Number(b?.total_score || b?.score || 0) - Number(a?.total_score || a?.score || 0));
+    };
+
+    let touched = 0;
+
+    if (Array.isArray(result.best_matches)) {
+      result.best_matches.forEach((entry) => { if (boostEntry(entry)) touched += 1; });
+      sortByScoreDesc(result.best_matches);
+    }
+
+    const buckets = result?.buckets && typeof result.buckets === "object" ? result.buckets : {};
+    Object.keys(buckets).forEach((bucketKey) => {
+      const bucket = buckets[bucketKey];
+      if (bucket && Array.isArray(bucket.results)) {
+        bucket.results.forEach((entry) => { if (boostEntry(entry)) touched += 1; });
+        sortByScoreDesc(bucket.results);
+      }
+    });
+
+    if (Array.isArray(result.packages)) {
+      result.packages.forEach((pkg) => {
+        if (!pkg || typeof pkg !== "object") {
+          return;
+        }
+        const memberCards = [pkg?.cards?.setup, pkg?.cards?.converter, pkg?.cards?.payoff].filter(Boolean);
+        let pkgBonus = 0;
+        let memberHits = 0;
+        memberCards.forEach((member) => {
+          const nameKey = normalizeStrategyName(member?.name || member?.id || "");
+          const boost = Number(boostByKey.get(nameKey) || 0);
+          if (boost > 0) {
+            pkgBonus += boost * SCORE_SCALE;
+            memberHits += 1;
+          }
+        });
+        if (pkgBonus > 0) {
+          // Half-credit for groups so a single combo-card doesn't dominate.
+          const appliedBonus = pkgBonus * 0.5;
+          const baseScore = Number(pkg.score || 0);
+          pkg.spellbook_bonus = appliedBonus;
+          pkg.score = (Number.isFinite(baseScore) ? baseScore : 0) + appliedBonus;
+          const reason = `Spellbook combo overlap on ${memberHits} card${memberHits > 1 ? "s" : ""} (+${appliedBonus.toFixed(1)})`;
+          if (Array.isArray(pkg.reasons)) {
+            if (!pkg.reasons.includes(reason)) {
+              pkg.reasons = [reason, ...pkg.reasons];
+            }
+          } else {
+            pkg.reasons = [reason];
+          }
+          touched += 1;
+        }
+      });
+      result.packages.sort((a, b) => Number(b?.score || 0) - Number(a?.score || 0));
+    }
+
+    return touched;
   }
 
   function resetStrategyKnownCardsCache() {
@@ -4940,11 +5101,9 @@ import {
     const cardNode = document.createElement("article");
     cardNode.className = compact ? "strategy-card is-compact" : "strategy-card";
 
-    const scryfallId = card.scryfallId || "";
+    const scryfallId = String(card?.scryfallId || rowValue(card?.row, ["scryfall_id", "scry_fall_id"]) || "").trim();
     const imageVersion = "art_crop";
-    const imageUrl = scryfallId
-      ? `https://api.scryfall.com/cards/${encodeURIComponent(scryfallId)}?format=image&version=${encodeURIComponent(imageVersion)}`
-      : "";
+    const imageUrl = scryfallCdnImageUrl(scryfallId, imageVersion);
     const hasImage = Boolean(imageUrl);
     if (!hasImage) {
       cardNode.classList.add("is-placeholder");
@@ -4961,6 +5120,15 @@ import {
       img.src = imageUrl;
       img.alt = card.name;
       img.loading = "lazy";
+      img.decoding = "async";
+      img.addEventListener("error", () => {
+        art.innerHTML = "";
+        const fallback = document.createElement("span");
+        fallback.className = "strategy-card-fallback";
+        fallback.textContent = "Image indisponible";
+        art.appendChild(fallback);
+        cardNode.classList.add("is-placeholder");
+      }, { once: true });
       art.appendChild(img);
     } else {
       const fallback = document.createElement("span");

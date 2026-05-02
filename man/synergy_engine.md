@@ -9,8 +9,22 @@ The MVP synergy engine is symbolic and explainable:
 - score cards from mechanical structure instead of naive text overlap
 - surface indirect engines, packages, and anti-synergy as separate result classes
 
-The engine is implemented in `R/query_synergy_engine.R` and exposed through
-Plumber routes.
+The engine is split across thematic modules under `R/`:
+
+| Module | Responsibility |
+|---|---|
+| `query_synergy_engine.R` | Pipeline entry points, runtime metrics, jobs, payload parsing, catalog loader |
+| `synergy_utils.R` | Coercions, scalar/vector helpers, color/legality accessors |
+| `synergy_event_registry.R` | Event ontology, aliases, family expansion, canonicalization |
+| `synergy_normalize.R` | Card normalization, mechanic rules and expansion, role/cadence/strategy inference |
+| `synergy_axes.R` | Lightweight overlap, role complementarity, indirect engines, packages, color/format/anti penalties |
+| `synergy_score_pair.R` | Pairwise scoring, indirect resource bridges, chain matching |
+| `synergy_buckets.R` | Result bucketing, diversification, output shaping |
+| `synergy_groups.R` | Graph edges/paths, group detection, package detection |
+| `synergy_cache.R` | Precompute version, cache keys, profiles, on-disk caches |
+| `synergy_catalog_sqlite.R` | Optional helper to load the catalog from a local SQLite database |
+
+The engine is exposed through Plumber routes.
 
 ## Ontology
 
@@ -42,7 +56,7 @@ Aliases are canonicalized to stable IDs (`alias_to_id`).
 - strategy tags
 - anti-synergy tags
 - inferred roles (`producer`, `payoff`, `engine`, `setup`, `converter`, `amplifier`, `target`, `bridge`, `finisher`)
-- cadence markers (one-shot, repeatable, scalable)
+- cadence markers (`one_shot`, `conditional_repeatable`, `reliable_repeatable`, `scalable_repeatable`)
 
 ## Scoring Logic
 
@@ -52,10 +66,18 @@ Aliases are canonicalized to stable IDs (`alias_to_id`).
 - `indirect_engine_score`
 - `reciprocal_value_score`
 - `package_score`
+- `event_bridge_score`
+- `payoff_bridge_score`
+- `resource_bridge_score`
+- `zone_transition_bridge_score`
+- `strong_bridge_score`
+- `setup_converter_score`
 - `anti_synergy_score`
 - `shared_plan_score`
 - `cadence_score`
 - `role_complementarity_score`
+- `reliability_score`
+- `shell_dependency_score`
 
 Each result returns:
 
@@ -63,14 +85,18 @@ Each result returns:
 - score breakdown by axis
 - bucket scores by category
 - primary bucket/category
-- relation classes (`enabler_payoff`, `shared_plan`, etc.)
+- relation classes (`direct_enabler`, `indirect_engine`, `shell_dependent_engine`, `value_cluster`, etc.)
 - human-readable reasons
 - inferred roles
 - matched events and package links
+- explicit bridge debug signals (event/payoff/resource/zone-transition)
 - directional explanations
 
 Broad plan tags are used as supporting rerank signals only. They should not outweigh
-role complementarity, cadence, or real mechanical event structure.
+explicit bridge structure (event/payoff/resource/zone), role complementarity, reliability,
+cadence, or real mechanical event structure.
+For setup-style seeds, explicit `resource_bridge`, `zone_transition_bridge`, and
+`setup_converter_score` signals are valid direct-enabler bridges.
 
 ## Ranking Buckets
 
@@ -101,6 +127,12 @@ The query pipeline is staged:
 4. run bucket assembly on the deep-scored subset
 5. run package detection only on a smaller top-N subset
 
+Cheap-scan contract:
+
+- allowed in full-catalog scan: basic event overlap, family overlap, coarse role fit, coarse plan fit, anti-synergy flags, precomputed cadence/color/format/tempo signals
+- excluded from full-catalog scan: reliability estimation, shell-dependence analysis, rich explanation text, and package/group typing
+- deep-only logic: reliability/shell axes, full relation labeling, explanation generation, and package/group classification
+
 Current defaults are intentionally conservative:
 
 - `top_k`: `max(64, min(120, max_results * 4))`
@@ -126,14 +158,19 @@ same precompute layer is built in memory.
 - `pipeline.candidate_filter_count`
 - `pipeline.cheap_scan_count`
 - `pipeline.deep_score_count`
+- `pipeline.full_catalog_scanned_count`
+- `pipeline.deep_scored_count`
 - `pipeline.package_candidate_count`
+- `pipeline.package_eval_count`
 - `pipeline.group_graph_pair_count`
 - `pipeline.full_catalog_light_scan`
 - `pipeline.top_k_used`
 - `pipeline.package_top_n_used`
+- `pipeline.stage_metrics` (per-stage call counters for debugging)
 
 and stage timings in `timings`, including cheap scan, deep scoring, package detection, and
-response assembly. These fields are intended to help debug bottlenecks without changing the
+response assembly. Additional stage timings include top-K selection and explanation assembly.
+These fields are intended to help debug bottlenecks without changing the
 mechanical meaning of the engine.
 
 For polling UIs, the engine also supports background job progress via additive routes.
@@ -157,6 +194,11 @@ chain validation over the local pairwise graph to identify generalized structure
 
 Packages expose endpoints, intermediate cards, inferred role sequence, matched events,
 matched resource transitions, and score breakdown to justify the package score.
+When the seed behaves as setup, scoring also boosts setup -> converter -> target alignment
+before broader shared-value clusters.
+Groups are also classified to separate true causal lines (for example `causal_package`,
+`setup_converter_payoff`, `engine_amplifier_finisher`) from weaker shared value clusters
+(for example `value_cluster`).
 
 ## Mechanic Rule Extensions
 
