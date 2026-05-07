@@ -2484,17 +2484,39 @@ import {
     }
     if (synergyResult?.ok) {
       let spellbookBoostApplied = 0;
-      if (isStrategyIncludeSpellbookEnabled()) {
-        try {
-          const spellbookContext = await getStrategySpellbookContext(resolvedSeed);
-          if (runToken !== state.strategy.runToken) {
-            return;
-          }
-          spellbookBoostApplied = applySpellbookBoostToBackendResult(synergyResult, spellbookContext);
-        } catch (error) {
-          // Boost is best-effort: keep backend results untouched on failure.
+      let spellbookContext = {
+        boostByKey: new Map(),
+        refsByKey: new Map(),
+        popularityByKey: new Map(),
+        variantCount: 0,
+        variants: []
+      };
+      let lotusContext = {
+        boostByKey: new Map(),
+        refsByKey: new Map(),
+        postCount: 0
+      };
+      try {
+        const [spellbookOut, lotusOut] = await Promise.all([
+          isStrategyIncludeSpellbookEnabled()
+            ? getStrategySpellbookContext(resolvedSeed)
+            : Promise.resolve(spellbookContext),
+          isStrategyIncludeLotusEnabled()
+            ? getStrategyLotusNoirContext(resolvedSeed, activeModel.cards)
+            : Promise.resolve(lotusContext)
+        ]);
+        spellbookContext = spellbookOut;
+        lotusContext = lotusOut;
+        if (runToken !== state.strategy.runToken) {
+          return;
         }
+        if (isStrategyIncludeSpellbookEnabled()) {
+          spellbookBoostApplied = applySpellbookBoostToBackendResult(synergyResult, spellbookContext);
+        }
+      } catch (error) {
+        // External references are best-effort: keep backend results usable.
       }
+      annotateBackendResultProvenance(synergyResult, spellbookContext, lotusContext);
       renderBackendDirectSynergyCards(synergyResult, resolvedSeed.name, activeModel.cards, directLimit);
       renderBackendSynergyBuckets(synergyResult, resolvedSeed.name, activeModel.cards, groupLimit);
 
@@ -2561,10 +2583,10 @@ import {
         activeModel.cards,
         groupLimit,
         spellbookContext,
-        { allowExternalCards: manaFilterCodes.length === 0 }
+        { allowExternalCards: manaFilterCodes.length === 0, externalContext }
       )
       : [];
-    const fallbackGroups = computeSynergyGroups(resolvedSeed, direct, activeModel.cards, groupLimit);
+    const fallbackGroups = computeSynergyGroups(resolvedSeed, direct, activeModel.cards, groupLimit, externalContext);
     let groups = mergeStrategyGroups(spellbookGroups, fallbackGroups, groupLimit);
     groups = await enrichStrategyGroupsWithScryfall(groups, getCollectionLanguage());
     if (runToken !== state.strategy.runToken) {
@@ -2884,7 +2906,8 @@ import {
           formatSynergyEntryMeta(entry, index + 1),
           {
             metaTitle: formatSynergyEntryTitle(entry),
-            badge: String(entry?.bucket_label || "").trim() || "Direct"
+            badge: String(entry?.bucket_label || "").trim() || "Direct",
+            provenanceTags: readStrategyProvenanceTags(entry)
           }
         )
       );
@@ -2923,7 +2946,8 @@ import {
           {
             compact: true,
             metaTitle: formatSynergyEntryTitle(entry),
-            badge: String(entry?.bucket_label || bucket?.label || "").trim()
+            badge: String(entry?.bucket_label || bucket?.label || "").trim(),
+            provenanceTags: readStrategyProvenanceTags(entry)
           }
         )
       );
@@ -2946,6 +2970,9 @@ import {
     const title = document.createElement("p");
     title.className = "strategy-group-title";
     title.textContent = `Top packages / groups | ${results.length}`;
+    if (results.length > 0) {
+      appendStrategyProvenanceBadges(title, readStrategyProvenanceTags(results[0]));
+    }
     article.appendChild(title);
 
     results.slice(0, Math.max(1, Number(limit) || 6)).forEach((pkg, index) => {
@@ -2955,6 +2982,7 @@ import {
       const line = document.createElement("p");
       line.className = "strategy-group-line";
       line.textContent = `#${index + 1} | score ${Math.round(Number(pkg?.score || 0))} | ${String(pkg?.archetype || "package").trim()}`;
+      appendStrategyProvenanceBadges(line, readStrategyProvenanceTags(pkg));
       block.appendChild(line);
 
       const reason = document.createElement("p");
@@ -3676,6 +3704,194 @@ import {
     return getCollectionLanguage() === "fr" ? "Source: Scryfall" : "Source: Scryfall";
   }
 
+  function normalizeStrategyProvenanceTag(tag) {
+    const value = normalizeStrategyName(tag);
+    if (!value) {
+      return "";
+    }
+    if (value === "spellbook" || value === "commander_spellbook") {
+      return "spellbook";
+    }
+    if (value === "lotus_noir" || value === "lotusnoir" || value === "lotus-noir") {
+      return "lotus_noir";
+    }
+    if (value === "heuristic" || value === "heuristique" || value === "mechanical" || value === "mecanique") {
+      return "heuristic";
+    }
+    return value;
+  }
+
+  function readStrategyProvenanceTags(entry) {
+    const raw = Array.isArray(entry?.provenance_tags)
+      ? entry.provenance_tags
+      : (Array.isArray(entry?.provenanceTags) ? entry.provenanceTags : []);
+    const seen = new Set();
+    const out = [];
+    raw.forEach((tag) => {
+      const normalized = normalizeStrategyProvenanceTag(tag);
+      if (!normalized || seen.has(normalized)) {
+        return;
+      }
+      seen.add(normalized);
+      out.push(normalized);
+    });
+    return out;
+  }
+
+  function buildStrategyProvenanceTags({ heuristic = false, spellbook = false, lotus = false } = {}) {
+    const tags = [];
+    if (heuristic) {
+      tags.push("heuristic");
+    }
+    if (spellbook) {
+      tags.push("spellbook");
+    }
+    if (lotus) {
+      tags.push("lotus_noir");
+    }
+    return tags;
+  }
+
+  function strategyProvenanceTagLabel(tag) {
+    const normalized = normalizeStrategyProvenanceTag(tag);
+    const isFr = getCollectionLanguage() === "fr";
+    switch (normalized) {
+    case "heuristic":
+      return isFr ? "Heuristique" : "Heuristic";
+    case "spellbook":
+      return "Spellbook";
+    case "lotus_noir":
+      return "Lotus Noir";
+    default:
+      return String(tag || "").trim();
+    }
+  }
+
+  function strategyProvenanceToneClass(tag) {
+    const normalized = normalizeStrategyProvenanceTag(tag);
+    switch (normalized) {
+    case "heuristic":
+      return "is-provenance-heuristic";
+    case "spellbook":
+      return "is-provenance-spellbook";
+    case "lotus_noir":
+      return "is-provenance-lotus";
+    default:
+      return "is-side";
+    }
+  }
+
+  function appendStrategyProvenanceBadges(container, tags) {
+    const safeTags = Array.isArray(tags) ? tags : [];
+    safeTags.forEach((tag) => {
+      const normalized = normalizeStrategyProvenanceTag(tag);
+      if (!normalized) {
+        return;
+      }
+      appendStrategyCardBadge(
+        container,
+        strategyProvenanceTagLabel(normalized),
+        strategyProvenanceToneClass(normalized)
+      );
+    });
+  }
+
+  function collectStrategyExternalEvidenceForKey(cardKey, externalContext = {}) {
+    const key = normalizeStrategyName(cardKey);
+    if (!key) {
+      return {
+        spellbookRefs: 0,
+        spellbookBoost: 0,
+        lotusRefs: 0,
+        lotusBoost: 0
+      };
+    }
+
+    return {
+      spellbookRefs: Math.max(0, Number(externalContext?.refsByKey?.get?.(key) || 0)),
+      spellbookBoost: Math.max(0, Number(externalContext?.boostByKey?.get?.(key) || 0)),
+      lotusRefs: Math.max(0, Number(externalContext?.lotusRefsByKey?.get?.(key) || 0)),
+      lotusBoost: Math.max(0, Number(externalContext?.lotusBoostByKey?.get?.(key) || 0))
+    };
+  }
+
+  function collectStrategyExternalEvidenceForCards(cards, externalContext = {}) {
+    const safeCards = Array.isArray(cards) ? cards : [];
+    return safeCards.reduce((acc, card) => {
+      const evidence = collectStrategyExternalEvidenceForKey(card?.key || card?.name || "", externalContext);
+      acc.spellbookRefs += evidence.spellbookRefs;
+      acc.spellbookBoost = Math.max(acc.spellbookBoost, evidence.spellbookBoost);
+      acc.lotusRefs += evidence.lotusRefs;
+      acc.lotusBoost = Math.max(acc.lotusBoost, evidence.lotusBoost);
+      return acc;
+    }, {
+      spellbookRefs: 0,
+      spellbookBoost: 0,
+      lotusRefs: 0,
+      lotusBoost: 0
+    });
+  }
+
+  function buildStrategyGroupProvenanceTags(group, externalContext = {}) {
+    const sourceType = String(group?.sourceType || "").toLowerCase();
+    const evidence = collectStrategyExternalEvidenceForCards(group?.cards, externalContext);
+    return buildStrategyProvenanceTags({
+      heuristic: sourceType === "heuristic",
+      spellbook: sourceType === "spellbook" || evidence.spellbookRefs > 0 || evidence.spellbookBoost > 0,
+      lotus: evidence.lotusRefs > 0 || evidence.lotusBoost > 0
+    });
+  }
+
+  function annotateBackendResultProvenance(result, spellbookContext = {}, lotusContext = {}) {
+    if (!result || typeof result !== "object") {
+      return;
+    }
+
+    const externalContext = mergeStrategyExternalContexts(spellbookContext, lotusContext);
+
+    const annotateEntry = (entry) => {
+      if (!entry || typeof entry !== "object") {
+        return;
+      }
+      const evidence = collectStrategyExternalEvidenceForKey(entry?.name || entry?.id || "", externalContext);
+      entry.provenance_tags = buildStrategyProvenanceTags({
+        heuristic: true,
+        spellbook: evidence.spellbookRefs > 0 || evidence.spellbookBoost > 0 || Number(entry?.spellbook_boost || 0) > 0,
+        lotus: evidence.lotusRefs > 0 || evidence.lotusBoost > 0
+      });
+    };
+
+    const annotateGroup = (group) => {
+      if (!group || typeof group !== "object") {
+        return;
+      }
+      const members = Array.isArray(group?.members)
+        ? group.members
+        : [];
+      const cards = members.map((member) => ({
+        key: member?.id || member?.name || "",
+        name: member?.name || member?.id || ""
+      }));
+      group.provenance_tags = buildStrategyGroupProvenanceTags(
+        { cards, sourceType: "heuristic" },
+        externalContext
+      );
+    };
+
+    if (Array.isArray(result.best_matches)) {
+      result.best_matches.forEach(annotateEntry);
+    }
+    const buckets = result?.buckets && typeof result.buckets === "object" ? result.buckets : {};
+    Object.values(buckets).forEach((bucket) => {
+      if (bucket && Array.isArray(bucket.results)) {
+        bucket.results.forEach(annotateEntry);
+      }
+    });
+    if (Array.isArray(result.packages)) {
+      result.packages.forEach(annotateGroup);
+    }
+  }
+
   function appendStrategyCardBadge(container, label, toneClass) {
     if (!container) {
       return;
@@ -4173,7 +4389,12 @@ import {
           colorScore: sim.colorScore,
           comboBoost: sim.comboBoost,
           spellbookBoost,
-          lotusBoost
+          lotusBoost,
+          provenance_tags: buildStrategyProvenanceTags({
+            heuristic: true,
+            spellbook: spellbookRefs > 0 || spellbookBoost > 0,
+            lotus: lotusRefs > 0 || lotusBoost > 0
+          })
         };
       });
 
@@ -4346,7 +4567,7 @@ import {
     };
   }
 
-  function computeSynergyGroups(seedCard, directEntries, allCards, groupLimit) {
+  function computeSynergyGroups(seedCard, directEntries, allCards, groupLimit, externalContext = {}) {
     const anchors = directEntries.slice(0, Math.min(18, directEntries.length));
     if (anchors.length < 2) {
       return [];
@@ -4377,6 +4598,10 @@ import {
           coreCards: split.coreCards,
           sideCards: split.sideCards,
           sourceType: "heuristic",
+          provenance_tags: buildStrategyGroupProvenanceTags({
+            cards: packageCards,
+            sourceType: "heuristic"
+          }, externalContext),
           bridgeName: left.score >= right.score ? left.card.name : right.card.name,
           score: groupScore,
           scoreParts: groupScoreParts,
@@ -4419,6 +4644,9 @@ import {
       return [];
     }
     const allowExternalCards = options?.allowExternalCards !== false;
+    const externalContext = options?.externalContext && typeof options.externalContext === "object"
+      ? options.externalContext
+      : {};
 
     const cardsByKey = new Map((Array.isArray(allCards) ? allCards : []).map((card) => [card.key, card]));
     const directByKey = new Map((Array.isArray(directEntries) ? directEntries : []).map((entry) => [entry.card.key, entry]));
@@ -4502,6 +4730,10 @@ import {
         coreCards: split.coreCards,
         sideCards: split.sideCards,
         sourceType: "spellbook",
+        provenance_tags: buildStrategyGroupProvenanceTags({
+          cards: packageCards,
+          sourceType: "spellbook"
+        }, externalContext),
         sourceVariantId: String(variant?.id || "").trim(),
         comboDetails,
         bridgeName,
@@ -4964,7 +5196,8 @@ import {
           `#${index + 1}`,
           {
             metaTitle: fullMeta,
-            validationMeta: buildDirectValidationMeta(entry.validation)
+            validationMeta: buildDirectValidationMeta(entry.validation),
+            provenanceTags: readStrategyProvenanceTags(entry)
           }
         )
       );
@@ -4974,12 +5207,15 @@ import {
 
   function buildDirectValidationMeta(validation) {
     const spellbook = Math.max(0, Math.min(1, Number(validation?.spellbookScore) || 0));
+    const lotus = Math.max(0, Math.min(1, Number(validation?.lotusScore) || 0));
     const global = Math.max(0, Math.min(1, Number(validation?.score) || 0));
     const refs = Math.max(0, Number(validation?.spellbookRefs) || 0);
+    const lotusRefs = Math.max(0, Number(validation?.lotusRefs) || 0);
     return {
       spellbook: `SB ${Math.round(spellbook * 100)}%`,
+      lotus: `LN ${Math.round(lotus * 100)}%`,
       global: `API ${Math.round(global * 100)}%`,
-      refs: `refs SB ${refs}`
+      refs: `refs SB ${refs} | LN ${lotusRefs}`
     };
   }
 
@@ -5009,6 +5245,7 @@ import {
       sourceBadge.className = `strategy-group-source-badge is-${sourceType}`;
       sourceBadge.textContent = sourceType === "spellbook" ? "Source: Spellbook" : "Source: Heuristique";
       title.appendChild(sourceBadge);
+      appendStrategyProvenanceBadges(title, readStrategyProvenanceTags(group));
       article.appendChild(title);
 
       const validationLine = document.createElement("p");
@@ -5098,6 +5335,7 @@ import {
     const validationMeta = options.validationMeta && typeof options.validationMeta === "object"
       ? options.validationMeta
       : null;
+    const provenanceTags = readStrategyProvenanceTags({ provenance_tags: options.provenanceTags });
     const cardNode = document.createElement("article");
     cardNode.className = compact ? "strategy-card is-compact" : "strategy-card";
 
@@ -5164,6 +5402,7 @@ import {
     if (sourceBadge) {
       appendStrategyCardBadge(badgesLine, sourceBadge, "is-source-scryfall");
     }
+    appendStrategyProvenanceBadges(badgesLine, provenanceTags);
     if (badgesLine.childNodes.length > 0) {
       body.appendChild(badgesLine);
     }
@@ -5186,6 +5425,13 @@ import {
       sbChip.className = "strategy-validation-chip is-spellbook";
       sbChip.textContent = validationMeta.spellbook;
       validationRow.appendChild(sbChip);
+
+      if (validationMeta.lotus) {
+        const lotusChip = document.createElement("span");
+        lotusChip.className = "strategy-validation-chip is-source-scryfall";
+        lotusChip.textContent = validationMeta.lotus;
+        validationRow.appendChild(lotusChip);
+      }
 
       const glChip = document.createElement("span");
       glChip.className = "strategy-validation-chip is-global";

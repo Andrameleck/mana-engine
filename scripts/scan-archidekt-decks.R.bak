@@ -1,0 +1,339 @@
+#!/usr/bin/env Rscript
+# Parallel Archidekt deck scanner — writes results into a SQLite database.
+#
+# Workers fetch decks in parallel (mclapply, fork-based — Linux only).
+# The main process collects results and writes to SQLite after each batch.
+# A checkpoint table in the DB tracks the last scanned ID so interrupted
+# runs resume automatically.
+#
+# Environment variables:
+#   ARCHIDEKT_DB_PATH       SQLite output. Default: inst/decks/archidekt.sqlite
+#   ARCHIDEKT_MIN_ID        First deck ID. Default: 1
+#   ARCHIDEKT_MAX_ID        Last deck ID.  Default: 8000000
+#   ARCHIDEKT_IDS_FILE      File with one ID per line (overrides MIN/MAX).
+#   ARCHIDEKT_WORKERS       Parallel workers. Default: 8
+#   ARCHIDEKT_CHUNK         IDs per worker per batch. Default: 50
+#   ARCHIDEKT_DELAY         Seconds between requests per worker. Default: 0.1
+#   ARCHIDEKT_OVERWRITE     Re-fetch stored decks. Default: false
+#   ARCHIDEKT_COARSE_STEP   Enable adaptive mode: probe every N IDs first;
+#                           only fine-scan blocks where >=1 probe in
+#                           (prev, this, next) block hit. Default: 0 (off)
+#                           Suggested: 1000
+
+suppressMessages(devtools::load_all(".", quiet = TRUE))
+
+# ── config ────────────────────────────────────────────────────────────────────
+db_path <- Sys.getenv("ARCHIDEKT_DB_PATH",
+  unset = file.path("inst", "decks", "archidekt.sqlite"))
+dir.create(dirname(db_path), recursive = TRUE, showWarnings = FALSE)
+
+ids_file  <- trimws(Sys.getenv("ARCHIDEKT_IDS_FILE", unset = ""))
+n_workers <- max(1L, suppressWarnings(as.integer(
+  Sys.getenv("ARCHIDEKT_WORKERS", unset = "8"))))
+chunk_sz  <- max(1L, suppressWarnings(as.integer(
+  Sys.getenv("ARCHIDEKT_CHUNK", unset = "50"))))
+delay     <- max(0, suppressWarnings(as.numeric(
+  Sys.getenv("ARCHIDEKT_DELAY", unset = "0.1"))))
+overwrite <- tolower(Sys.getenv("ARCHIDEKT_OVERWRITE", unset = "false")) %in%
+  c("1","true","yes","y","on")
+
+min_id <- max(1L, suppressWarnings(as.integer(
+  Sys.getenv("ARCHIDEKT_MIN_ID", unset = "1"))))
+max_id <- suppressWarnings(as.integer(
+  Sys.getenv("ARCHIDEKT_MAX_ID", unset = "8000000")))
+if (is.na(max_id)) max_id <- 8000000L
+
+ts <- function() format(Sys.time(), "[%Y-%m-%d %H:%M:%S]")
+
+# ── DB setup ──────────────────────────────────────────────────────────────────
+if (!requireNamespace("DBI",     quietly = TRUE) ||
+    !requireNamespace("RSQLite", quietly = TRUE)) {
+  stop("DBI and RSQLite packages are required")
+}
+
+con <- DBI::dbConnect(RSQLite::SQLite(), db_path)
+on.exit(try(DBI::dbDisconnect(con), silent = TRUE), add = TRUE)
+
+DBI::dbExecute(con, "
+  CREATE TABLE IF NOT EXISTS decks (
+    id         INTEGER PRIMARY KEY,
+    url        TEXT,
+    title      TEXT,
+    author     TEXT,
+    format     TEXT,
+    updated_at TEXT,
+    fetched_at TEXT
+  )
+")
+DBI::dbExecute(con, "
+  CREATE TABLE IF NOT EXISTS deck_cards (
+    deck_id     INTEGER,
+    section     TEXT,
+    quantity    INTEGER,
+    card_name   TEXT,
+    scryfall_id TEXT
+  )
+")
+DBI::dbExecute(con,
+  "CREATE INDEX IF NOT EXISTS idx_deck_cards_deck_id ON deck_cards (deck_id)")
+DBI::dbExecute(con, "
+  CREATE TABLE IF NOT EXISTS scan_checkpoint (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+  )
+")
+
+# ── determine IDs to scan ─────────────────────────────────────────────────────
+if (nzchar(ids_file)) {
+  if (!file.exists(ids_file)) stop(sprintf("IDs file not found: %s", ids_file))
+  all_ids <- suppressWarnings(as.integer(
+    readLines(ids_file, warn = FALSE)))
+  all_ids <- all_ids[!is.na(all_ids) & all_ids > 0L]
+} else {
+  # Resume: find last checkpoint
+  last_done <- DBI::dbGetQuery(con,
+    "SELECT value FROM scan_checkpoint WHERE key='last_id'")$value
+  resume_from <- if (length(last_done) > 0L && nzchar(last_done)) {
+    as.integer(last_done) + 1L
+  } else {
+    min_id
+  }
+  if (resume_from > max_id) {
+    message(ts(), " Scan already complete (last_id=", last_done, ")")
+    quit(status = 0L)
+  }
+  all_ids <- seq.int(resume_from, max_id)
+}
+
+# Remove already-stored IDs unless overwrite
+if (!isTRUE(overwrite)) {
+  stored <- DBI::dbGetQuery(con, "SELECT id FROM decks")$id
+  all_ids <- all_ids[!all_ids %in% stored]
+}
+
+# ── adaptive coarse-probe pass (optional) ─────────────────────────────────────
+# Probes 1 ID per block. Keeps only blocks where the block itself or either
+# immediate neighbour returned a valid deck. Cold runs of 3+ consecutive
+# misses are skipped entirely, shrinking the fine-scan ID list.
+coarse_step <- suppressWarnings(as.integer(
+  Sys.getenv("ARCHIDEKT_COARSE_STEP", unset = "0")))
+
+if (coarse_step >= 10L && !nzchar(ids_file) && length(all_ids) > coarse_step * 3L) {
+  probe_ids <- seq.int(min(all_ids), max(all_ids), by = coarse_step)
+  message(sprintf("%s Adaptive probe: step=%d  n_probes=%d",
+                  ts(), coarse_step, length(probe_ids)))
+
+  probe_chunks <- split(probe_ids, ceiling(seq_along(probe_ids) / chunk_sz))
+
+  hit_flags <- unlist(parallel::mclapply(
+    probe_chunks,
+    function(ids) {
+      vapply(ids, function(id) {
+        Sys.sleep(delay * 0.3)
+        url <- sprintf("https://archidekt.com/api/decks/%d/?format=json",
+                       as.integer(id))
+        raw <- tryCatch(
+          paste(readLines(url, warn = FALSE, encoding = "UTF-8"), collapse = "\n"),
+          error = function(e) ""
+        )
+        if (!nzchar(raw)) return(FALSE)
+        p <- tryCatch(jsonlite::fromJSON(raw, simplifyVector = FALSE),
+                      error = function(e) NULL)
+        !is.null(p) && is.null(p$error) &&
+          !isTRUE(p$private) && !isTRUE(p$unlisted)
+      }, logical(1L))
+    },
+    mc.cores = min(n_workers, length(probe_chunks))
+  ), use.names = FALSE)
+
+  n_hits <- sum(hit_flags)
+  message(sprintf("%s  Probe: %d/%d hit (%.0f%%)",
+                  ts(), n_hits, length(probe_ids),
+                  100 * n_hits / max(length(probe_ids), 1L)))
+
+  # Block is hot if it OR either immediate neighbour had a hit
+  hot <- logical(length(probe_ids))
+  for (i in which(hit_flags)) {
+    hot[max(1L, i - 1L) : min(length(hot), i + 1L)] <- TRUE
+  }
+
+  # Retain only IDs inside hot blocks
+  all_ids_pre <- all_ids
+  all_ids <- sort(unique(unlist(lapply(which(hot), function(bi) {
+    lo <- probe_ids[bi]
+    hi <- if (bi < length(probe_ids)) probe_ids[bi + 1L] - 1L else max(all_ids_pre)
+    all_ids_pre[all_ids_pre >= lo & all_ids_pre <= hi]
+  }), use.names = FALSE)))
+
+  message(sprintf("%s  Hot: %d/%d blocks  fine IDs: %d  (%.0f%% of range kept)",
+                  ts(), sum(hot), length(hot), length(all_ids),
+                  100 * length(all_ids) / max(max(all_ids_pre) - min(all_ids_pre) + 1L, 1L)))
+}
+
+n_total <- length(all_ids)
+rate_est <- n_workers / max(delay, 0.001)
+eta_min  <- round(n_total / rate_est / 60)
+
+message(sprintf("%s Archidekt parallel scan", ts()))
+message(sprintf("  DB        : %s", db_path))
+message(sprintf("  IDs       : %d total | workers=%d | delay=%.2fs | ~%.0f req/s",
+                n_total, n_workers, delay, rate_est))
+message(sprintf("  ETA       : ~%d min", eta_min))
+
+if (n_total == 0L) {
+  message(ts(), " Nothing to do.")
+  quit(status = 0L)
+}
+
+# ── worker function (pure base R — no devtools state) ─────────────────────────
+fetch_chunk <- function(ids, delay) {
+  if (!requireNamespace("jsonlite", quietly = TRUE)) return(list())
+  results <- list()
+
+  for (id in ids) {
+    if (delay > 0) Sys.sleep(delay)
+    url <- sprintf("https://archidekt.com/api/decks/%d/?format=json",
+                   as.integer(id))
+    raw <- tryCatch(
+      paste(readLines(url, warn = FALSE, encoding = "UTF-8"), collapse = "\n"),
+      error = function(e) ""
+    )
+    if (!nzchar(raw)) next
+
+    p <- tryCatch(
+      jsonlite::fromJSON(raw, simplifyVector = FALSE),
+      error = function(e) NULL
+    )
+    if (is.null(p) || !is.null(p$error)) next
+    if (isTRUE(p$private) || isTRUE(p$unlisted)) next
+
+    # format label
+    fmt_codes <- c("1"="Standard","2"="Modern","3"="Commander","4"="Legacy",
+                   "5"="Vintage","6"="Pauper","7"="Limited","8"="Frontier",
+                   "9"="Future Standard","10"="Penny Dreadful",
+                   "11"="1v1 Commander","13"="Oathbreaker",
+                   "14"="Historic","17"="Pioneer")
+    fmt <- unname(fmt_codes[as.character(p$deckFormat %||% "")])
+    if (is.null(fmt) || is.na(fmt)) fmt <- as.character(p$deckFormat %||% "")
+
+    deck_title  <- trimws(as.character(p$name %||% ""))
+    deck_owner  <- trimws(as.character((p$owner %||% list())$username %||% ""))
+    deck_date   <- trimws(as.character(p$updatedAt %||% ""))
+    deck_url    <- sprintf("https://archidekt.com/decks/%d", as.integer(id))
+
+    cards_raw <- p$cards %||% list()
+    card_rows <- lapply(cards_raw, function(entry) {
+      qty <- suppressWarnings(as.integer(entry$quantity %||% 1L))
+      if (is.na(qty) || qty < 1L) qty <- 1L
+      card        <- entry$card %||% list()
+      oracle_card <- card$oracleCard %||% list()
+      card_name   <- trimws(as.character(
+        oracle_card$name %||% card$displayName %||% ""))
+      scryfall_id <- trimws(as.character(
+        card$uid %||% oracle_card$uid %||% ""))
+      cats    <- entry$categories %||% list()
+      section <- if (length(cats) > 0L) trimws(as.character(cats[[1L]])) else "Main"
+      if (!nzchar(card_name)) return(NULL)
+      list(section=section, quantity=qty,
+           card_name=card_name, scryfall_id=scryfall_id)
+    })
+    card_rows <- Filter(Negate(is.null), card_rows)
+
+    results[[length(results) + 1L]] <- list(
+      id         = as.integer(id),
+      url        = deck_url,
+      title      = deck_title,
+      author     = deck_owner,
+      format     = fmt,
+      updated_at = deck_date,
+      cards      = card_rows
+    )
+  }
+  results
+}
+
+# ── parallel batch loop ───────────────────────────────────────────────────────
+chunk_list  <- split(all_ids, ceiling(seq_along(all_ids) / chunk_sz))
+n_chunks    <- length(chunk_list)
+chunks_done <- 0L
+inserted    <- 0L
+skipped     <- 0L
+t0          <- proc.time()[["elapsed"]]
+
+for (batch_i in seq(1L, n_chunks, by = n_workers)) {
+  batch_end    <- min(batch_i + n_workers - 1L, n_chunks)
+  batch_chunks <- chunk_list[seq.int(batch_i, batch_end)]
+
+  batch_results <- parallel::mclapply(
+    batch_chunks,
+    FUN      = function(ids) fetch_chunk(ids, delay),
+    mc.cores = length(batch_chunks)
+  )
+
+  ts_now <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  last_id <- NULL
+
+  for (chunk_res in batch_results) {
+    for (deck in chunk_res) {
+      tryCatch({
+        DBI::dbExecute(con,
+          "INSERT OR REPLACE INTO decks
+             (id, url, title, author, format, updated_at, fetched_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)",
+          params = list(deck$id, deck$url, deck$title, deck$author,
+                        deck$format, deck$updated_at, ts_now)
+        )
+        if (length(deck$cards) > 0L) {
+          DBI::dbExecute(con,
+            "DELETE FROM deck_cards WHERE deck_id = ?",
+            params = list(deck$id)
+          )
+          n <- length(deck$cards)
+          card_df <- data.frame(
+            deck_id     = rep.int(deck$id, n),
+            section     = vapply(deck$cards, `[[`, character(1), "section"),
+            quantity    = vapply(deck$cards, `[[`, integer(1),   "quantity"),
+            card_name   = vapply(deck$cards, `[[`, character(1), "card_name"),
+            scryfall_id = vapply(deck$cards, `[[`, character(1), "scryfall_id"),
+            stringsAsFactors = FALSE
+          )
+          DBI::dbAppendTable(con, "deck_cards", card_df)
+        }
+        inserted <- inserted + 1L
+      }, error = function(e) {
+        message(sprintf("  DB ERROR id=%d: %s", deck$id, conditionMessage(e)))
+      })
+    }
+
+    # track last ID processed in this batch (for checkpoint)
+    chunk_ids <- unlist(batch_chunks[seq_along(batch_chunks)])
+    if (length(chunk_ids)) last_id <- max(chunk_ids)
+  }
+
+  chunks_done <- chunks_done + length(batch_chunks)
+
+  # checkpoint
+  if (!is.null(last_id)) {
+    DBI::dbExecute(con,
+      "INSERT OR REPLACE INTO scan_checkpoint (key, value) VALUES ('last_id', ?)",
+      params = list(as.character(last_id))
+    )
+  }
+
+  # progress log
+  elapsed  <- proc.time()[["elapsed"]] - t0
+  done_ids <- chunks_done * chunk_sz
+  pct      <- 100 * min(done_ids, n_total) / n_total
+  rate     <- if (elapsed > 0) done_ids / elapsed else 0
+  rem_ids  <- max(0L, n_total - done_ids)
+  eta_rem  <- if (rate > 0) round(rem_ids / rate / 60) else NA_integer_
+
+  message(sprintf(
+    "%s  %.1f%%  last_id=%-9s  inserted=%d  rate=%.0f req/s  reste~%s min",
+    ts(), pct, last_id %||% "?", inserted,
+    rate, if (is.na(eta_rem)) "?" else as.character(eta_rem)
+  ))
+}
+
+message(sprintf("%s Done — inserted=%d  skipped=%d  db=%s",
+                ts(), inserted, skipped, db_path))

@@ -521,6 +521,10 @@ query_synergy_find_in_catalog <- function(payload = list(),
     min_value = 2L,
     max_value = 20L
   )
+  include_spellbook <- query_api_parse_bool(payload$include_spellbook, default = FALSE)
+  include_lotusnoir <- query_api_parse_bool(payload$include_lotusnoir, default = FALSE)
+  spellbook_variants_override <- if (is.list(payload$spellbook_variants)) payload$spellbook_variants else NULL
+  lotusnoir_posts_override <- if (is.list(payload$lotusnoir_posts)) payload$lotusnoir_posts else NULL
   color_filter <- query_synergy_parse_color_identity(payload$color_identity)
 
   registry <- query_synergy_event_registry_default()
@@ -710,7 +714,7 @@ query_synergy_find_in_catalog <- function(payload = list(),
       deep_score_count = length(scored_all),
       package_candidate_count = 0L
     ))
-    return(list(
+    response <- list(
       ok = TRUE,
       card = target_normalized$name,
       card_id = target_normalized$id,
@@ -749,7 +753,18 @@ query_synergy_find_in_catalog <- function(payload = list(),
         stage_metrics = metrics_snapshot$stage_counts
       ),
       timings = c(timings, list(total_ms = round(sum(unlist(timings), na.rm = TRUE), 1)))
-    ))
+    )
+    if (isTRUE(include_spellbook) || isTRUE(include_lotusnoir) || is.list(spellbook_variants_override) || is.list(lotusnoir_posts_override)) {
+      response <- query_synergy_attach_external_validations(
+        result = response,
+        seed_name = target_normalized$name,
+        include_spellbook = include_spellbook,
+        include_lotusnoir = include_lotusnoir,
+        spellbook_variants = spellbook_variants_override,
+        lotusnoir_posts = lotusnoir_posts_override
+      )$result
+    }
+    return(response)
   }
 
   ord <- order(vapply(scored, function(entry) entry$score$score, numeric(1)), decreasing = TRUE)
@@ -849,7 +864,7 @@ query_synergy_find_in_catalog <- function(payload = list(),
     package_candidate_count = length(package_pool)
   ))
 
-  list(
+  response <- list(
     ok = TRUE,
     card = target_normalized$name,
     card_id = target_normalized$id,
@@ -869,6 +884,19 @@ query_synergy_find_in_catalog <- function(payload = list(),
     pipeline = response_pipeline,
     timings = timings
   )
+
+  if (isTRUE(include_spellbook) || isTRUE(include_lotusnoir) || is.list(spellbook_variants_override) || is.list(lotusnoir_posts_override)) {
+    response <- query_synergy_attach_external_validations(
+      result = response,
+      seed_name = target_normalized$name,
+      include_spellbook = include_spellbook,
+      include_lotusnoir = include_lotusnoir,
+      spellbook_variants = spellbook_variants_override,
+      lotusnoir_posts = lotusnoir_posts_override
+    )$result
+  }
+
+  response
 }
 
 

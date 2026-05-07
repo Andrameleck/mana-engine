@@ -4,13 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>mtgcodex.api Workspace</title>
-  <link rel="icon" href="/ui/static/favicon.ico" sizes="any">
-  <link rel="icon" type="image/png" sizes="32x32" href="/ui/static/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/ui/static/favicon-16x16.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/ui/static/apple-touch-icon.png">
-  <link rel="manifest" href="/ui/static/site.webmanifest">
-  <meta name="theme-color" content="#0a0d13">
-  <link rel="stylesheet" href="/ui/static/styles.css?v=20260501-calculdev-layout-fix">
+  <link rel="stylesheet" href="/ui/static/styles.css">
+  <script type="module" crossorigin src="/ui/static/app.js"></script>
+  <link rel="stylesheet" crossorigin href="/ui/static/app.css">
 </head>
 <body>
   <div class="app-shell">
@@ -47,17 +43,6 @@
           </svg>
           <span class="visually-hidden">Strategy</span>
         </button>
-        <button type="button" class="side-tab" data-tab="calculdev" data-label="Calcul_dev" aria-label="Calcul_dev" title="Calcul_dev">
-          <svg viewBox="0 0 24 24" class="side-tab-icon" aria-hidden="true">
-            <path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"></path>
-            <path d="M8 8h8"></path>
-            <path d="M8 12h3"></path>
-            <path d="M13 12h3"></path>
-            <path d="M8 16h3"></path>
-            <path d="M13 16h3"></path>
-          </svg>
-          <span class="visually-hidden">Calcul_dev</span>
-        </button>
       </nav>
     </aside>
 
@@ -86,13 +71,21 @@
               </label>
               <div class="actions collection-actions-inline">
                 <input id="collection-source-file" type="file" class="hidden-file-input">
-                <button type="button" id="collection-pick-file" class="btn-icon-only" aria-label="Choisir fichier collection" title="Choisir fichier collection">
+                <button type="button" id="collection-pick-file" class="btn-icon-only" aria-label="Choisir CSV" title="Choisir CSV">
                   <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
                     <path d="M12 4v11"></path>
                     <path d="M8.5 8.5L12 5l3.5 3.5"></path>
                     <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"></path>
                   </svg>
-                  <span class="visually-hidden">Choisir fichier collection</span>
+                  <span class="visually-hidden">Choisir CSV</span>
+                </button>
+                <button type="submit" class="btn-icon-only" aria-label="Creer le dossier" title="Creer le dossier">
+                  <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
+                    <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h4l1.6 2H18.5A1.5 1.5 0 0 1 20 9.5v8A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z"></path>
+                    <path d="M12 10.5v5"></path>
+                    <path d="M9.5 13h5"></path>
+                  </svg>
+                  <span class="visually-hidden">Creer le dossier</span>
                 </button>
               </div>
             </form>
@@ -111,7 +104,7 @@
         <div class="collection-admin">
           <section class="panel panel-compact">
             <div class="panel-head">
-              <h3>Nouveau deck</h3>
+              <h3>Import deck</h3>
             </div>
             <form id="deck-load-form" class="collection-load-inline">
               <label for="deck-name">
@@ -128,15 +121,23 @@
                   </svg>
                   <span class="visually-hidden">Choisir un fichier deck</span>
                 </button>
+                <button type="submit" class="btn-icon-only" aria-label="Ajouter le deck" title="Ajouter le deck">
+                  <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
+                    <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h4l1.6 2H18.5A1.5 1.5 0 0 1 20 9.5v8A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z"></path>
+                    <path d="M12 10.5v5"></path>
+                    <path d="M9.5 13h5"></path>
+                  </svg>
+                  <span class="visually-hidden">Ajouter le deck</span>
+                </button>
               </div>
             </form>
           </section>
 
           <section class="panel panel-compact deck-list-panel">
             <div class="panel-head">
-              <h3>Decks</h3>
+              <h3>Decks list</h3>
             </div>
-            <div id="decks-list" class="entity-list deck-entry-grid"></div>
+            <div id="decks-list" class="entity-list deck-icon-grid"></div>
           </section>
         </div>
       </section>
@@ -166,19 +167,19 @@
               <label for="strategy-only-collection" class="strategy-toggle">
                 <span class="strategy-toggle-row">
                   <input id="strategy-only-collection" type="checkbox">
-                  <span id="strategy-only-collection-hint">Calculer uniquement a partir de la collection chargee</span>
+                  <span id="strategy-only-collection-hint">Limiter le calcul aux cartes de la collection chargee</span>
                 </span>
               </label>
               <label for="strategy-include-spellbook" class="strategy-toggle">
                 <span class="strategy-toggle-row">
                   <input id="strategy-include-spellbook" type="checkbox">
-                  <span id="strategy-include-spellbook-hint">Bonus de score pour les cartes presentes dans Commander Spellbook</span>
+                  <span id="strategy-include-spellbook-hint">Prioriser les cartes presentes dans les combos publics</span>
                 </span>
               </label>
               <label for="strategy-include-lotus" class="strategy-toggle">
                 <span class="strategy-toggle-row">
                   <input id="strategy-include-lotus" type="checkbox">
-                  <span id="strategy-include-lotus-hint">Bonus de score base sur les decks LotusNoir (beta)</span>
+                  <span id="strategy-include-lotus-hint">Croiser avec les decks communautaires LotusNoir (beta)</span>
                 </span>
               </label>
               <label class="strategy-mana-filter">
@@ -228,104 +229,27 @@
         </section>
       </section>
 
-      <section id="tab-calculdev" class="tab-view" aria-labelledby="workspace-title">
-        <section class="panel strategy-panel">
-          <div class="panel-head">
-            <h3>Calcul_dev Playground</h3>
-          </div>
-
-          <div class="strategy-controls">
-            <p id="calculdev-source-meta" class="muted" style="display:none"></p>
-            <div class="strategy-control-grid">
-              <label for="calculdev-seed-input">
-                <span id="calculdev-seed-label">Carte seed</span>
-                <input id="calculdev-seed-input" type="search" list="strategy-seed-list" placeholder="Entomb">
-              </label>
-
-              <label for="calculdev-direct-limit">
-                <span id="calculdev-direct-limit-label">Top synergies directes</span>
-                <input id="calculdev-direct-limit" type="number" min="4" max="24" value="12">
-              </label>
-
-              <label for="calculdev-group-limit">
-                <span id="calculdev-group-limit-label">Top groupes</span>
-                <input id="calculdev-group-limit" type="number" min="3" max="12" value="6">
-              </label>
-
-              <label class="strategy-mana-filter">
-                <span id="calculdev-mana-filter-label">Filtre mana (couleurs autorisees)</span>
-                <span class="strategy-mana-filter-row">
-                  <label class="strategy-mana-toggle"><input type="checkbox" data-calculdev-mana="W"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/W.svg" alt="W" loading="lazy"></label>
-                  <label class="strategy-mana-toggle"><input type="checkbox" data-calculdev-mana="U"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/U.svg" alt="U" loading="lazy"></label>
-                  <label class="strategy-mana-toggle"><input type="checkbox" data-calculdev-mana="B"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/B.svg" alt="B" loading="lazy"></label>
-                  <label class="strategy-mana-toggle"><input type="checkbox" data-calculdev-mana="R"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/R.svg" alt="R" loading="lazy"></label>
-                  <label class="strategy-mana-toggle"><input type="checkbox" data-calculdev-mana="G"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/G.svg" alt="G" loading="lazy"></label>
-                  <label class="strategy-mana-toggle"><input type="checkbox" data-calculdev-mana="C"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/C.svg" alt="C" loading="lazy"></label>
-                </span>
-              </label>
-
-              <div class="actions strategy-actions">
-                <button type="button" id="calculdev-run-btn">Calculer</button>
-              </div>
-            </div>
-          </div>
-
-          <div id="calculdev-status" class="muted">En attente de calcul.</div>
-          <div id="calculdev-progress-wrap" class="strategy-progress is-hidden" aria-live="polite">
-            <div class="strategy-progress-head">
-              <span id="calculdev-progress-text">Preparation du calcul...</span>
-              <span id="calculdev-progress-value">0%</span>
-            </div>
-            <div class="strategy-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-labelledby="calculdev-progress-text">
-              <span id="calculdev-progress-bar" class="strategy-progress-bar" style="width:0%"></span>
-            </div>
-          </div>
-
-          <div class="strategy-results-grid">
-            <section class="strategy-result-block">
-              <div class="strategy-result-head">
-                <h4>Synergies directes</h4>
-              </div>
-              <div id="calculdev-direct-list" class="strategy-card-grid"></div>
-            </section>
-
-            <section class="strategy-result-block">
-              <div class="strategy-result-head">
-                <h4>Groupes de synergie</h4>
-              </div>
-              <div id="calculdev-group-list" class="strategy-group-list"></div>
-            </section>
-
-            <aside id="calculdev-card-preview" class="strategy-result-preview" aria-live="polite">
-              <div class="strategy-result-head">
-                <h4 id="calculdev-card-preview-title">Carte</h4>
-              </div>
-              <div class="strategy-card-preview-body">
-                <img id="calculdev-card-preview-image" alt="Card preview" loading="lazy">
-                <p id="calculdev-card-preview-text" class="muted">Survole ou selectionne une carte de synergie pour afficher ses details.</p>
-                <dl id="calculdev-card-preview-meta" class="card-preview-meta"></dl>
-              </div>
-            </aside>
-          </div>
-        </section>
-      </section>
-
       <div id="workspace-lower" class="workspace-lower">
         <section class="panel table-panel">
           <div class="panel-head">
             <h3 id="table-title">Table</h3>
             <div id="load-summary" class="summary muted">No data loaded.</div>
           </div>
-          <div class="table-panel-body">
-            <div class="table-main">
-              <div id="table-wrap" class="table-wrap"></div>
-              <div id="table-scrollbar" class="table-scrollbar" aria-hidden="true">
-                <div id="table-scrollbar-inner"></div>
-              </div>
-              <div id="table-pager" class="table-pager"></div>
-            </div>
+          <div id="table-wrap" class="table-wrap"></div>
+          <div id="table-scrollbar" class="table-scrollbar" aria-hidden="true">
+            <div id="table-scrollbar-inner"></div>
           </div>
+          <div id="table-pager" class="table-pager"></div>
         </section>
+
+        <aside id="deck-stats-panel" class="panel deck-stats-panel is-hidden" aria-live="polite">
+          <div class="panel-head">
+            <h3>Statistiques</h3>
+          </div>
+          <div id="deck-stats-content" class="deck-stats-content muted">
+            Selectionne un deck pour afficher ses statistiques.
+          </div>
+        </aside>
 
         <aside id="card-preview" class="card-preview hidden" aria-live="polite">
           <div class="card-preview-head">
@@ -338,19 +262,9 @@
             <dl id="card-preview-meta" class="card-preview-meta"></dl>
           </div>
         </aside>
-
-        <aside id="deck-stats-panel" class="panel deck-stats-panel is-hidden" aria-live="polite">
-          <div class="panel-head">
-            <h3>Statistiques</h3>
-          </div>
-          <div id="deck-stats-content" class="deck-stats-content muted">
-            Selectionne un deck pour afficher ses statistiques.
-          </div>
-        </aside>
       </div>
     </main>
   </div>
 
-  <script type="module" src="/ui/static/main.js?v=20260502-strategy-lotusnoir-boost"></script>
 </body>
 </html>
