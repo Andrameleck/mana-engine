@@ -447,6 +447,34 @@ test_that("precomputed catalog cache persists normalized profiles for canonical 
   expect_true(is.list(precomputed$indexes))
 })
 
+test_that("cache paths can be controlled by environment for deployments", {
+  old_value <- Sys.getenv("MTGCODEX_SYNERGY_CACHE_DIR", unset = NA_character_)
+  on.exit({
+    if (is.na(old_value)) {
+      Sys.unsetenv("MTGCODEX_SYNERGY_CACHE_DIR")
+    } else {
+      Sys.setenv(MTGCODEX_SYNERGY_CACHE_DIR = old_value)
+    }
+  }, add = TRUE)
+
+  env_cache <- file.path(tempdir(), "mtgcodex-env-cache")
+  explicit_cache <- file.path(tempdir(), "mtgcodex-explicit-cache")
+  Sys.setenv(MTGCODEX_SYNERGY_CACHE_DIR = env_cache)
+
+  env_paths <- mtgcodex.api:::query_synergy_cache_paths()
+  explicit_paths <- mtgcodex.api:::query_synergy_cache_paths(explicit_cache)
+
+  expect_identical(
+    normalizePath(env_paths$base_dir, mustWork = FALSE),
+    normalizePath(env_cache, mustWork = FALSE)
+  )
+  expect_identical(
+    normalizePath(explicit_paths$base_dir, mustWork = FALSE),
+    normalizePath(explicit_cache, mustWork = FALSE)
+  )
+  expect_identical(basename(env_paths$rds_file), "scryfall_oracle_cards.rds")
+})
+
 test_that("progress callback reports backend-linked staged progress", {
   catalog <- list(
     list(

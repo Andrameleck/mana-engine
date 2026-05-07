@@ -11,3 +11,7 @@
 ^inst/\.vscode/
 ^inst/collection/library_scryfall\.sqlite$
 ^inst/collection/library_scryfall\.sqlite-.*
+^Dockerfile$
+^docker-compose\.yml$
+^\.dockerignore$
+^\.gitattributes$

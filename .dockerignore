@@ -1,0 +1,17 @@
+.git
+.Rproj.user
+.Rhistory
+.RData
+.RDataTmp
+.Ruserdata
+.vscode
+.quarto
+public
+*.log
+*.tar.gz
+*.Rcheck
+
+# Local/generated Scryfall databases are rebuilt inside Docker.
+inst/collection/library_scryfall.sqlite
+inst/collection/library_scryfall.sqlite-*
+

@@ -13,6 +13,32 @@ mtgcodex.api::start_api(host = "0.0.0.0", port = 8000)
 
 Then open `http://localhost:8000/ui`.
 
+## Docker Compose
+
+The Scryfall SQLite library is generated at container startup instead of being
+stored in Git. The first launch downloads the configured Scryfall bulk dataset,
+builds `/data/cache/mtgcodex.api/all_cards.sqlite`, enriches it with normalized
+mechanics tables, and stores it in the persistent `mtgcodex-cache` volume.
+
+```bash
+docker compose up --build
+```
+
+Then open `http://localhost:8010/ui`.
+
+Useful environment variables:
+
+- `MTGCODEX_SCRYFALL_BOOTSTRAP=auto` builds the SQLite file only when missing
+  or incomplete. Use `force` to rebuild it, or `false` to skip bootstrapping.
+- `SCRYFALL_BULK_TYPE=oracle_cards` selects the Scryfall bulk dataset.
+- `ENRICH_CHUNK=2000` controls enrichment batch size.
+
+To rebuild the generated SQLite from the current Scryfall snapshot:
+
+```bash
+MTGCODEX_SCRYFALL_BOOTSTRAP=force docker compose up --build
+```
+
 ## Systemd service on a VM
 
 The repository includes a `systemd` + Nginx deployment that starts both the
