@@ -35,10 +35,7 @@ query_synergy_specific_strategy_tags <- function(tags, min_weight = 0.7) {
     return(character(0))
   }
 
-  threshold <- suppressWarnings(as.numeric(min_weight))
-  if (!is.finite(threshold) || is.na(threshold)) {
-    threshold <- 0.7
-  }
+  threshold <- query_synergy_as_num(min_weight, default = 0.7)
   Filter(function(tag) query_synergy_plan_tag_specificity_weight(tag) >= threshold, values)
 }
 
@@ -146,20 +143,14 @@ query_synergy_reliability_axis <- function(target,
   card <- if (is.list(candidate)) candidate else list()
   cadence <- if (is.list(card$cadence)) card$cadence else list()
   cadence_class <- query_api_scalar(cadence$class, default = "one_shot")
-  cadence_strength <- suppressWarnings(as.numeric(cadence$strength))
-  if (!is.finite(cadence_strength) || is.na(cadence_strength)) {
-    cadence_strength <- 0
-  }
+  cadence_strength <- query_synergy_as_num(cadence$strength)
   cadence_weight <- query_synergy_cadence_class_weight(cadence_class)
   consumed_events <- unique(query_synergy_to_vector(card$consumed_events))
   contexts <- unique(query_synergy_to_vector(cadence$contexts))
   target_roles <- unique(query_synergy_to_vector(card$target_roles))
 
   shell_axis <- if (is.list(shell_dependency)) shell_dependency else query_synergy_shell_dependency_axis(card)
-  activation_cost_component <- suppressWarnings(as.numeric(shell_axis$components$activation))
-  if (!is.finite(activation_cost_component) || is.na(activation_cost_component)) {
-    activation_cost_component <- 0
-  }
+  activation_cost_component <- query_synergy_as_num(shell_axis$components$activation)
   prerequisite_penalty <- min(0.45, max(0, length(consumed_events) - 1L) * 0.08)
   context_penalty <- 0
   if ("combat" %in% contexts && suppressWarnings(as.numeric(direct_score)) < 0.28) {
@@ -177,10 +168,7 @@ query_synergy_reliability_axis <- function(target,
   }
   shell_score <- suppressWarnings(as.numeric(shell_dependency_score))
   if (!is.finite(shell_score) || is.na(shell_score)) {
-    shell_score <- suppressWarnings(as.numeric(shell_axis$score))
-    if (!is.finite(shell_score) || is.na(shell_score)) {
-      shell_score <- 0
-    }
+    shell_score <- query_synergy_as_num(shell_axis$score)
   }
   shell_penalty <- min(0.45, shell_score * 0.45)
 

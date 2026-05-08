@@ -955,10 +955,12 @@ query_synergy_get_catalog <- function(force_refresh = FALSE, cache_hours = 24L, 
 
   paths <- query_synergy_cache_paths(cache_dir)
 
+  # Allow an explicit SQLite path via env var (takes priority over all_cards.sqlite).
+  env_sqlite <- trimws(Sys.getenv("MTGCODEX_SQLITE_PATH", unset = ""))
   # Prefer the locally enriched SQLite catalog (all_cards.sqlite) when present.
   # Skipped on `force_refresh = TRUE` so callers can still trigger a Scryfall
   # bulk download.
-  sqlite_path <- file.path(paths$base_dir, "all_cards.sqlite")
+  sqlite_path <- if (nzchar(env_sqlite)) env_sqlite else file.path(paths$base_dir, "all_cards.sqlite")
   sqlite_rds  <- file.path(paths$base_dir, "all_cards-normalized.rds")
   if (!isTRUE(force_refresh) && file.exists(sqlite_path)) {
     # Best path: the SQLite already contains version-matching `cards_enriched`

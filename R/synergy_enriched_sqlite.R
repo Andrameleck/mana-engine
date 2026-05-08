@@ -223,6 +223,11 @@ query_synergy_catalog_normalized_from_sqlite <- function(db_path = NULL,
   }
   on.exit(try(DBI::dbDisconnect(con), silent = TRUE), add = TRUE)
 
+  # Load all rows then deduplicate in R by resolved name, keeping the richest
+  # entry (most strategy_tags). Double-face enrichment artefacts produce rows
+  # like "Card // Card" that share the same face_name as the canonical "Card"
+  # row; SQL GROUP BY name alone cannot collapse these because face_name is
+  # used as the canonical name during deserialization.
   rows <- tryCatch(
     DBI::dbGetQuery(con, "SELECT * FROM cards_enriched"),
     error = function(e) NULL
@@ -240,6 +245,30 @@ query_synergy_catalog_normalized_from_sqlite <- function(db_path = NULL,
     nzchar(query_api_scalar(card$id, default = "")) ||
       nzchar(query_api_scalar(card$name, default = ""))
   }, cards)
+
+  # Deduplicate by resolved name: keep the entry with the most strategy_tags
+  # (richest enrichment). Ties are broken by keeping the last occurrence so
+  # a more-recently added row wins.
+  if (length(cards) > 0L) {
+    names_vec <- vapply(cards, function(c) query_api_scalar(c$name, default = ""), character(1))
+    tag_counts <- vapply(cards, function(c) length(query_synergy_to_vector(c$strategy_tags)), integer(1))
+    keep <- !duplicated(names_vec, fromLast = FALSE) | logical(length(cards))
+    # Walk in reverse; for each name keep the occurrence with the most tags.
+    seen <- list()
+    keep_idx <- logical(length(cards))
+    for (i in rev(seq_along(cards))) {
+      nm <- names_vec[[i]]
+      if (!nzchar(nm)) next
+      prev <- seen[[nm]]
+      if (is.null(prev) || tag_counts[[i]] > tag_counts[[prev]]) {
+        if (!is.null(prev)) keep_idx[[prev]] <- FALSE
+        keep_idx[[i]] <- TRUE
+        seen[[nm]] <- i
+      }
+    }
+    cards <- cards[keep_idx]
+  }
+
   if (length(cards) == 0L) {
     return(query_api_error("no usable rows in enriched table"))
   }

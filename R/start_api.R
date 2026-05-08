@@ -77,7 +77,7 @@ start_api <- function(
     fun <- switch(
       tolower(level),
       "debug" = logger::log_debug,
-      "warn" = logger::log_warn,
+      "warn" = ,
       "warning" = logger::log_warn,
       "error" = logger::log_error,
       logger::log_info

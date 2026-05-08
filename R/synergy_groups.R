@@ -25,22 +25,11 @@ query_synergy_group_card_summary <- function(card) {
 
 query_synergy_unique_cards_by_id <- function(cards) {
   items <- query_synergy_to_list(cards)
-  if (length(items) == 0L) {
-    return(list())
-  }
-
-  seen <- new.env(parent = emptyenv(), hash = TRUE)
-  out <- list()
-  for (card in items) {
-    key <- query_api_scalar(card$id, default = query_api_scalar(card$name, default = ""))
-    if (!nzchar(key) || exists(key, envir = seen, inherits = FALSE)) {
-      next
-    }
-    assign(key, TRUE, envir = seen)
-    out[[length(out) + 1L]] <- card
-  }
-
-  out
+  if (length(items) == 0L) return(list())
+  keys <- vapply(items, function(c) {
+    query_api_scalar(c$id, default = query_api_scalar(c$name, default = ""))
+  }, character(1))
+  items[nzchar(keys) & !duplicated(keys)]
 }
 
 query_synergy_resources_compatible <- function(left, right) {
@@ -171,18 +160,8 @@ query_synergy_collect_resource_transitions <- function(source,
     return(list())
   }
 
-  seen <- new.env(parent = emptyenv(), hash = TRUE)
-  deduped <- list()
-  for (transition in out) {
-    key <- query_synergy_group_transition_key(transition)
-    if (!nzchar(key) || exists(key, envir = seen, inherits = FALSE)) {
-      next
-    }
-    assign(key, TRUE, envir = seen)
-    deduped[[length(deduped) + 1L]] <- transition
-  }
-
-  deduped
+  keys <- vapply(out, query_synergy_group_transition_key, character(1))
+  out[nzchar(keys) & !duplicated(keys)]
 }
 
 query_synergy_build_group_edge <- function(source,
@@ -787,30 +766,12 @@ query_synergy_build_synergy_group <- function(path_ids,
     return(NULL)
   }
 
-  edge_continuity <- vapply(edges, function(edge) {
-    value <- suppressWarnings(as.numeric(edge$continuity_score))
-    if (!is.finite(value) || is.na(value)) 0 else value
-  }, numeric(1))
-  edge_shared_plan <- vapply(edges, function(edge) {
-    value <- suppressWarnings(as.numeric(edge$axis_scores$shared_plan_score))
-    if (!is.finite(value) || is.na(value)) 0 else value
-  }, numeric(1))
-  cadence_values <- vapply(cards, function(card) {
-    value <- suppressWarnings(as.numeric(card$cadence$strength))
-    if (!is.finite(value) || is.na(value)) 0 else value
-  }, numeric(1))
-  edge_direct <- vapply(edges, function(edge) {
-    value <- suppressWarnings(as.numeric(edge$axis_scores$direct_event_score))
-    if (!is.finite(value) || is.na(value)) 0 else value
-  }, numeric(1))
-  edge_indirect <- vapply(edges, function(edge) {
-    value <- suppressWarnings(as.numeric(edge$axis_scores$indirect_engine_score))
-    if (!is.finite(value) || is.na(value)) 0 else value
-  }, numeric(1))
-  edge_reliability <- vapply(edges, function(edge) {
-    value <- suppressWarnings(as.numeric(edge$axis_scores$reliability_score))
-    if (!is.finite(value) || is.na(value)) 0 else value
-  }, numeric(1))
+  edge_continuity  <- vapply(edges, function(edge) query_synergy_as_num(edge$continuity_score), numeric(1))
+  edge_shared_plan <- vapply(edges, function(edge) query_synergy_as_num(edge$axis_scores$shared_plan_score), numeric(1))
+  cadence_values   <- vapply(cards, function(card) query_synergy_as_num(card$cadence$strength), numeric(1))
+  edge_direct      <- vapply(edges, function(edge) query_synergy_as_num(edge$axis_scores$direct_event_score), numeric(1))
+  edge_indirect    <- vapply(edges, function(edge) query_synergy_as_num(edge$axis_scores$indirect_engine_score), numeric(1))
+  edge_reliability <- vapply(edges, function(edge) query_synergy_as_num(edge$axis_scores$reliability_score), numeric(1))
   member_shell <- vapply(cards, function(card) {
     suppressWarnings(as.numeric(query_synergy_shell_dependency_axis(card)$score))
   }, numeric(1))
@@ -1217,16 +1178,8 @@ query_synergy_detect_groups_for_seed <- function(seed,
     ))
   }
 
-  seen <- new.env(parent = emptyenv(), hash = TRUE)
-  deduped <- list()
-  for (group in groups) {
-    key <- query_api_scalar(group$id, default = "")
-    if (!nzchar(key) || exists(key, envir = seen, inherits = FALSE)) {
-      next
-    }
-    assign(key, TRUE, envir = seen)
-    deduped[[length(deduped) + 1L]] <- group
-  }
+  keys <- vapply(groups, function(g) query_api_scalar(g$id, default = ""), character(1))
+  deduped <- groups[nzchar(keys) & !duplicated(keys)]
 
   ord <- order(
     vapply(deduped, function(entry) suppressWarnings(as.numeric(entry$total_score)), numeric(1)),

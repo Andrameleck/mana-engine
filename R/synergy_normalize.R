@@ -189,45 +189,15 @@ query_synergy_build_ability_records <- function(keywords,
                                                 mechanics,
                                                 expanded_abilities = list(),
                                                 parsed_abilities = list()) {
-  keyword_values <- query_synergy_to_vector(keywords)
-  mechanic_values <- query_synergy_to_vector(mechanics)
-
-  out <- list()
-  if (length(keyword_values) > 0L) {
-    for (value in keyword_values) {
-      out[[length(out) + 1L]] <- list(
-        kind = "keyword",
-        id = tolower(value),
-        label = value,
-        source = "keyword",
-        text = value,
-        trigger = list(),
-        effects = list(),
-        references = list()
-      )
-    }
-  }
-  if (length(mechanic_values) > 0L) {
-    for (value in mechanic_values) {
-      out[[length(out) + 1L]] <- list(
-        kind = "mechanic",
-        id = tolower(value),
-        label = value,
-        source = "mechanic",
-        text = value,
-        trigger = list(),
-        effects = list(),
-        references = list()
-      )
-    }
-  }
-
-  out <- c(
-    out,
-    query_synergy_to_list(expanded_abilities),
-    query_synergy_to_list(parsed_abilities)
+  .make_record <- function(kind, value) list(
+    kind = kind, id = tolower(value), label = value, source = kind,
+    text = value, trigger = list(), effects = list(), references = list()
   )
-  query_synergy_unique_abilities(out)
+  kw <- lapply(query_synergy_to_vector(keywords),  function(v) .make_record("keyword",  v))
+  mc <- lapply(query_synergy_to_vector(mechanics), function(v) .make_record("mechanic", v))
+  query_synergy_unique_abilities(c(kw, mc,
+    query_synergy_to_list(expanded_abilities),
+    query_synergy_to_list(parsed_abilities)))
 }
 
 query_synergy_unique_abilities <- function(abilities) {
@@ -264,22 +234,18 @@ query_synergy_build_event_role_records <- function(events, role, registry = quer
     return(list())
   }
 
-  out <- vector("list", length(event_ids))
-  for (i in seq_along(event_ids)) {
-    event_id <- event_ids[[i]]
+  lapply(event_ids, function(event_id) {
     event_def <- registry$events[[event_id]]
-    out[[i]] <- list(
-      event = event_id,
-      role = query_api_scalar(role, default = ""),
-      parent = query_api_scalar(event_def$parent, default = ""),
-      kind = query_api_scalar(event_def$kind, default = "event"),
-      scope = query_api_scalar(event_def$scope, default = "generic"),
+    list(
+      event    = event_id,
+      role     = query_api_scalar(role, default = ""),
+      parent   = query_api_scalar(event_def$parent, default = ""),
+      kind     = query_api_scalar(event_def$kind, default = "event"),
+      scope    = query_api_scalar(event_def$scope, default = "generic"),
       resource = query_api_scalar(event_def$resource, default = ""),
-      tags = query_synergy_to_vector(event_def$tags)
+      tags     = query_synergy_to_vector(event_def$tags)
     )
-  }
-
-  out
+  })
 }
 
 query_synergy_build_move_records <- function(events, registry = query_synergy_event_registry_default()) {
@@ -1143,16 +1109,13 @@ query_synergy_build_mechanic_rules <- function(rules = list(),
     merged[[tolower(query_api_scalar(rule_id, default = ""))]] <- additions[[rule_id]]
   }
 
-  out <- list()
-  for (rule_id in names(merged)) {
-    normalized_id <- tolower(query_api_scalar(rule_id, default = ""))
-    if (!nzchar(normalized_id)) {
-      next
-    }
-    out[[normalized_id]] <- query_synergy_normalize_mechanic_rule(normalized_id, merged[[rule_id]], registry = registry)
-  }
-
-  out
+  norm_ids <- tolower(vapply(names(merged), query_api_scalar, character(1), default = ""))
+  valid    <- nzchar(norm_ids)
+  setNames(
+    Map(function(id, rule) query_synergy_normalize_mechanic_rule(id, rule, registry = registry),
+        norm_ids[valid], merged[valid]),
+    norm_ids[valid]
+  )
 }
 
 query_synergy_normalize_mechanic_rule <- function(rule_id, rule, registry = query_synergy_event_registry_default()) {
@@ -1521,29 +1484,20 @@ query_synergy_fragment_trigger <- function(kind, text, events) {
 }
 
 query_synergy_fragment_effect_records <- function(events, registry = query_synergy_event_registry_default()) {
-  out <- list()
   mapping <- list(
     produce = events$produced,
-    reward = events$consumed,
+    reward  = events$consumed,
     replace = events$replaced,
     prevent = events$prevented
   )
-
-  for (role in names(mapping)) {
+  unlist(lapply(names(mapping), function(role) {
     event_ids <- unique(query_synergy_canonicalize_events(mapping[[role]], registry))
-    if (length(event_ids) == 0L) {
-      next
-    }
-    for (event_id in event_ids) {
-      out[[length(out) + 1L]] <- list(
-        role = role,
-        event = event_id,
-        parent = query_api_scalar(registry$events[[event_id]]$parent, default = "")
-      )
-    }
-  }
-
-  out
+    lapply(event_ids, function(event_id) list(
+      role   = role,
+      event  = event_id,
+      parent = query_api_scalar(registry$events[[event_id]]$parent, default = "")
+    ))
+  }), recursive = FALSE)
 }
 
 query_synergy_extract_events_from_fragment <- function(text,
@@ -1638,21 +1592,12 @@ query_synergy_extract_events_from_fragment <- function(text,
     )
   }
 
-  for (tag in names(parse_rules$setup_patterns)) {
-    if (any(vapply(parse_rules$setup_patterns[[tag]], function(pattern) grepl(pattern, lower, perl = TRUE), logical(1)))) {
-      setup <- c(setup, query_api_scalar(tag, default = ""))
-    }
+  .tags_matching <- function(pattern_list, text) {
+    names(Filter(function(patterns) any(vapply(patterns, grepl, logical(1), x = text, perl = TRUE)), pattern_list))
   }
-  for (tag in names(parse_rules$finisher_patterns)) {
-    if (any(vapply(parse_rules$finisher_patterns[[tag]], function(pattern) grepl(pattern, lower, perl = TRUE), logical(1)))) {
-      finisher <- c(finisher, query_api_scalar(tag, default = ""))
-    }
-  }
-  for (tag in names(parse_rules$anti_tag_patterns)) {
-    if (any(vapply(parse_rules$anti_tag_patterns[[tag]], function(pattern) grepl(pattern, lower, perl = TRUE), logical(1)))) {
-      anti_tags <- c(anti_tags, query_api_scalar(tag, default = ""))
-    }
-  }
+  setup     <- c(setup,     .tags_matching(parse_rules$setup_patterns,    lower))
+  finisher  <- c(finisher,  .tags_matching(parse_rules$finisher_patterns, lower))
+  anti_tags <- c(anti_tags, .tags_matching(parse_rules$anti_tag_patterns, lower))
   if ("SELF_DRAW_CARD" %in% consumed || "OPPONENT_DRAW_CARD" %in% consumed) {
     produced <- setdiff(produced, "DRAW_CARD")
     consumed <- c(consumed, "DRAW_CARD")
@@ -1694,15 +1639,41 @@ query_synergy_ability_parse_rules_seed <- function() {
   list(
     produced_patterns = list(
       DRAW_CARD = c("draw\\s+(a|an|x|one|two|three|[0-9]+)\\s+card", "conniv"),
+      OPPONENT_DRAW_CARD = c(
+        "each player draws\\s+(a|an|x|one|two|three|[0-9]+|that many)?\\s*(additional\\s+)?cards?",
+        "that player draws\\s+(a|an|x|one|two|three|[0-9]+|that many)?\\s*(additional\\s+)?cards?",
+        "target opponent draws\\s+(a|an|x|one|two|three|[0-9]+|that many)\\s+cards?",
+        "each opponent draws\\s+(a|an|x|one|two|three|[0-9]+|that many)\\s+cards?",
+        "each player[^.]*draws?\\s+(a|an|x|one|two|three|[0-9]+|that many|cards equal)",
+        "then draws? that many cards",
+        "then draws? cards equal"
+      ),
       DISCARD_CARD = c("discard\\s+(a|an|x|one|two|three|[0-9]+)\\s+card", "discards\\s+(a|an|x|one|two|three|[0-9]+)\\s+card", "conniv"),
+      OPPONENT_DISCARD = c(
+        "each player discards",
+        "target opponent discards",
+        "each opponent discards",
+        "that player discards"
+      ),
       LOOT = c("conniv", "draw\\s+a\\s+card.*then discard", "discard\\s+a\\s+card.*then draw", "cycling\\s*\\{"),
       CYCLING_EVENT = c("cycling\\s*\\{"),
       SURVEIL_EVENT = c("surveil\\s+[0-9x]+"),
       DREDGE_EVENT = c("dredge\\s+[0-9]+"),
       GAIN_LIFE = c("gain\\s+[0-9x]+\\s+life"),
       LOSE_LIFE = c("lose\\s+[0-9x]+\\s+life"),
-      OPPONENT_LOSE_LIFE = c("each opponent loses\\s+[0-9x]+\\s+life", "target opponent loses\\s+[0-9x]+\\s+life"),
-      DRAIN_LIFE = c("each opponent loses\\s+[0-9x]+\\s+life and you gain", "loses?\\s+[0-9x]+\\s+life\\.\\s*you gain"),
+      OPPONENT_LOSE_LIFE = c(
+        "each opponent loses\\s+[0-9x]+\\s+life",
+        "target opponent loses\\s+[0-9x]+\\s+life",
+        "whenever an opponent[^.]{0,120}they lose\\s+[0-9x]+\\s+life",
+        "whenever an opponent[^.]{0,80}\\s+lose[s]?\\s+[0-9x]+\\s+life",
+        "that opponent loses\\s+[0-9x]+\\s+life",
+        "that player loses\\s+[0-9x]+\\s+life"
+      ),
+      DRAIN_LIFE = c(
+        "each opponent loses\\s+[0-9x]+\\s+life and you gain",
+        "loses?\\s+[0-9x]+\\s+life\\.\\s*you gain",
+        "whenever an opponent[^.]{0,120}they lose\\s+[0-9x]+\\s+life[^.]*you gain"
+      ),
       CREATE_TOKEN = c("create\\s+.*token"),
       CREATE_CREATURE_TOKEN = c("create\\s+.*creature token"),
       CREATE_TREASURE = c("create\\s+.*treasure token"),
@@ -1794,41 +1765,26 @@ query_synergy_build_ability_parse_rules <- function(rules = list(),
   merged <- if (is.list(base_rules) && length(base_rules) > 0L) base_rules else query_synergy_ability_parse_rules_seed()
   additions <- if (is.list(rules)) rules else list()
 
-  merge_event_map <- function(base_map, add_map) {
+  .merge_map <- function(base_map, add_map, key_fn) {
     out <- list()
-    all_maps <- list(base_map, add_map)
-    for (map in all_maps) {
-      if (!is.list(map) || length(map) == 0L) {
-        next
-      }
-      for (event_name in names(map)) {
-        event_id <- query_synergy_canonicalize_events(event_name, registry)
-        if (length(event_id) == 0L) {
-          next
-        }
-        key <- event_id[[1]]
-        out[[key]] <- unique(c(query_synergy_to_vector(out[[key]]), query_synergy_to_vector(map[[event_name]])))
+    for (map in list(base_map, add_map)) {
+      if (!is.list(map) || length(map) == 0L) next
+      for (nm in names(map)) {
+        key <- key_fn(nm)
+        if (!nzchar(key)) next
+        out[[key]] <- unique(c(query_synergy_to_vector(out[[key]]), query_synergy_to_vector(map[[nm]])))
       }
     }
     out
   }
-
+  merge_event_map <- function(base_map, add_map) {
+    .merge_map(base_map, add_map, function(nm) {
+      ids <- query_synergy_canonicalize_events(nm, registry)
+      if (length(ids) == 0L) "" else ids[[1]]
+    })
+  }
   merge_tag_map <- function(base_map, add_map) {
-    out <- list()
-    all_maps <- list(base_map, add_map)
-    for (map in all_maps) {
-      if (!is.list(map) || length(map) == 0L) {
-        next
-      }
-      for (tag_name in names(map)) {
-        key <- query_api_scalar(tag_name, default = "")
-        if (!nzchar(key)) {
-          next
-        }
-        out[[key]] <- unique(c(query_synergy_to_vector(out[[key]]), query_synergy_to_vector(map[[tag_name]])))
-      }
-    }
-    out
+    .merge_map(base_map, add_map, function(nm) query_api_scalar(nm, default = ""))
   }
 
   list(

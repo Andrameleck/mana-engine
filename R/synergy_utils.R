@@ -117,21 +117,11 @@ query_synergy_card_color_identity <- function(card) {
 
 query_synergy_card_legalities <- function(card) {
   legalities <- card$legalities
-  if (!is.list(legalities) || length(legalities) == 0L) {
-    return(list())
-  }
-
-  out <- list()
+  if (!is.list(legalities) || length(legalities) == 0L) return(list())
   keys <- names(legalities)
-  if (length(keys) == 0L) {
-    return(out)
-  }
-
-  for (key in keys) {
-    out[[tolower(key)]] <- tolower(query_api_scalar(legalities[[key]], default = ""))
-  }
-
-  out
+  if (length(keys) == 0L) return(list())
+  vals <- vapply(legalities, function(v) tolower(query_api_scalar(v, default = "")), character(1))
+  setNames(as.list(vals), tolower(keys))
 }
 
 query_synergy_parse_color_identity <- function(value) {

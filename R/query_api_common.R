@@ -1,3 +1,5 @@
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
 query_api_error <- function(message, ...) {
   list(
     ok = FALSE,
@@ -32,20 +34,16 @@ query_api_scalar_arg <- function(req, key, default = "") {
   query_api_scalar(req$args[[key]], default = default)
 }
 
+.bool_lookup <- c(
+  "1" = TRUE, "true" = TRUE, "yes" = TRUE, "y" = TRUE, "on" = TRUE,
+  "0" = FALSE, "false" = FALSE, "no" = FALSE, "n" = FALSE, "off" = FALSE
+)
+
 query_api_parse_bool <- function(value, default = FALSE) {
   parsed <- tolower(query_api_scalar(value, default = ""))
-  if (!nzchar(parsed)) {
-    return(isTRUE(default))
-  }
-
-  if (parsed %in% c("1", "true", "yes", "y", "on")) {
-    return(TRUE)
-  }
-  if (parsed %in% c("0", "false", "no", "n", "off")) {
-    return(FALSE)
-  }
-
-  isTRUE(default)
+  if (!nzchar(parsed)) return(isTRUE(default))
+  result <- .bool_lookup[parsed]
+  if (is.na(result)) isTRUE(default) else unname(result)
 }
 
 query_api_require_db <- function() {

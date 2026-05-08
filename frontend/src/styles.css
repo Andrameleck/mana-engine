@@ -1242,8 +1242,8 @@ body {
 
 .strategy-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
   min-width: 0;
 }
 
@@ -1253,7 +1253,7 @@ body {
   background: rgba(15, 19, 27, 0.82);
   overflow: hidden;
   display: grid;
-  grid-template-rows: 180px auto;
+  grid-template-rows: 138px auto;
   min-width: 0;
 }
 
@@ -1294,6 +1294,9 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* Most Scryfall art_crop frames hide the printed title in the lower band;
+     anchoring on top keeps full-art names from leaking into the visible art. */
+  object-position: center top;
 }
 
 .strategy-card-fallback {

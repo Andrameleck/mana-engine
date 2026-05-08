@@ -1581,9 +1581,4 @@ query_lotusnoir_download_decks_csv <- function(output_csv,
   )
 }
 
-`%||%` <- function(x, y) {
-  if (is.null(x)) {
-    return(y)
-  }
-  x
-}
+

@@ -648,33 +648,20 @@ query_collection_db_complete_collection_rows <- function(rows, ref_con) {
     return(rows)
   }
 
-  hit_index <- stats::setNames(seq_len(nrow(hits)), hits$scryfall_id)
-  for (i in seq_len(nrow(rows))) {
-    sid <- rows$scryfall_id[[i]]
-    idx <- hit_index[sid]
-    if (!nzchar(sid) || length(idx) == 0L || is.na(idx[[1]])) {
-      next
-    }
-    hit <- hits[idx[[1]], , drop = FALSE]
-    if (!nzchar(rows$name[[i]]) && nzchar(hit$name[[1]])) {
-      rows$name[[i]] <- hit$name[[1]]
-    }
-    if (!nzchar(rows$set_code[[i]]) && nzchar(hit$set_code[[1]])) {
-      rows$set_code[[i]] <- toupper(hit$set_code[[1]])
-    }
-    if (!nzchar(rows$set_name[[i]]) && nzchar(hit$set_name[[1]])) {
-      rows$set_name[[i]] <- hit$set_name[[1]]
-    }
-    if (!nzchar(rows$collector_number[[i]]) && nzchar(hit$collector_number[[1]])) {
-      rows$collector_number[[i]] <- hit$collector_number[[1]]
-    }
-    if (!nzchar(rows$rarity[[i]]) && nzchar(hit$rarity[[1]])) {
-      rows$rarity[[i]] <- hit$rarity[[1]]
-    }
-    if (!nzchar(rows$language[[i]]) && nzchar(hit$lang[[1]])) {
-      rows$language[[i]] <- hit$lang[[1]]
-    }
+  idx <- match(rows$scryfall_id, hits$scryfall_id)
+  matched <- nzchar(rows$scryfall_id) & !is.na(idx)
+  fill_from_hit <- function(target, source_col, transform = identity) {
+    src <- transform(source_col[idx])
+    needs <- matched & !nzchar(target) & !is.na(src) & nzchar(src)
+    target[needs] <- src[needs]
+    target
   }
+  rows$name             <- fill_from_hit(rows$name, hits$name)
+  rows$set_code         <- fill_from_hit(rows$set_code, hits$set_code, toupper)
+  rows$set_name         <- fill_from_hit(rows$set_name, hits$set_name)
+  rows$collector_number <- fill_from_hit(rows$collector_number, hits$collector_number)
+  rows$rarity           <- fill_from_hit(rows$rarity, hits$rarity)
+  rows$language         <- fill_from_hit(rows$language, hits$lang)
 
   rows
 }

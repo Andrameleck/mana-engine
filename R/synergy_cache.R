@@ -134,30 +134,19 @@ query_synergy_build_compact_profile <- function(card, registry = query_synergy_e
 
 query_synergy_build_profile_index_map <- function(profiles, selector) {
   items <- query_synergy_to_list(profiles)
-  index_env <- new.env(parent = emptyenv(), hash = TRUE)
+  if (length(items) == 0L) return(list())
 
-  for (i in seq_along(items)) {
-    values <- unique(query_synergy_to_vector(selector(items[[i]])))
-    if (length(values) == 0L) {
-      next
-    }
+  keys_per_item <- lapply(items, function(item) {
+    vals <- unique(query_synergy_to_vector(selector(item)))
+    vapply(vals, function(v) query_api_scalar(v, default = ""), character(1))
+  })
+  keys_per_item <- lapply(keys_per_item, function(k) k[nzchar(k)])
 
-    for (value in values) {
-      key <- query_api_scalar(value, default = "")
-      if (!nzchar(key)) {
-        next
-      }
+  key_vec <- unlist(keys_per_item, use.names = FALSE)
+  if (length(key_vec) == 0L) return(list())
 
-      if (exists(key, envir = index_env, inherits = FALSE)) {
-        assign(key, c(get(key, envir = index_env, inherits = FALSE), i), envir = index_env)
-      } else {
-        assign(key, i, envir = index_env)
-      }
-    }
-  }
-
-  out <- as.list(index_env, all.names = TRUE)
-  lapply(out, function(entry) unique(as.integer(entry)))
+  idx_vec <- rep(seq_along(items), lengths(keys_per_item))
+  lapply(split(idx_vec, key_vec), function(idxs) unique(as.integer(idxs)))
 }
 
 query_synergy_build_profile_indexes <- function(profiles) {

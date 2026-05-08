@@ -73,33 +73,17 @@ cosine_similarity_sparse <- function(a, b) {
 build_feature_index <- function(cards) {
   .validate_cards(cards)
 
-  feature_index <- list()
-  for (i in seq_along(cards)) {
+  nz_per_card <- lapply(seq_along(cards), function(i) {
     feats <- .card_features(cards[[i]])
-    if (length(feats) == 0L) {
-      next
-    }
-    nz <- names(feats)[feats != 0]
-    if (length(nz) == 0L) {
-      next
-    }
-    for (feat in nz) {
-      if (is.null(feature_index[[feat]])) {
-        feature_index[[feat]] <- i
-      } else {
-        feature_index[[feat]] <- c(feature_index[[feat]], i)
-      }
-    }
-  }
+    names(feats)[feats != 0]
+  })
 
-  if (length(feature_index) == 0L) {
-    return(feature_index)
-  }
+  feat_vec <- unlist(nz_per_card, use.names = FALSE)
+  if (length(feat_vec) == 0L) return(list())
 
-  for (feat in names(feature_index)) {
-    feature_index[[feat]] <- sort(unique(as.integer(feature_index[[feat]])))
-  }
-
+  idx_vec  <- rep(seq_along(cards), lengths(nz_per_card))
+  groups   <- split(idx_vec, feat_vec)
+  feature_index <- lapply(groups, function(idxs) sort(unique(as.integer(idxs))))
   feature_index[sort(names(feature_index))]
 }
 
@@ -133,28 +117,13 @@ candidate_set <- function(u_features, feature_index, max_candidates = 2000L) {
   }
 
   nz_feats <- names(feats)[feats != 0]
-  if (length(nz_feats) == 0L) {
-    return(integer(0))
-  }
+  if (length(nz_feats) == 0L) return(integer(0))
 
-  hits <- vector("list", length(nz_feats))
-  hit_count <- 0L
-  for (feat in nz_feats) {
-    bucket <- feature_index[[feat]]
-    if (!is.null(bucket) && length(bucket) > 0L) {
-      hit_count <- hit_count + 1L
-      hits[[hit_count]] <- bucket
-    }
-  }
+  buckets   <- Filter(function(b) length(b) > 0L, feature_index[nz_feats])
+  if (length(buckets) == 0L) return(integer(0))
 
-  if (hit_count == 0L) {
-    return(integer(0))
-  }
-
-  candidates <- sort(unique(as.integer(unlist(hits[seq_len(hit_count)], use.names = FALSE))))
-  if (length(candidates) > max_candidates) {
-    candidates <- candidates[seq_len(max_candidates)]
-  }
+  candidates <- sort(unique(as.integer(unlist(buckets, use.names = FALSE))))
+  if (length(candidates) > max_candidates) candidates <- candidates[seq_len(max_candidates)]
   as.integer(candidates)
 }
 

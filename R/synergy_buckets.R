@@ -152,48 +152,13 @@ query_synergy_build_result_buckets <- function(target, scored_entries, max_resul
 
     candidate <- entry$card
     score <- entry$score
-    direct_axis <- suppressWarnings(as.numeric(score$axis_scores$direct_event_score))
-    payoff_axis <- suppressWarnings(as.numeric(score$axis_scores$payoff_bridge_score))
-    resource_axis <- suppressWarnings(as.numeric(score$axis_scores$resource_bridge_score))
-    zone_axis <- suppressWarnings(as.numeric(score$axis_scores$zone_transition_bridge_score))
-    setup_converter_axis <- suppressWarnings(as.numeric(score$axis_scores$setup_converter_score))
-    strong_bridge_axis <- suppressWarnings(as.numeric(score$axis_scores$strong_bridge_score))
-    weak_bridge_axis <- suppressWarnings(as.numeric(score$axis_scores$weak_bridge_penalty))
-    if (length(direct_axis) == 0L || !is.finite(direct_axis[[1]]) || is.na(direct_axis[[1]])) {
-      direct_axis <- 0
-    } else {
-      direct_axis <- direct_axis[[1]]
-    }
-    if (length(payoff_axis) == 0L || !is.finite(payoff_axis[[1]]) || is.na(payoff_axis[[1]])) {
-      payoff_axis <- 0
-    } else {
-      payoff_axis <- payoff_axis[[1]]
-    }
-    if (length(resource_axis) == 0L || !is.finite(resource_axis[[1]]) || is.na(resource_axis[[1]])) {
-      resource_axis <- 0
-    } else {
-      resource_axis <- resource_axis[[1]]
-    }
-    if (length(zone_axis) == 0L || !is.finite(zone_axis[[1]]) || is.na(zone_axis[[1]])) {
-      zone_axis <- 0
-    } else {
-      zone_axis <- zone_axis[[1]]
-    }
-    if (length(setup_converter_axis) == 0L || !is.finite(setup_converter_axis[[1]]) || is.na(setup_converter_axis[[1]])) {
-      setup_converter_axis <- 0
-    } else {
-      setup_converter_axis <- setup_converter_axis[[1]]
-    }
-    if (length(strong_bridge_axis) == 0L || !is.finite(strong_bridge_axis[[1]]) || is.na(strong_bridge_axis[[1]])) {
-      strong_bridge_axis <- 0
-    } else {
-      strong_bridge_axis <- strong_bridge_axis[[1]]
-    }
-    if (length(weak_bridge_axis) == 0L || !is.finite(weak_bridge_axis[[1]]) || is.na(weak_bridge_axis[[1]])) {
-      weak_bridge_axis <- 0
-    } else {
-      weak_bridge_axis <- weak_bridge_axis[[1]]
-    }
+    direct_axis           <- query_synergy_as_num(score$axis_scores$direct_event_score)
+    payoff_axis           <- query_synergy_as_num(score$axis_scores$payoff_bridge_score)
+    resource_axis         <- query_synergy_as_num(score$axis_scores$resource_bridge_score)
+    zone_axis             <- query_synergy_as_num(score$axis_scores$zone_transition_bridge_score)
+    setup_converter_axis  <- query_synergy_as_num(score$axis_scores$setup_converter_score)
+    strong_bridge_axis    <- query_synergy_as_num(score$axis_scores$strong_bridge_score)
+    weak_bridge_axis      <- query_synergy_as_num(score$axis_scores$weak_bridge_penalty)
     has_strong_bridge <- strong_bridge_axis >= 0.16 ||
       direct_axis >= 0.1 ||
       payoff_axis >= 0.1 ||
@@ -232,16 +197,9 @@ query_synergy_build_result_buckets <- function(target, scored_entries, max_resul
   }
 
   flat_selected <- query_synergy_diversify_entries(flat_pool, limit = max_results)
-  dedup_flat <- list()
-  seen <- new.env(parent = emptyenv(), hash = TRUE)
-  for (entry in flat_selected) {
-    key <- query_api_scalar(entry$id, default = "")
-    if (!nzchar(key) || exists(key, envir = seen, inherits = FALSE)) {
-      next
-    }
-    assign(key, TRUE, envir = seen)
-    dedup_flat[[length(dedup_flat) + 1L]] <- entry
-  }
+  flat_keys <- vapply(flat_selected, function(e) query_api_scalar(e$id, default = ""), character(1))
+  keep <- nzchar(flat_keys) & !duplicated(flat_keys)
+  dedup_flat <- flat_selected[keep]
 
   list(
     buckets = list(

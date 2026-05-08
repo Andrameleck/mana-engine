@@ -61,6 +61,7 @@ import {
       strategy_include_spellbook_label: "Include combo references (Commander Spellbook)",
       strategy_include_spellbook_hint: "Prioritize cards present in public combos (adds a score bonus)",
       strategy_include_lotus_hint: "Cross-check with LotusNoir community decks (beta)",
+      strategy_force_recompute_hint: "Force recompute (ignore cache)",
       strategy_only_collection_hint: "Restrict the calculator to cards from the loaded collection",
       strategy_mana_filter_label: "Mana filter (allowed colors)",
       direct_synergies: "Direct synergies",
@@ -116,6 +117,7 @@ import {
       strategy_include_spellbook_label: "Inclure reference combos (Commander Spellbook)",
       strategy_include_spellbook_hint: "Prioriser les cartes presentes dans les combos publics (ajoute un bonus de score)",
       strategy_include_lotus_hint: "Croiser avec les decks communautaires LotusNoir (beta)",
+      strategy_force_recompute_hint: "Forcer le recalcul (ignorer le cache)",
       strategy_only_collection_hint: "Limiter le calcul aux cartes de la collection chargee",
       strategy_mana_filter_label: "Filtre mana (couleurs autorisees)",
       direct_synergies: "Synergies directes",
@@ -206,8 +208,9 @@ import {
       modelCache: new Map(),
       lastCollectionId: null,
       includeKnownCards: true,
-      includeSpellbookCombos: true,
+      includeSpellbookCombos: false,
       includeLotusSignals: false,
+      forceRecompute: false,
       useCollectionOnly: false,
       knownCardsModel: null,
       knownCardsModelKey: "",
@@ -282,8 +285,7 @@ import {
       seedList: document.getElementById("strategy-seed-list"),
       directLimitInput: document.getElementById("strategy-direct-limit"),
       groupLimitInput: document.getElementById("strategy-group-limit"),
-      includeSpellbookInput: document.getElementById("strategy-include-spellbook"),
-      includeLotusInput: document.getElementById("strategy-include-lotus"),
+      forceRecomputeInput: document.getElementById("strategy-force-recompute"),
       onlyCollectionInput: document.getElementById("strategy-only-collection"),
       manaFilterInputs: Array.from(document.querySelectorAll("input[data-strategy-mana]")),
       runButton: document.getElementById("strategy-run-btn"),
@@ -436,9 +438,7 @@ import {
     setText("#strategy-seed-label", t("strategy_seed_label"));
     setText("#strategy-direct-limit-label", t("strategy_direct_limit_label"));
     setText("#strategy-group-limit-label", t("strategy_group_limit_label"));
-    setText("#strategy-include-spellbook-label", t("strategy_include_spellbook_label"));
-    setText("#strategy-include-spellbook-hint", t("strategy_include_spellbook_hint"));
-    setText("#strategy-include-lotus-hint", t("strategy_include_lotus_hint"));
+    setText("#strategy-force-recompute-hint", t("strategy_force_recompute_hint"));
     setText("#strategy-only-collection-hint", t("strategy_only_collection_hint"));
     setText("#strategy-mana-filter-label", t("strategy_mana_filter_label"));
     setText("#tab-strategy .strategy-result-block:nth-of-type(1) .strategy-result-head h4", t("direct_synergies"));
@@ -537,27 +537,10 @@ import {
       strategyNodes.seedInput.setAttribute("list", "strategy-seed-list");
     }
 
-    if (strategyNodes.includeSpellbookInput) {
-      strategyNodes.includeSpellbookInput.checked = isStrategyIncludeSpellbookEnabled();
-      strategyNodes.includeSpellbookInput.addEventListener("change", () => {
-        state.strategy.includeSpellbookCombos = strategyNodes.includeSpellbookInput.checked === true;
-        resetStrategySpellbookCache();
-        const collectionId = state.selectedCollectionId;
-        const payload = collectionId ? state.collectionPayloadById[collectionId] : null;
-        const meta = state.collections.find((entry) => entry.id === collectionId);
-        renderStrategyPanel(payload, meta);
-      });
-    }
-
-    if (strategyNodes.includeLotusInput) {
-      strategyNodes.includeLotusInput.checked = isStrategyIncludeLotusEnabled();
-      strategyNodes.includeLotusInput.addEventListener("change", () => {
-        state.strategy.includeLotusSignals = strategyNodes.includeLotusInput.checked === true;
-        resetStrategyLotusCache();
-        const collectionId = state.selectedCollectionId;
-        const payload = collectionId ? state.collectionPayloadById[collectionId] : null;
-        const meta = state.collections.find((entry) => entry.id === collectionId);
-        renderStrategyPanel(payload, meta);
+    if (strategyNodes.forceRecomputeInput) {
+      strategyNodes.forceRecomputeInput.checked = state.strategy.forceRecompute === true;
+      strategyNodes.forceRecomputeInput.addEventListener("change", () => {
+        state.strategy.forceRecompute = strategyNodes.forceRecomputeInput.checked === true;
       });
     }
 
@@ -2614,11 +2597,11 @@ import {
   }
 
   function isStrategyIncludeSpellbookEnabled() {
-    return state.strategy.includeSpellbookCombos === true;
+    return false;
   }
 
   function isStrategyIncludeLotusEnabled() {
-    return state.strategy.includeLotusSignals === true;
+    return false;
   }
 
   function isStrategyUseCollectionOnlyEnabled() {
@@ -2715,7 +2698,8 @@ import {
       max_results: maxResults,
       top_k: topK,
       package_top_n: packageTopN,
-      cards: safeCards
+      cards: safeCards,
+      force_refresh: state.strategy.forceRecompute === true
     };
   }
 
@@ -2860,8 +2844,16 @@ import {
     return safe.toFixed(2);
   }
 
-  function formatSynergyEntryMeta(entry, rank = 0) {
-    const score = Math.round(Number(entry?.total_score || entry?.score || 0));
+  function formatSynergyEntryMeta(entry, rank = 0, bucketKey = null) {
+    let scoreValue = null;
+    if (bucketKey && entry?.bucket_scores && Number.isFinite(Number(entry.bucket_scores[bucketKey]))) {
+      // Use the bucket-specific score (0..1 -> 0..100) so the displayed number
+      // matches the sort order applied to this bucket.
+      scoreValue = Number(entry.bucket_scores[bucketKey]) * 100;
+    } else {
+      scoreValue = Number(entry?.total_score || entry?.score || 0);
+    }
+    const score = Math.round(Number.isFinite(scoreValue) ? scoreValue : 0);
     const bucketLabel = String(entry?.bucket_label || entry?.bucket || "").trim();
     const prefix = rank > 0 ? `#${rank} | ` : "";
     return `${prefix}score ${score}${bucketLabel ? ` | ${bucketLabel}` : ""}`;
@@ -2903,7 +2895,7 @@ import {
       fragment.appendChild(
         createStrategyCardElement(
           card,
-          formatSynergyEntryMeta(entry, index + 1),
+          formatSynergyEntryMeta(entry, index + 1, "direct_enablers"),
           {
             metaTitle: formatSynergyEntryTitle(entry),
             badge: String(entry?.bucket_label || "").trim() || "Direct",
@@ -2937,12 +2929,13 @@ import {
 
     const grid = document.createElement("div");
     grid.className = "strategy-card-grid";
+    const bucketKey = String(bucket?.key || "").trim() || null;
     results.slice(0, Math.max(1, Number(options.limit) || 6)).forEach((entry) => {
       const card = resolveStrategySynergyCard(entry, lookup);
       grid.appendChild(
         createStrategyCardElement(
           card,
-          formatSynergyEntryMeta(entry),
+          formatSynergyEntryMeta(entry, 0, bucketKey),
           {
             compact: true,
             metaTitle: formatSynergyEntryTitle(entry),
@@ -2994,12 +2987,15 @@ import {
 
       const grid = document.createElement("div");
       grid.className = "strategy-card-grid";
-      [pkg?.cards?.setup, pkg?.cards?.converter, pkg?.cards?.payoff].filter(Boolean).forEach((entry) => {
+      const slots = pkg?.cards && typeof pkg.cards === "object" ? pkg.cards : {};
+      Object.entries(slots).forEach(([role, entry]) => {
+        if (!entry) return;
         const card = resolveStrategySynergyCard(entry, lookup);
+        const roleLabel = String(role || "").replace(/_/g, " ").trim();
         grid.appendChild(
-          createStrategyCardElement(card, String(entry?.name || "").trim(), {
+          createStrategyCardElement(card, roleLabel, {
             compact: true,
-            badge: String(pkg?.archetype || "package").trim()
+            badge: roleLabel || String(pkg?.archetype || "package").trim()
           })
         );
       });
@@ -3024,14 +3020,6 @@ import {
     appendBackendBucketSection(fragment, buckets.indirect_engines, cards, {
       limit,
       description: "Engines indirects repetables, convertisseurs ou bridges"
-    });
-    appendBackendBucketSection(fragment, buckets.reciprocal_value_cards, cards, {
-      limit,
-      description: "Cartes a valeur reciproque plutot que payoff unilateral"
-    });
-    appendBackendBucketSection(fragment, buckets.anti_synergy_warnings, cards, {
-      limit,
-      description: "Avertissements de conflits mecaniques et de plans"
     });
     appendBackendPackageSection(fragment, result?.packages, cards, limit);
 
