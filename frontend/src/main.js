@@ -7,6 +7,7 @@ import {
   fetchLotusNoirPosts as fetchLotusNoirPostsApi,
   fetchSpellbookVariants,
   fetchSynergyFind,
+  fetchSynergyDeckRecommend,
   startSynergyJob,
   fetchSynergyJobStatus
 } from "./api.js";
@@ -24,10 +25,12 @@ import {
       tabs_collections: "Collections",
       tabs_decks: "Decks",
       tabs_strategy: "Strategy",
+      tabs_generator: "Generator",
       tabs_spellbook: "Spellbook",
       subtitle_collections: "Create and manage multiple collection folders.",
       subtitle_decks: "Import and browse multiple decks.",
       subtitle_strategy: "Workspace for synergy and combo exploration.",
+      subtitle_generator: "Generate complete deck lists from format, colors and archetypes.",
       subtitle_spellbook: "Query Commander Spellbook by card name.",
       pick_csv: "Choose CSV",
       pick_deck_file: "Choose deck file",
@@ -80,10 +83,12 @@ import {
       tabs_collections: "Collections",
       tabs_decks: "Decks",
       tabs_strategy: "Strategy",
+      tabs_generator: "Générateur",
       tabs_spellbook: "Spellbook",
       subtitle_collections: "Creer et gerer plusieurs dossiers de collection.",
       subtitle_decks: "Importer et visualiser plusieurs decks.",
       subtitle_strategy: "Zone reservee au module de strategies.",
+      subtitle_generator: "Génère des decks complets à partir d'un format, de couleurs et d'archétypes.",
       subtitle_spellbook: "Interroger Commander Spellbook par nom de carte.",
       pick_csv: "Choisir CSV",
       pick_deck_file: "Choisir un fichier deck",
@@ -157,6 +162,10 @@ import {
         title: t("tabs_strategy"),
         subtitle: t("subtitle_strategy")
       },
+      generator: {
+        title: t("tabs_generator"),
+        subtitle: t("subtitle_generator")
+      },
       spellbook: {
         title: t("tabs_spellbook"),
         subtitle: t("subtitle_spellbook")
@@ -179,6 +188,10 @@ import {
     strategy: {
       title: "Strategy",
       subtitle: "Zone reservee au module de strategies."
+    },
+    generator: {
+      title: "Générateur",
+      subtitle: "Génère des decks complets à partir d'un format, de couleurs et d'archétypes."
     },
     spellbook: {
       title: "Spellbook",
@@ -1127,18 +1140,23 @@ import {
       return;
     }
 
-    if (!hasCollection) {
+    const poolOnlyChk = document.getElementById("deck-pool-only-collection");
+    const poolOnlyEnabled = poolOnlyChk ? poolOnlyChk.checked : false;
+
+    if (poolOnlyEnabled && !hasCollection) {
       runButton.disabled = true;
-      statusNode.textContent = "Selectionne une collection chargee pour proposer des cartes.";
+      statusNode.textContent = "Mode collection active : selectionne une collection chargee.";
       mechanicsNode.innerHTML = "";
-      upgradeNode.innerHTML = '<p class="muted">Choisis une collection active.</p>';
-      variationNode.innerHTML = '<p class="muted">Choisis une collection active.</p>';
+      upgradeNode.innerHTML = '<p class="muted">Choisis une collection active ou decoches l option.</p>';
+      variationNode.innerHTML = '<p class="muted">Choisis une collection active ou decoches l option.</p>';
       return;
     }
 
     if (!analysisResult) {
-      const sourceName = collectionMeta?.name || "collection active";
-      statusNode.textContent = `Pret pour analyse. Source recommandations: ${sourceName}.`;
+      const sourceName = poolOnlyEnabled
+        ? (collectionMeta?.name || "collection active")
+        : "catalogue complet (scryfall.sqlite)";
+      statusNode.textContent = `Pret pour analyse. Source: ${sourceName}.`;
       mechanicsNode.innerHTML = "";
       upgradeNode.innerHTML = '<p class="muted">Clique sur Analyser pour proposer des cartes d amelioration.</p>';
       variationNode.innerHTML = '<p class="muted">Clique sur Analyser pour proposer des cartes de variation.</p>';
@@ -1163,8 +1181,107 @@ import {
       "Aucune variation pertinente trouvee."
     );
 
-    const sourceName = collectionMeta?.name || "collection active";
+    const usedPoolOnly = document.getElementById("deck-pool-only-collection")?.checked ?? false;
+    const sourceName = (usedPoolOnly && collectionMeta?.name)
+      ? collectionMeta.name
+      : "catalogue complet";
     statusNode.textContent = `Analyse terminee. ${analysisResult.upgrades.length} ameliorations et ${analysisResult.variants.length} variations proposees depuis ${sourceName}.`;
+  }
+
+  function backendDeckResponseToAnalysis(response, collectionCards) {
+    const recs = Array.isArray(response?.recommendations) ? response.recommendations : [];
+    const lookup = new Map();
+    (Array.isArray(collectionCards) ? collectionCards : []).forEach((card) => {
+      const key = normalizeStrategyName(card?.key || card?.name || "");
+      if (key && !lookup.has(key)) {
+        lookup.set(key, card);
+      }
+    });
+
+    const decorate = (rec) => {
+      const nameKey = normalizeStrategyName(rec?.name || "");
+      const card = lookup.get(nameKey) || {
+        name: rec?.name || "",
+        oracle_text: rec?.oracle_text || "",
+        type_line: rec?.type_line || "",
+        mana_cost: rec?.mana_cost || ""
+      };
+      const topAnchors = Array.isArray(rec?.top_anchors) ? rec.top_anchors : [];
+      const anchorList = topAnchors
+        .map((a) => `${a.anchor_name} (${Math.round(Number(a.pair_score) || 0)})`)
+        .join(", ");
+      const reason = anchorList ? `Synergie avec ${anchorList}` : "";
+      return {
+        card,
+        score: Number(rec?.total_score) || 0,
+        improveScore: Number(rec?.total_score) || 0,
+        variationScore: Number(rec?.total_score) || 0,
+        score_base: Number(rec?.score_base) || 0,
+        score_modifiers: rec?.score_modifiers || null,
+        anchor_coverage: Number(rec?.anchor_coverage) || 0,
+        best_pair_score: Number(rec?.best_pair_score) || 0,
+        top_anchors: topAnchors,
+        reason
+      };
+    };
+
+    const sortedByScore = [...recs].sort(
+      (a, b) => (Number(b?.total_score) || 0) - (Number(a?.total_score) || 0)
+    );
+    // Variations: surface entries with low anchor overlap (1 anchor only) but
+    // strong individual pair score — these are off-plan picks, the kind of
+    // "this opens a new angle" candidate.
+    const sortedByNovelty = [...recs].sort((a, b) => {
+      const noveltyA = (Number(a?.best_pair_score) || 0) - 6 * (Number(a?.anchor_coverage) || 0);
+      const noveltyB = (Number(b?.best_pair_score) || 0) - 6 * (Number(b?.anchor_coverage) || 0);
+      return noveltyB - noveltyA;
+    });
+
+    const upgradeNames = new Set();
+    const upgrades = [];
+    for (const rec of sortedByScore) {
+      if (upgrades.length >= 12) break;
+      upgrades.push(decorate(rec));
+      upgradeNames.add(normalizeStrategyName(rec?.name || ""));
+    }
+    const variants = [];
+    for (const rec of sortedByNovelty) {
+      if (variants.length >= 12) break;
+      const k = normalizeStrategyName(rec?.name || "");
+      if (upgradeNames.has(k)) continue;
+      variants.push(decorate(rec));
+    }
+
+    // Mechanics chips: aggregate strategy_tags from the top recommendations.
+    const tagCounts = new Map();
+    for (const rec of recs.slice(0, 20)) {
+      const tags = Array.isArray(rec?.strategy_tags) ? rec.strategy_tags : [];
+      for (const tag of tags) {
+        const t = String(tag || "").trim();
+        if (!t) continue;
+        tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
+      }
+    }
+    const total = Array.from(tagCounts.values()).reduce((a, b) => a + b, 0) || 1;
+    const mechanics = Array.from(tagCounts.entries())
+      .map(([id, value]) => ({
+        id,
+        label: id.replace(/_/g, " "),
+        value,
+        share: value / total
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
+
+    return {
+      backend: true,
+      mechanics,
+      upgrades,
+      variants,
+      anchors: response?.anchors || [],
+      deck_resolved: response?.deck_resolved || 0,
+      deck_unresolved: response?.deck_unresolved || []
+    };
   }
 
   function renderDeckRecommendationCards(target, entries, scoreField, emptyMessage) {
@@ -1184,7 +1301,59 @@ import {
       const metaLine = reason
         ? `#${index + 1} | score ${formatDecimal(scoreValue)} | ${reason}`
         : `#${index + 1} | score ${formatDecimal(scoreValue)}`;
-      fragment.appendChild(createStrategyCardElement(entry.card, metaLine));
+      const cardEl = createStrategyCardElement(entry.card, metaLine);
+
+      // Backend recommendations: show score breakdown chips (base + modifiers)
+      // and per-anchor pair-score chips so the user can see WHY the card is
+      // recommended, not just a single number.
+      if (entry?.score_modifiers || (Array.isArray(entry?.top_anchors) && entry.top_anchors.length > 0)) {
+        const breakdown = document.createElement("div");
+        breakdown.className = "deck-rec-breakdown";
+
+        if (Number.isFinite(entry?.score_base) && entry.score_base > 0) {
+          const baseChip = document.createElement("span");
+          baseChip.className = "strategy-score-base";
+          baseChip.textContent = `Base ${Math.round(entry.score_base)}`;
+          breakdown.appendChild(baseChip);
+        }
+
+        const mods = entry?.score_modifiers && typeof entry.score_modifiers === "object"
+          ? entry.score_modifiers
+          : null;
+        if (mods) {
+          Object.keys(mods).forEach((key) => {
+            const mod = mods[key] || {};
+            const amount = Number(mod.amount) || 0;
+            if (amount === 0) return;
+            const chip = document.createElement("span");
+            chip.className = `strategy-score-mod is-${amount >= 0 ? "positive" : "negative"} mod-${key}`;
+            const labelMap = {
+              anchor_coverage: "Couverture",
+              spellbook: "Combo Spellbook",
+              archetype: "Archetype"
+            };
+            const label = labelMap[key] || key;
+            chip.textContent = `${amount >= 0 ? "+" : ""}${amount} ${label}`;
+            if (key === "anchor_coverage" && Number(mod.anchors_matched)) {
+              chip.title = `${mod.anchors_matched} ancres ont propose cette carte`;
+            }
+            breakdown.appendChild(chip);
+          });
+        }
+
+        const anchors = Array.isArray(entry?.top_anchors) ? entry.top_anchors : [];
+        anchors.slice(0, 3).forEach((a) => {
+          const chip = document.createElement("span");
+          chip.className = "deck-rec-anchor-chip";
+          chip.textContent = `${a.anchor_name} ${Math.round(Number(a.pair_score) || 0)}`;
+          chip.title = String(a.explanation_text || a.bucket_label || "");
+          breakdown.appendChild(chip);
+        });
+
+        cardEl.appendChild(breakdown);
+      }
+
+      fragment.appendChild(cardEl);
     });
     target.appendChild(fragment);
   }
@@ -1204,7 +1373,11 @@ import {
 
     const collectionId = state.selectedCollectionId;
     const collectionPayload = collectionId ? state.collectionPayloadById[collectionId] : null;
-    if (!collectionPayload || collectionPayload.ok !== true) {
+    const poolOnlyToggle = document.getElementById("deck-pool-only-collection");
+    const poolOnlyEnabled = poolOnlyToggle ? poolOnlyToggle.checked : false;
+    // When pool is restricted to the collection, require a loaded collection.
+    // When using the full catalog, proceed even without a collection.
+    if (poolOnlyEnabled && (!collectionPayload || collectionPayload.ok !== true)) {
       renderDeckAnalysisState(deckEntry, null);
       return;
     }
@@ -1245,7 +1418,49 @@ import {
       const deckModel = buildStrategyModelFromRows(deckRows);
       const collectionModel = getStrategyModelForCollection(collectionId, collectionPayload);
 
-      const analysis = computeDeckRecommendationAnalysis(deckModel.cards, collectionModel.cards);
+      // Backend deck-wide synergy analysis (preferred). Reuses the role-aware
+      // pair scorer applied to anchor cards from the deck. Falls back to the
+      // legacy local feature-similarity model if the API is unreachable.
+      let analysis = null;
+      try {
+        const deckNames = Array.from(new Set(
+          deckModel.cards
+            .map((c) => String(c?.name || "").trim())
+            .filter(Boolean)
+        ));
+        const usePoolOnly = document.getElementById("deck-pool-only-collection")?.checked ?? false;
+        const poolNames = usePoolOnly
+          ? Array.from(new Set(
+              collectionModel.cards
+                .map((c) => String(c?.name || "").trim())
+                .filter(Boolean)
+            ))
+          : []; // empty = full catalog
+        const backendResponse = await fetchSynergyDeckRecommend({
+          deck: deckNames,
+          pool: poolNames,
+          format: deckEntry?.payload?.deck?.format || "commander",
+          max_results: 30,
+          max_anchors: 6
+        });
+        if (requestToken !== DECK_ANALYSIS_STATE.requestToken) {
+          return;
+        }
+        if (backendResponse && backendResponse.ok === true && Array.isArray(backendResponse.recommendations)) {
+          analysis = backendDeckResponseToAnalysis(backendResponse, collectionModel.cards);
+        }
+      } catch (_) {
+        // Network/backend failure: fall back to the local computation below.
+      }
+
+      if (!analysis) {
+        // Local fallback only makes sense scoped to the collection.
+        const usePoolOnlyFallback = document.getElementById("deck-pool-only-collection")?.checked ?? false;
+        analysis = computeDeckRecommendationAnalysis(
+          deckModel.cards,
+          usePoolOnlyFallback ? collectionModel.cards : []
+        );
+      }
       if (requestToken !== DECK_ANALYSIS_STATE.requestToken) {
         return;
       }
@@ -6268,7 +6483,13 @@ import {
             <h4 class="deck-visual-title">Deck Analysis</h4>
             <button type="button" id="deck-analyze-btn" class="deck-analyze-btn" data-action="analyze-deck">Analyser</button>
           </div>
-          <p id="deck-analysis-status" class="deck-stats-note muted">Choisis une collection puis clique sur Analyser.</p>
+          <label for="deck-pool-only-collection" class="strategy-toggle deck-pool-toggle">
+            <span class="strategy-toggle-row">
+              <input id="deck-pool-only-collection" type="checkbox">
+              <span class="strategy-toggle-label">Limiter aux cartes de la collection</span>
+            </span>
+          </label>
+          <p id="deck-analysis-status" class="deck-stats-note muted">Clique sur Analyser pour proposer des ameliorations.</p>
           <div id="deck-analysis-mechanics" class="deck-mechanic-chips"></div>
           <div class="deck-analysis-grid">
             <section class="deck-analysis-block">

@@ -41,6 +41,15 @@
           </svg>
           <span class="visually-hidden">Strategy</span>
         </button>
+        <button type="button" class="side-tab" data-tab="generator" data-label="Générateur" aria-label="Générateur de deck" title="Générateur de deck">
+          <svg viewBox="0 0 24 24" class="side-tab-icon" aria-hidden="true">
+            <path d="M4 4h6v6H4z"></path>
+            <path d="M14 4h6v6h-6z"></path>
+            <path d="M4 14h6v6H4z"></path>
+            <path d="M14 14h6v6h-6z"></path>
+          </svg>
+          <span class="visually-hidden">Générateur de deck</span>
+        </button>
       </nav>
     </aside>
 
@@ -258,6 +267,88 @@
               </div>
             </aside>
           </div>
+        </section>
+      </section>
+
+      <section id="tab-generator" class="tab-view" aria-labelledby="workspace-title">
+        <section class="panel deck-gen-panel">
+          <div class="panel-head">
+            <h3>Générateur de deck</h3>
+          </div>
+
+          <div class="deck-gen-controls">
+            <div class="deck-gen-control-grid">
+              <label for="deck-gen-format">
+                <span>Format</span>
+                <select id="deck-gen-format">
+                  <option value="random">🎲 Aléatoire</option>
+                  <option value="commander">Commander</option>
+                  <option value="brawl">Brawl</option>
+                  <option value="modern">Modern</option>
+                  <option value="legacy">Legacy</option>
+                  <option value="vintage">Vintage</option>
+                  <option value="pioneer">Pioneer</option>
+                  <option value="standard">Standard</option>
+                  <option value="pauper">Pauper</option>
+                  <option value="historic">Historic</option>
+                </select>
+              </label>
+
+              <label for="deck-gen-commander">
+                <span>Commandant (optionnel)</span>
+                <input id="deck-gen-commander" type="search" list="deck-gen-commander-list" placeholder="Auto-sélection">
+                <datalist id="deck-gen-commander-list"></datalist>
+              </label>
+
+              <label for="deck-gen-variants">
+                <span>Variantes</span>
+                <input id="deck-gen-variants" type="number" min="1" max="5" value="3">
+              </label>
+
+              <label class="deck-gen-mana-filter">
+                <span>Identité de couleur</span>
+                <span class="deck-gen-mana-row">
+                  <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="W"><img src="https://svgs.scryfall.io/card-symbols/W.svg" alt="W" loading="lazy"></label>
+                  <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="U"><img src="https://svgs.scryfall.io/card-symbols/U.svg" alt="U" loading="lazy"></label>
+                  <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="B"><img src="https://svgs.scryfall.io/card-symbols/B.svg" alt="B" loading="lazy"></label>
+                  <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="R"><img src="https://svgs.scryfall.io/card-symbols/R.svg" alt="R" loading="lazy"></label>
+                  <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="G"><img src="https://svgs.scryfall.io/card-symbols/G.svg" alt="G" loading="lazy"></label>
+                  <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="C"><img src="https://svgs.scryfall.io/card-symbols/C.svg" alt="C" loading="lazy"></label>
+                </span>
+              </label>
+            </div>
+
+            <div class="deck-gen-archetype-block">
+              <div class="deck-gen-archetype-head">
+                <span class="deck-gen-archetype-title">Archétypes ciblés</span>
+                <div class="deck-gen-archetype-actions">
+                  <button type="button" id="deck-gen-archetype-none" class="ghost">Aucun</button>
+                </div>
+              </div>
+              <div id="deck-gen-archetype-chips" class="deck-gen-archetype-chips"></div>
+              <p class="muted">Sélectionne un ou plusieurs archétypes pour orienter le deck.</p>
+            </div>
+
+            <div class="deck-gen-collection-block">
+              <label class="deck-gen-collection-toggle-row">
+                <input type="checkbox" id="deck-gen-use-collection">
+                <span>Utiliser uniquement ma collection</span>
+              </label>
+              <div id="deck-gen-collection-picker" class="deck-gen-collection-picker is-hidden">
+                <select id="deck-gen-collection-select">
+                  <option value="">Chargement…</option>
+                </select>
+                <span id="deck-gen-collection-status" class="muted"></span>
+              </div>
+            </div>
+
+            <div class="actions deck-gen-actions">
+              <button type="button" id="deck-gen-run-btn" class="primary">Générer</button>
+            </div>
+          </div>
+
+          <div id="deck-gen-status" class="muted">Choisis tes options puis clique sur Générer.</div>
+          <div id="deck-gen-results" class="deck-gen-results"></div>
         </section>
       </section>
 

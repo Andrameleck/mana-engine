@@ -360,6 +360,36 @@ function(req, res) {
   )
 }
 
+#* Recommend cards to improve a whole deck (deck-wide synergy analysis)
+#* @serializer unboxedJSON
+#* @post /synergy/deck/recommend
+function(req, res) {
+  query_call(
+    "query_synergy_deck_recommend",
+    req = req
+  )
+}
+
+#* Generate complete deck lists from format + colors + archetypes
+#* @serializer unboxedJSON
+#* @post /synergy/deck/generate
+function(req, res) {
+  # Inject client_id from the request header into the parsed body so the
+  # deck generator can authenticate collection access transparently.
+  client_id <- query_req_client_id(req)
+  if (nzchar(client_id)) {
+    body <- tryCatch(jsonlite::fromJSON(req$postBody, simplifyVector = FALSE), error = function(e) list())
+    if (!nzchar(body$client_id %||% "")) {
+      body$client_id <- client_id
+      req$postBody <- jsonlite::toJSON(body, auto_unbox = TRUE)
+    }
+  }
+  query_call(
+    "query_synergy_deck_generate",
+    req = req
+  )
+}
+
 #* Start a background mechanical synergy job with progress reporting
 #* @serializer unboxedJSON
 #* @post /synergy/jobs/start

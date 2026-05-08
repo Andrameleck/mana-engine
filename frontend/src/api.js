@@ -8,6 +8,8 @@ const API_ENDPOINTS = Object.freeze({
   collections: "/collections",
   strategyBridgeEquation: "/strategy/bridge_equation",
   synergyFind: "/synergy/find",
+  synergyDeckRecommend: "/synergy/deck/recommend",
+  synergyDeckGenerate: "/synergy/deck/generate",
   synergyJobStart: "/synergy/jobs/start",
   synergyJobs: "/synergy/jobs",
   referenceLotusNoirPosts: "/reference/lotusnoir/posts",
@@ -266,6 +268,36 @@ async function fetchSynergyFind(payload = {}) {
   });
 }
 
+async function fetchSynergyDeckRecommend(payload = {}) {
+  return apiRequest(API_ENDPOINTS.synergyDeckRecommend, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+    fallback: {
+      ok: false,
+      recommendations: [],
+      anchors: [],
+      deck_resolved: 0,
+      deck_unresolved: []
+    }
+  });
+}
+
+async function fetchSynergyDeckGenerate(payload = {}) {
+  return apiRequest(API_ENDPOINTS.synergyDeckGenerate, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+    fallback: {
+      ok: false,
+      decks: [],
+      deck_count: 0,
+      candidate_count: 0,
+      commander_name: ""
+    }
+  });
+}
+
 async function startSynergyJob(payload = {}) {
   return apiRequest(API_ENDPOINTS.synergyJobStart, {
     method: "POST",
@@ -316,6 +348,8 @@ window.fetchSpellbookVariants = fetchSpellbookVariants;
 window.fetchLotusNoirPosts = fetchLotusNoirPosts;
 window.fetchStrategyBridgeEquation = fetchStrategyBridgeEquation;
 window.fetchSynergyFind = fetchSynergyFind;
+window.fetchSynergyDeckRecommend = fetchSynergyDeckRecommend;
+window.fetchSynergyDeckGenerate = fetchSynergyDeckGenerate;
 window.startSynergyJob = startSynergyJob;
 window.fetchSynergyJobStatus = fetchSynergyJobStatus;
 window.fetchMtgjsonCards = fetchMtgjsonCards;
@@ -334,6 +368,8 @@ export {
   fetchLotusNoirPosts,
   fetchStrategyBridgeEquation,
   fetchSynergyFind,
+  fetchSynergyDeckRecommend,
+  fetchSynergyDeckGenerate,
   startSynergyJob,
   fetchSynergyJobStatus,
   fetchMtgjsonCards
