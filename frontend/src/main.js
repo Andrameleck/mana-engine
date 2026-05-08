@@ -197,6 +197,16 @@ import {
       seedName: "",
       directLimit: 12,
       groupLimit: 6,
+      refineIterations: 2,
+      format: "none",
+      formatColorIdentityStrict: false,
+      allowIllegal: false,
+      formatCatalog: [],
+      formatCatalogLoaded: false,
+      selectedArchetypes: [],
+      archetypeFilterStrict: false,
+      archetypeCatalog: [],
+      archetypeCatalogLoaded: false,
       manaFilter: {
         W: false,
         U: false,
@@ -285,6 +295,13 @@ import {
       seedList: document.getElementById("strategy-seed-list"),
       directLimitInput: document.getElementById("strategy-direct-limit"),
       groupLimitInput: document.getElementById("strategy-group-limit"),
+      refineIterationsInput: document.getElementById("strategy-refine-iterations"),
+      formatSelect: document.getElementById("strategy-format"),
+      allowIllegalInput: document.getElementById("strategy-allow-illegal"),
+      archetypeChips: document.getElementById("strategy-archetype-chips"),
+      archetypeAllBtn: document.getElementById("strategy-archetype-all"),
+      archetypeNoneBtn: document.getElementById("strategy-archetype-none"),
+      archetypeStrictInput: document.getElementById("strategy-archetype-strict"),
       forceRecomputeInput: document.getElementById("strategy-force-recompute"),
       onlyCollectionInput: document.getElementById("strategy-only-collection"),
       manaFilterInputs: Array.from(document.querySelectorAll("input[data-strategy-mana]")),
@@ -584,6 +601,34 @@ import {
     strategyNodes.groupLimitInput?.addEventListener("change", () => {
       state.strategy.groupLimit = clampInt(strategyNodes.groupLimitInput.value, 3, 12, 6);
     });
+
+    strategyNodes.refineIterationsInput?.addEventListener("change", () => {
+      state.strategy.refineIterations = clampInt(strategyNodes.refineIterationsInput.value, 0, 4, 2);
+    });
+
+    strategyNodes.formatSelect?.addEventListener("change", () => {
+      const value = String(strategyNodes.formatSelect.value || "commander").toLowerCase();
+      state.strategy.format = value;
+      applyStrategyFormatConstraints();
+    });
+    strategyNodes.allowIllegalInput?.addEventListener("change", () => {
+      state.strategy.allowIllegal = strategyNodes.allowIllegalInput.checked === true;
+    });
+    ensureStrategyFormatCatalog();
+
+    strategyNodes.archetypeAllBtn?.addEventListener("click", () => {
+      const all = (state.strategy.archetypeCatalog || []).map((a) => a.key);
+      state.strategy.selectedArchetypes = all.slice();
+      renderStrategyArchetypeChips();
+    });
+    strategyNodes.archetypeNoneBtn?.addEventListener("click", () => {
+      state.strategy.selectedArchetypes = [];
+      renderStrategyArchetypeChips();
+    });
+    strategyNodes.archetypeStrictInput?.addEventListener("change", () => {
+      state.strategy.archetypeFilterStrict = strategyNodes.archetypeStrictInput.checked === true;
+    });
+    ensureStrategyArchetypeCatalog();
 
     strategyNodes.runButton.addEventListener("click", () => {
       runStrategyComputation();
@@ -1492,14 +1537,19 @@ import {
 
     const directLimit = clampInt(strategyNodes.directLimitInput?.value, 4, 24, 12);
     const groupLimit = clampInt(strategyNodes.groupLimitInput?.value, 3, 12, 6);
+    const refineIterations = clampInt(strategyNodes.refineIterationsInput?.value, 0, 4, 2);
     state.strategy.directLimit = directLimit;
     state.strategy.groupLimit = groupLimit;
+    state.strategy.refineIterations = refineIterations;
 
     if (strategyNodes.directLimitInput) {
       strategyNodes.directLimitInput.value = String(directLimit);
     }
     if (strategyNodes.groupLimitInput) {
       strategyNodes.groupLimitInput.value = String(groupLimit);
+    }
+    if (strategyNodes.refineIterationsInput) {
+      strategyNodes.refineIterationsInput.value = String(refineIterations);
     }
 
     renderStrategySeedDatalist(model.cards, [], "");
@@ -2452,11 +2502,13 @@ import {
 
     const directLimit = clampInt(strategyNodes.directLimitInput?.value, 4, 24, state.strategy.directLimit);
     const groupLimit = clampInt(strategyNodes.groupLimitInput?.value, 3, 12, state.strategy.groupLimit);
+    const refineIterations = clampInt(strategyNodes.refineIterationsInput?.value, 0, 4, state.strategy.refineIterations);
     state.strategy.directLimit = directLimit;
     state.strategy.groupLimit = groupLimit;
+    state.strategy.refineIterations = refineIterations;
 
     const resolvedSeed = resolveSeedCard(seedCard.name, activeModel.cards) || seedCard;
-    const synergyPayload = buildStrategySynergyPayload(resolvedSeed, activeModel.cards, directLimit, groupLimit);
+    const synergyPayload = buildStrategySynergyPayload(resolvedSeed, activeModel.cards, directLimit, groupLimit, refineIterations);
 
     strategyNodes.status.textContent = currentUiLanguage() === "fr"
       ? `Analyse mecanique backend en cours pour ${resolvedSeed.name}...`
@@ -2687,17 +2739,127 @@ import {
     return payload;
   }
 
-  function buildStrategySynergyPayload(seedCard, cards, directLimit, groupLimit) {
+  async function ensureStrategyFormatCatalog() {
+    if (state.strategy.formatCatalogLoaded) {
+      applyStrategyFormatConstraints();
+      return;
+    }
+    try {
+      const res = await fetch("/formats", { headers: { Accept: "application/json" } });
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data?.formats) ? data.formats : [];
+        state.strategy.formatCatalog = list
+          .map((entry) => ({
+            key: String(entry?.key || "").trim().toLowerCase(),
+            label: String(entry?.label || entry?.key || "").trim(),
+            singleton: entry?.singleton === true,
+            colorIdentityStrict: entry?.color_identity_strict === true
+          }))
+          .filter((entry) => entry.key.length > 0);
+      }
+    } catch (err) {
+      // Silent — the dropdown still works with hardcoded options.
+    }
+    state.strategy.formatCatalogLoaded = true;
+    applyStrategyFormatConstraints();
+  }
+
+  // Apply format-driven UI constraints: disable the color-identity (mana)
+  // filter for non-singleton formats where color identity has no meaning.
+  function applyStrategyFormatConstraints() {
+    const strategyNodes = nodes.strategy;
+    const key = String(state.strategy.format || "none").toLowerCase();
+    const spec = (state.strategy.formatCatalog || []).find((f) => f.key === key);
+    const strict = spec ? spec.colorIdentityStrict : (key === "commander" || key === "brawl");
+    state.strategy.formatColorIdentityStrict = strict;
+    // Color filter inputs are always enabled — the user decides whether to use them.
+    // (In Commander/Brawl the filter means color-identity; in other formats it filters by card color.)
+    if (strategyNodes.formatSelect && strategyNodes.formatSelect.value !== key) {
+      strategyNodes.formatSelect.value = key;
+    }
+    if (strategyNodes.allowIllegalInput) {
+      strategyNodes.allowIllegalInput.checked = state.strategy.allowIllegal === true;
+    }
+  }
+
+  async function ensureStrategyArchetypeCatalog() {
+    const strategyNodes = nodes.strategy;
+    if (state.strategy.archetypeCatalogLoaded) {
+      renderStrategyArchetypeChips();
+      return;
+    }
+    try {
+      const res = await fetch("/archetypes", { headers: { Accept: "application/json" } });
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data?.archetypes) ? data.archetypes : [];
+        state.strategy.archetypeCatalog = list
+          .map((entry) => ({
+            key: String(entry?.key || "").trim(),
+            label: String(entry?.label || entry?.key || "").trim(),
+            description: String(entry?.description || "")
+          }))
+          .filter((entry) => entry.key.length > 0);
+      }
+    } catch (err) {
+      // Silent: chips just stay empty.
+    }
+    state.strategy.archetypeCatalogLoaded = true;
+    renderStrategyArchetypeChips();
+  }
+
+  function renderStrategyArchetypeChips() {
+    const strategyNodes = nodes.strategy;
+    const container = strategyNodes.archetypeChips;
+    if (!container) return;
+    container.innerHTML = "";
+    const selected = new Set(state.strategy.selectedArchetypes || []);
+    (state.strategy.archetypeCatalog || []).forEach((entry) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "strategy-archetype-chip";
+      chip.dataset.archetypeKey = entry.key;
+      chip.title = entry.description || entry.label;
+      chip.textContent = entry.label;
+      if (selected.has(entry.key)) {
+        chip.classList.add("is-selected");
+      }
+      chip.addEventListener("click", () => {
+        const set = new Set(state.strategy.selectedArchetypes || []);
+        if (set.has(entry.key)) set.delete(entry.key); else set.add(entry.key);
+        state.strategy.selectedArchetypes = Array.from(set);
+        renderStrategyArchetypeChips();
+      });
+      container.appendChild(chip);
+    });
+    if (strategyNodes.archetypeStrictInput) {
+      strategyNodes.archetypeStrictInput.checked = state.strategy.archetypeFilterStrict === true;
+    }
+  }
+
+  function buildStrategySynergyPayload(seedCard, cards, directLimit, groupLimit, refineIterations) {
     const safeCards = Array.isArray(cards) ? cards.map(toStrategySynergyCardPayload).filter((card) => card.name) : [];
     const maxResults = Math.max(Number(directLimit) || 0, (Number(groupLimit) || 0) * 2, 12);
     const topK = Math.max(maxResults * 4, (Number(groupLimit) || 0) * 6, 48);
     const packageTopN = Math.max(Math.min((Number(groupLimit) || 0) * 2, 24), 6);
+    const safeRefineIters = Math.max(0, Math.min(4, Number(refineIterations) || 2));
+    // Refine ALL returned groups, not just the top 3 (server default).
+    const safeRefineTopN = Math.max(Number(groupLimit) || 6, 3);
+    const archetypeFilter = Array.isArray(state.strategy.selectedArchetypes)
+      ? state.strategy.selectedArchetypes.filter((key) => typeof key === "string" && key.length > 0)
+      : [];
     return {
       card_name: String(seedCard?.name || "").trim(),
-      format: "commander",
+      format: String(state.strategy.format || "none").toLowerCase(),
+      allow_illegal: state.strategy.allowIllegal === true,
       max_results: maxResults,
       top_k: topK,
       package_top_n: packageTopN,
+      group_refine_iterations: safeRefineIters,
+      group_refine_top_n: safeRefineTopN,
+      archetype_filter: archetypeFilter,
+      archetype_filter_strict: archetypeFilter.length > 0 && state.strategy.archetypeFilterStrict === true,
       cards: safeCards,
       force_refresh: state.strategy.forceRecompute === true
     };
@@ -2854,9 +3016,41 @@ import {
       scoreValue = Number(entry?.total_score || entry?.score || 0);
     }
     const score = Math.round(Number.isFinite(scoreValue) ? scoreValue : 0);
-    const bucketLabel = String(entry?.bucket_label || entry?.bucket || "").trim();
     const prefix = rank > 0 ? `#${rank} | ` : "";
-    return `${prefix}score ${score}${bucketLabel ? ` | ${bucketLabel}` : ""}`;
+    return `${prefix}score ${score}`;
+  }
+
+  function roleToToneClass(role) {
+    const r = String(role || "").toLowerCase().replace(/[^a-z_]/g, "");
+    const map = {
+      engine: "is-role-engine",
+      producer: "is-role-producer",
+      payoff: "is-role-payoff",
+      target: "is-role-target",
+      finisher: "is-role-finisher",
+      setup: "is-role-setup",
+      amplifier: "is-role-amplifier",
+      converter: "is-role-converter",
+      bridge: "is-role-bridge",
+      fuel: "is-role-producer"
+    };
+    return map[r] || "is-side";
+  }
+
+  function formatEntryRoleBadge(entry) {
+    const roles = Array.isArray(entry?.roles) && entry.roles.length > 0
+      ? entry.roles
+      : [];
+    if (roles.length === 0) {
+      return { label: "", toneClass: "is-side" };
+    }
+    const label = roles
+      .slice(0, 2)
+      .map(function(r) {
+        return String(r).replace(/_/g, " ").replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+      })
+      .join(" / ");
+    return { label, toneClass: roleToToneClass(roles[0]) };
   }
 
   function formatSynergyEntryTitle(entry) {
@@ -2898,7 +3092,8 @@ import {
           formatSynergyEntryMeta(entry, index + 1, "direct_enablers"),
           {
             metaTitle: formatSynergyEntryTitle(entry),
-            badge: String(entry?.bucket_label || "").trim() || "Direct",
+            badge: formatEntryRoleBadge(entry).label,
+            badgeTone: formatEntryRoleBadge(entry).toneClass,
             provenanceTags: readStrategyProvenanceTags(entry)
           }
         )
@@ -2919,7 +3114,14 @@ import {
 
     const title = document.createElement("p");
     title.className = "strategy-group-title";
-    title.textContent = `${String(bucket?.label || bucket?.key || "Bucket").trim()} | ${results.length}`;
+    const bucketFriendlyLabels = {
+      indirect_engines: "Synergies indirectes",
+      reciprocal_value_cards: "Valeur réciproque",
+      direct_enablers: "Synergies directes"
+    };
+    const bucketTitleKey = String(bucket?.key || "").trim();
+    const bucketFriendlyLabel = bucketFriendlyLabels[bucketTitleKey] || String(bucket?.key || "Synergies").replace(/_/g, " ").trim();
+    title.textContent = `${bucketFriendlyLabel} | ${results.length}`;
     article.appendChild(title);
 
     const detail = document.createElement("p");
@@ -2939,7 +3141,8 @@ import {
           {
             compact: true,
             metaTitle: formatSynergyEntryTitle(entry),
-            badge: String(entry?.bucket_label || bucket?.label || "").trim(),
+            badge: formatEntryRoleBadge(entry).label,
+            badgeTone: formatEntryRoleBadge(entry).toneClass,
             provenanceTags: readStrategyProvenanceTags(entry)
           }
         )
@@ -2957,45 +3160,273 @@ import {
     }
 
     const lookup = buildStrategySynergyLookup(cards);
+    const isFr = currentUiLanguage() === "fr";
+
     const article = document.createElement("article");
     article.className = "strategy-group is-heuristic";
 
     const title = document.createElement("p");
     title.className = "strategy-group-title";
-    title.textContent = `Top packages / groups | ${results.length}`;
-    if (results.length > 0) {
-      appendStrategyProvenanceBadges(title, readStrategyProvenanceTags(results[0]));
-    }
+    title.textContent = isFr
+      ? `Combos / groupes détectés | ${results.length}`
+      : `Detected combos / groups | ${results.length}`;
     article.appendChild(title);
 
-    results.slice(0, Math.max(1, Number(limit) || 6)).forEach((pkg, index) => {
+    results.slice(0, Math.max(1, Number(limit) || 6)).forEach((pkg) => {
       const block = document.createElement("div");
       block.className = "strategy-group-section is-core";
 
-      const line = document.createElement("p");
-      line.className = "strategy-group-line";
-      line.textContent = `#${index + 1} | score ${Math.round(Number(pkg?.score || 0))} | ${String(pkg?.archetype || "package").trim()}`;
-      appendStrategyProvenanceBadges(line, readStrategyProvenanceTags(pkg));
-      block.appendChild(line);
+      // Role chain header: "Setup → Converter → Payoff"
+      const slots = pkg?.cards && typeof pkg.cards === "object" ? pkg.cards : {};
+      const slotRoles = Object.keys(slots);
+      if (slotRoles.length > 0) {
+        const chainLine = document.createElement("p");
+        chainLine.className = "strategy-combo-chain";
+        const score = Math.round(Number(pkg?.score || 0));
+        chainLine.textContent = slotRoles
+          .map(function(r) {
+            return String(r).replace(/_/g, " ").replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+          })
+          .join(" → ");
+        if (score > 0) {
+          const scorePill = document.createElement("span");
+          scorePill.className = "strategy-combo-score";
+          scorePill.textContent = score;
+          chainLine.appendChild(scorePill);
+        }
+        block.appendChild(chainLine);
+      }
 
-      const reason = document.createElement("p");
-      reason.className = "strategy-group-line";
-      reason.textContent = Array.isArray(pkg?.reasons) && pkg.reasons.length > 0
-        ? String(pkg.reasons[0]).trim()
-        : "Package mecanique detecte.";
-      block.appendChild(reason);
+      // Score breakdown — show base + modifiers if backend exposed them.
+      const scoreBase = Number(pkg?.score_base);
+      const scoreMods = pkg?.score_modifiers && typeof pkg.score_modifiers === "object" ? pkg.score_modifiers : null;
+      if (Number.isFinite(scoreBase) && scoreMods) {
+        const modKeys = Object.keys(scoreMods).filter((k) => Number(scoreMods[k]?.amount) !== 0);
+        if (modKeys.length > 0) {
+          const breakdown = document.createElement("div");
+          breakdown.className = "strategy-score-breakdown";
+          const baseChip = document.createElement("span");
+          baseChip.className = "strategy-score-base";
+          baseChip.textContent = (isFr ? "Base " : "Base ") + Math.round(scoreBase);
+          breakdown.appendChild(baseChip);
+          const modLabels = isFr
+            ? { spellbook: "Combo Spellbook", archetype: "Archétype", cooccurrence: "Co-occurrence" }
+            : { spellbook: "Spellbook combo", archetype: "Archetype", cooccurrence: "Co-occurrence" };
+          modKeys.forEach((key) => {
+            const mod = scoreMods[key] || {};
+            const amount = Number(mod.amount) || 0;
+            const chip = document.createElement("span");
+            chip.className = `strategy-score-mod is-${amount >= 0 ? "positive" : "negative"} mod-${key}`;
+            const sign = amount >= 0 ? "+" : "";
+            const label = modLabels[key] || key;
+            chip.textContent = `${sign}${amount} ${label}`;
+            if (key === "archetype" && Number.isFinite(Number(mod.alignment))) {
+              chip.title = (isFr ? "Alignement " : "Alignment ") + Math.round(Number(mod.alignment) * 100) + "%";
+            } else if (key === "spellbook" && mod.combo_title) {
+              chip.title = String(mod.combo_title);
+            }
+            breakdown.appendChild(chip);
+          });
+          block.appendChild(breakdown);
+        }
+      }
 
+      // Archetype chips (theme classification of the group)
+      const archetypeMap = pkg?.archetypes && typeof pkg.archetypes === "object" ? pkg.archetypes : null;
+      if (archetypeMap) {
+        const archetypeEntries = Object.keys(archetypeMap)
+          .map((key) => ({ key, ...(archetypeMap[key] || {}) }))
+          .filter((entry) => Number(entry.score) > 0)
+          .sort((a, b) => Number(b.score) - Number(a.score))
+          .slice(0, 6);
+        if (archetypeEntries.length > 0) {
+          const archRow = document.createElement("div");
+          archRow.className = "strategy-group-archetypes";
+          archetypeEntries.forEach((entry) => {
+            const chip = document.createElement("span");
+            chip.className = "strategy-archetype-tag";
+            const label = String(entry.label || entry.key).trim();
+            const scorePct = Math.round(Number(entry.score) * 100);
+            chip.textContent = `${label} ${scorePct}%`;
+            chip.title = `${label} — fit ${scorePct}% across ${entry.contributors || 0} card(s)`;
+            archRow.appendChild(chip);
+          });
+          const alignment = Number(pkg?.archetype_alignment);
+          if (Number.isFinite(alignment) && (state.strategy.selectedArchetypes || []).length > 0) {
+            const alignChip = document.createElement("span");
+            alignChip.className = "strategy-archetype-tag is-alignment";
+            alignChip.textContent = `↔ ${Math.round(alignment * 100)}%`;
+            alignChip.title = isFr ? "Alignement avec les archétypes sélectionnés" : "Alignment with selected archetypes";
+            archRow.appendChild(alignChip);
+          }
+          block.appendChild(archRow);
+        }
+      }
+
+      // Co-occurrence in real decks (Archidekt + Spellbook databases).
+      const coocMap = pkg?.cooccurrence && typeof pkg.cooccurrence === "object" ? pkg.cooccurrence : null;
+      if (coocMap) {
+        const sourceLabels = { archidekt: "Archidekt", spellbook: "Spellbook" };
+        const coocEntries = Object.keys(coocMap)
+          .map((src) => ({ src, ...(coocMap[src] || {}) }))
+          .filter((entry) => Number(entry.total) > 0);
+        if (coocEntries.length > 0) {
+          const coocRow = document.createElement("div");
+          coocRow.className = "strategy-group-cooccurrence";
+          coocEntries.forEach((entry) => {
+            const chip = document.createElement("span");
+            chip.className = "strategy-cooc-tag";
+            const decks = Number(entry.decks) || 0;
+            const total = Number(entry.total) || 0;
+            const label = sourceLabels[entry.src] || entry.src;
+            chip.textContent = `${label}: ${decks.toLocaleString()} / ${total.toLocaleString()}`;
+            chip.title = isFr
+              ? `${decks} decks ${label} contiennent toutes les cartes de ce groupe (sur ${total} decks scannés)`
+              : `${decks} ${label} decks contain every card in this group (out of ${total} scanned)`;
+            if (decks === 0) chip.classList.add("is-zero");
+            coocRow.appendChild(chip);
+          });
+          block.appendChild(coocRow);
+        }
+      }
+
+      // Spellbook combo matches — displayed as a highlighted block before the
+      // mechanical details, since they represent "ground truth" combo validation.
+      const spellbookMatches = Array.isArray(pkg?.spellbook_matches) ? pkg.spellbook_matches : [];
+      if (spellbookMatches.length > 0) {
+        const sbBlock = document.createElement("div");
+        sbBlock.className = "strategy-spellbook-block";
+        const sbHeader = document.createElement("div");
+        sbHeader.className = "strategy-spellbook-header";
+        sbHeader.textContent = isFr ? "⚡ Combo Spellbook détecté" : "⚡ Spellbook combo match";
+        sbBlock.appendChild(sbHeader);
+        spellbookMatches.forEach((match) => {
+          const row = document.createElement("div");
+          row.className = `strategy-spellbook-match is-${match.match_type || "partial"}`;
+          const title = document.createElement("span");
+          title.className = "strategy-spellbook-title";
+          title.textContent = String(match.title || "").trim();
+          row.appendChild(title);
+          const produces = String(match.produces || "").trim();
+          if (produces) {
+            const prod = document.createElement("span");
+            prod.className = "strategy-spellbook-produces";
+            prod.textContent = produces;
+            row.appendChild(prod);
+          }
+          const badge = document.createElement("span");
+          badge.className = `strategy-spellbook-badge is-${match.match_type || "partial"}`;
+          const labels = { exact: isFr ? "Exact" : "Exact", contains: isFr ? "Inclus" : "Contains", partial: isFr ? "Partiel" : "Partial" };
+          badge.textContent = (labels[match.match_type] || match.match_type) + (match.bonus ? ` +${match.bonus}` : "");
+          row.appendChild(badge);
+          sbBlock.appendChild(row);
+        });
+        block.appendChild(sbBlock);
+      }
+
+      // All explanations inside a collapsible details block
+      const details = document.createElement("details");
+      details.className = "strategy-combo-details";
+      const summary = document.createElement("summary");
+      summary.textContent = isFr ? "Mécanique détaillée" : "Mechanical detail";
+      details.appendChild(summary);
+
+      // Global reasons (skip reason[0] which just repeats the role chain)
+      const allReasons = Array.isArray(pkg?.reasons) ? pkg.reasons : [];
+      const bodyReasons = allReasons.slice(1).filter(function(r) {
+        const t = String(r || "").trim();
+        return t.length > 0 && !t.startsWith("Package line:") && !t.startsWith("Line classification:");
+      });
+      bodyReasons.forEach(function(r) {
+        const p = document.createElement("p");
+        p.className = "strategy-group-line";
+        p.textContent = String(r).trim();
+        details.appendChild(p);
+      });
+
+      // Per-edge mechanical breakdown
+      const edges = Array.isArray(pkg?.edges) ? pkg.edges : [];
+      edges.forEach(function(edge) {
+        const fromName = String(edge?.from?.name || "").trim();
+        const toName = String(edge?.to?.name || "").trim();
+        if (!fromName || !toName) return;
+
+        const edgeBlock = document.createElement("div");
+        edgeBlock.className = "strategy-combo-edge";
+
+        // "Card A → Card B"
+        const pairLabel = document.createElement("p");
+        pairLabel.className = "strategy-combo-edge-pair";
+        pairLabel.textContent = `${fromName} → ${toName}`;
+        edgeBlock.appendChild(pairLabel);
+
+        // Matched events as chips
+        const evts = edge?.matched_events || {};
+        const allEvts = Array.from(new Set([
+          ...(Array.isArray(evts.direct) ? evts.direct : []),
+          ...(Array.isArray(evts.indirect) ? evts.indirect : []),
+          ...(Array.isArray(evts.setup_finisher) ? evts.setup_finisher : []),
+          ...(Array.isArray(evts.resource_bridges) ? evts.resource_bridges : [])
+        ])).filter(Boolean).slice(0, 6);
+        if (allEvts.length > 0) {
+          const evtRow = document.createElement("div");
+          evtRow.className = "strategy-combo-edge-events";
+          allEvts.forEach(function(evt) {
+            const chip = document.createElement("span");
+            chip.className = "strategy-combo-event-chip";
+            chip.textContent = String(evt).replace(/_/g, " ").toLowerCase();
+            evtRow.appendChild(chip);
+          });
+          edgeBlock.appendChild(evtRow);
+        }
+
+        // First edge reason (contextual sentence)
+        const edgeReasons = Array.isArray(edge?.reasons) ? edge.reasons : [];
+        if (edgeReasons.length > 0) {
+          const edgeReason = document.createElement("p");
+          edgeReason.className = "strategy-combo-edge-reason";
+          edgeReason.textContent = String(edgeReasons[0]).trim();
+          edgeBlock.appendChild(edgeReason);
+        }
+
+        // Oracle text snippet from source card
+        const fromOracle = String(edge?.from?.oracle_text || "").trim();
+        const toOracle = String(edge?.to?.oracle_text || "").trim();
+        if (fromOracle || toOracle) {
+          const oracleBlock = document.createElement("div");
+          oracleBlock.className = "strategy-combo-oracle-block";
+          if (fromOracle) {
+            const p = document.createElement("p");
+            p.className = "strategy-combo-oracle";
+            p.innerHTML = `<em>${escapeHtml(fromName)}:</em> ${escapeHtml(fromOracle)}`;
+            oracleBlock.appendChild(p);
+          }
+          if (toOracle) {
+            const p = document.createElement("p");
+            p.className = "strategy-combo-oracle";
+            p.innerHTML = `<em>${escapeHtml(toName)}:</em> ${escapeHtml(toOracle)}`;
+            oracleBlock.appendChild(p);
+          }
+          edgeBlock.appendChild(oracleBlock);
+        }
+
+        details.appendChild(edgeBlock);
+      });
+
+      block.appendChild(details);
+
+      // Cards grid — badge = inferred slot role
       const grid = document.createElement("div");
       grid.className = "strategy-card-grid";
-      const slots = pkg?.cards && typeof pkg.cards === "object" ? pkg.cards : {};
       Object.entries(slots).forEach(([role, entry]) => {
         if (!entry) return;
         const card = resolveStrategySynergyCard(entry, lookup);
-        const roleLabel = String(role || "").replace(/_/g, " ").trim();
+        const roleLabel = String(role || "").replace(/_/g, " ").replace(/\b\w/g, function(c) { return c.toUpperCase(); });
         grid.appendChild(
-          createStrategyCardElement(card, roleLabel, {
+          createStrategyCardElement(card, "", {
             compact: true,
-            badge: roleLabel || String(pkg?.archetype || "package").trim()
+            badge: roleLabel,
+            badgeTone: roleToToneClass(role)
           })
         );
       });
@@ -3017,10 +3448,6 @@ import {
     target.innerHTML = "";
 
     const fragment = document.createDocumentFragment();
-    appendBackendBucketSection(fragment, buckets.indirect_engines, cards, {
-      limit,
-      description: "Engines indirects repetables, convertisseurs ou bridges"
-    });
     appendBackendPackageSection(fragment, result?.packages, cards, limit);
 
     if (!fragment.childNodes.length) {
@@ -3773,7 +4200,7 @@ import {
     const safeTags = Array.isArray(tags) ? tags : [];
     safeTags.forEach((tag) => {
       const normalized = normalizeStrategyProvenanceTag(tag);
-      if (!normalized) {
+      if (!normalized || normalized === "heuristic") {
         return;
       }
       appendStrategyCardBadge(
@@ -5380,15 +5807,10 @@ import {
     const badgesLine = document.createElement("div");
     badgesLine.className = "strategy-card-badges";
     if (badge) {
-      appendStrategyCardBadge(
-        badgesLine,
-        badge,
-        badgeTone === "side" ? "is-side" : "is-core"
-      );
-    }
-    const sourceBadge = strategySourceBadgeText(card?.source || "collection");
-    if (sourceBadge) {
-      appendStrategyCardBadge(badgesLine, sourceBadge, "is-source-scryfall");
+      const resolvedTone = badgeTone.startsWith("is-")
+        ? badgeTone
+        : (badgeTone === "side" ? "is-side" : "is-core");
+      appendStrategyCardBadge(badgesLine, badge, resolvedTone);
     }
     appendStrategyProvenanceBadges(badgesLine, provenanceTags);
     if (badgesLine.childNodes.length > 0) {

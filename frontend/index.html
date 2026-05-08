@@ -158,9 +158,34 @@
                 <span id="strategy-direct-limit-label">Top synergies directes</span>
                 <input id="strategy-direct-limit" type="number" min="4" max="24" value="12">
               </label>
+              <label for="strategy-format">
+                <span id="strategy-format-label">Format</span>
+                <select id="strategy-format">
+                  <option value="none" selected>Aucun (pas de filtre)</option>
+                  <option value="commander">Commander</option>
+                  <option value="modern">Modern</option>
+                  <option value="legacy">Legacy</option>
+                  <option value="vintage">Vintage</option>
+                  <option value="pioneer">Pioneer</option>
+                  <option value="standard">Standard</option>
+                  <option value="pauper">Pauper</option>
+                  <option value="brawl">Brawl</option>
+                  <option value="historic">Historic</option>
+                </select>
+              </label>
+              <label for="strategy-allow-illegal" class="strategy-toggle">
+                <span class="strategy-toggle-row">
+                  <input id="strategy-allow-illegal" type="checkbox">
+                  <span id="strategy-allow-illegal-hint">Autoriser les cartes hors format</span>
+                </span>
+              </label>
               <label for="strategy-group-limit">
                 <span id="strategy-group-limit-label">Top groupes</span>
                 <input id="strategy-group-limit" type="number" min="3" max="12" value="6">
+              </label>
+              <label for="strategy-refine-iterations">
+                <span id="strategy-refine-iterations-label">Itérations raffinement</span>
+                <input id="strategy-refine-iterations" type="number" min="0" max="4" value="2">
               </label>
               <label for="strategy-only-collection" class="strategy-toggle">
                 <span class="strategy-toggle-row">
@@ -174,6 +199,21 @@
                   <span id="strategy-force-recompute-hint">Forcer le recalcul (ignorer le cache)</span>
                 </span>
               </label>
+              <div class="strategy-archetype-filter" id="strategy-archetype-block">
+                <div class="strategy-archetype-head">
+                  <span class="strategy-archetype-title">Archétypes ciblés</span>
+                  <div class="strategy-archetype-actions">
+                    <button type="button" id="strategy-archetype-all" class="ghost">Tout</button>
+                    <button type="button" id="strategy-archetype-none" class="ghost">Aucun</button>
+                    <label class="strategy-archetype-strict-toggle">
+                      <input id="strategy-archetype-strict" type="checkbox">
+                      <span>Strict</span>
+                    </label>
+                  </div>
+                </div>
+                <div id="strategy-archetype-chips" class="strategy-archetype-chips"></div>
+                <p class="muted strategy-archetype-hint">Aucune sélection = pas de filtre. Mode strict = ignore les groupes hors archétype.</p>
+              </div>
               <label class="strategy-mana-filter">
                 <span class="strategy-mana-filter-row">
                   <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="W"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/W.svg" alt="W" loading="lazy"></label>

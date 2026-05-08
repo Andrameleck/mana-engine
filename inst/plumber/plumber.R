@@ -408,6 +408,20 @@ function() {
   query_call("query_synergy_list_mechanics")
 }
 
+#* List registered strategic archetypes
+#* @serializer unboxedJSON
+#* @get /archetypes
+function() {
+  query_call("query_synergy_list_archetypes")
+}
+
+#* List supported play formats
+#* @serializer unboxedJSON
+#* @get /formats
+function() {
+  query_call("query_synergy_list_formats")
+}
+
 #* Load a synergy catalog from a local SQLite database (cards_api table)
 #* @param db_path Optional absolute path to the SQLite file.
 #* @param table Optional table name (default: cards_api).

@@ -83,14 +83,9 @@ query_synergy_score_pair <- function(target, candidate, format_name = "commander
     cadence_strength <- 0
   }
   cadence_class <- query_api_scalar(candidate$cadence$class, default = "one_shot")
-  cadence_bonus <- switch(cadence_class,
-    scalable_repeatable = 0.12,
-    reliable_repeatable = 0.08,
-    conditional_repeatable = 0.03,
-    repeatable_scalable = 0.1,
-    repeatable = 0.07,
-    0
-  )
+  .cadence_tbl <- query_synergy_cadence_bonus_table()
+  cadence_bonus <- .cadence_tbl[[cadence_class]]
+  if (is.null(cadence_bonus)) cadence_bonus <- 0
   indirect_engine_effective <- max(0, min(1, suppressWarnings(as.numeric(indirect_engine$score)) * suppressWarnings(as.numeric(bridge_axes$bridge_gate))))
   cadence_support <- max(
     suppressWarnings(as.numeric(direct_event_score)),
@@ -119,7 +114,8 @@ query_synergy_score_pair <- function(target, candidate, format_name = "commander
 
   enabler_payoff_bonus <- if ((direct_event_score >= 0.1 || reciprocal_value_score >= 0.1) &&
                               role_complementarity_score >= 0.4) {
-    min(0.30,
+    .cap <- query_synergy_pair_bonuses()$enabler_payoff_cap
+    min(.cap,
         0.20 * max(direct_event_score, reciprocal_value_score) +
         0.10 * indirect_engine_effective +
         0.10 * role_complementarity_score)
@@ -128,33 +124,36 @@ query_synergy_score_pair <- function(target, candidate, format_name = "commander
   }
   setup_converter_bonus <- if (isTRUE(bridge_axes$has_setup_converter_bridge) &&
                                suppressWarnings(as.numeric(bridge_axes$zone_transition_score)) >= 0.3) {
-    0.18 * suppressWarnings(as.numeric(bridge_axes$setup_to_converter_score))
+    query_synergy_pair_bonuses()$setup_converter_cap *
+      suppressWarnings(as.numeric(bridge_axes$setup_to_converter_score))
   } else {
     0
   }
 
+  .pw <- query_synergy_pair_weights()
+  .pp <- query_synergy_pair_penalties()
   positive_score <-
-    0.24 * direct_event_score +
-    0.13 * indirect_engine_effective +
-    0.15 * reciprocal_value_score +
-    0.13 * suppressWarnings(as.numeric(bridge_axes$resource_zone_score)) +
-    0.07 * package_score +
-    0.03 * shared_plan_score +
-    0.07 * cadence_score +
-    0.09 * role_complementarity_score +
-    0.11 * reliability$score +
-    0.03 * color_fit +
-    0.02 * format_fit +
-    0.02 * tempo_fit +
+    .pw$direct_event         * direct_event_score +
+    .pw$indirect_engine      * indirect_engine_effective +
+    .pw$reciprocal_value     * reciprocal_value_score +
+    .pw$bridge_resource_zone * suppressWarnings(as.numeric(bridge_axes$resource_zone_score)) +
+    .pw$package_potential    * package_score +
+    .pw$shared_plan          * shared_plan_score +
+    .pw$cadence              * cadence_score +
+    .pw$role_complementarity * role_complementarity_score +
+    .pw$reliability          * reliability$score +
+    .pw$color_fit            * color_fit +
+    .pw$format_fit           * format_fit +
+    .pw$tempo_fit            * tempo_fit +
     enabler_payoff_bonus +
     setup_converter_bonus
 
   score_norm <- positive_score -
-    0.28 * anti_synergy_score -
-    0.12 * incoherence_penalty -
-    0.08 * tempo_mismatch_penalty -
-    0.16 * suppressWarnings(as.numeric(bridge_axes$weak_bridge_penalty)) -
-    0.1 * shell_dependency$score
+    .pp$anti_synergy     * anti_synergy_score -
+    .pp$incoherence      * incoherence_penalty -
+    .pp$tempo_mismatch   * tempo_mismatch_penalty -
+    .pp$weak_bridge      * suppressWarnings(as.numeric(bridge_axes$weak_bridge_penalty)) -
+    .pp$shell_dependency * shell_dependency$score
   score_norm <- max(0, min(1, score_norm))
   score_value <- as.integer(round(score_norm * 100))
 

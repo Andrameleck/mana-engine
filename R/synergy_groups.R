@@ -946,23 +946,26 @@ query_synergy_build_synergy_group <- function(path_ids,
     complexity_penalty = round(complexity_penalty, 4)
   )
 
+  .gw <- query_synergy_group_weights()
+  .gp <- query_synergy_group_penalties()
+  .gt <- query_synergy_group_thresholds()
   score_norm <-
-    0.2 * score_breakdown$chain_continuity +
-    0.12 * score_breakdown$role_coverage +
-    0.08 * score_breakdown$strategic_coherence +
-    0.13 * score_breakdown$resource_flow_quality +
-    0.11 * score_breakdown$causal_line_quality +
-    0.09 * score_breakdown$setup_converter_alignment +
-    0.1 * score_breakdown$repetition_potential +
-    0.07 * score_breakdown$amplification_bonus +
-    0.11 * score_breakdown$finisher_quality -
-    0.12 * score_breakdown$anti_synergy_penalty -
-    0.08 * score_breakdown$value_cluster_penalty -
-    0.08 * score_breakdown$shell_dependency_penalty -
-    0.07 * score_breakdown$redundancy_penalty -
-    0.07 * score_breakdown$complexity_penalty
+    .gw$chain_continuity          * score_breakdown$chain_continuity +
+    .gw$role_coverage             * score_breakdown$role_coverage +
+    .gw$strategic_coherence       * score_breakdown$strategic_coherence +
+    .gw$resource_flow_quality     * score_breakdown$resource_flow_quality +
+    .gw$causal_line_quality       * score_breakdown$causal_line_quality +
+    .gw$setup_converter_alignment * score_breakdown$setup_converter_alignment +
+    .gw$repetition_potential      * score_breakdown$repetition_potential +
+    .gw$amplification_bonus       * score_breakdown$amplification_bonus +
+    .gw$finisher_quality          * score_breakdown$finisher_quality -
+    .gp$anti_synergy     * score_breakdown$anti_synergy_penalty -
+    .gp$value_cluster    * score_breakdown$value_cluster_penalty -
+    .gp$shell_dependency * score_breakdown$shell_dependency_penalty -
+    .gp$redundancy       * score_breakdown$redundancy_penalty -
+    .gp$complexity       * score_breakdown$complexity_penalty
   score_norm <- max(0, min(1, score_norm))
-  if (score_norm <= 0.14 || chain_continuity <= 0.16) {
+  if (score_norm <= .gt$min_score_norm || chain_continuity <= .gt$min_chain_continuity) {
     return(NULL)
   }
 
@@ -1074,7 +1077,14 @@ query_synergy_build_synergy_group <- function(path_ids,
     matched_resource_transitions = resource_transitions,
     anti_conflicts = pair_penalty$conflicts,
     reasons = reasons,
-    explanation_text = paste(utils::head(reasons, 3L), collapse = " ")
+    explanation_text = paste(utils::head(reasons, 3L), collapse = " "),
+    archetypes = lapply(query_synergy_archetypes_for_group_members(cards), function(entry) {
+      list(
+        score = query_synergy_as_num(entry$score),
+        contributors = query_synergy_as_int(entry$contributors, default = 0L, min_value = 0L, max_value = 50L),
+        label = query_api_scalar(entry$label, default = "")
+      )
+    })
   )
 }
 
@@ -1112,6 +1122,291 @@ query_synergy_build_group_bucket <- function(groups, bucket_key, limit = 10L) {
     results = pool
   )
 }
+
+# -----------------------------------------------------------------------------
+# Group refinement (member-neighborhood swap)
+# -----------------------------------------------------------------------------
+# Given a detected group G = {seed, m1, m2, ...}, try to improve it by
+# replacing the weakest non-seed member with a card drawn from the
+# top-K neighborhood of one of the OTHER non-seed members.
+#
+# Rationale: a card D may have a low direct score with the seed but be a
+# strong neighbor of m1 or m2; once placed inside the chain
+# seed -> m1 -> D, the group's chain continuity may exceed the original.
+# This surfaces "bridge" cards that vanilla pool-based detection cannot
+# find when ranking is dominated by raw seed-pair scores.
+#
+# Identifies the weakest member via its incident edge continuity
+# contribution (option (b) of the formalisation).
+# -----------------------------------------------------------------------------
+
+query_synergy_group_member_weakness <- function(group) {
+  edges <- query_synergy_to_list(group$edges)
+  members <- query_synergy_to_list(group$members)
+  if (length(members) < 3L || length(edges) == 0L) {
+    return(NULL)
+  }
+  contrib <- vapply(seq_along(members), function(i) {
+    incoming <- if (i > 1L) suppressWarnings(as.numeric(edges[[i - 1L]]$continuity_score)) else NA_real_
+    outgoing <- if (i <= length(edges)) suppressWarnings(as.numeric(edges[[i]]$continuity_score)) else NA_real_
+    vals <- c(incoming, outgoing)
+    vals <- vals[is.finite(vals)]
+    if (length(vals) == 0L) return(NA_real_)
+    mean(vals)
+  }, numeric(1))
+  is_seed <- vapply(members, function(m) isTRUE(m$is_seed), logical(1))
+  contrib[is_seed] <- NA_real_
+  if (all(is.na(contrib))) {
+    return(NULL)
+  }
+  weakest_pos <- which.min(contrib)
+  list(
+    position = weakest_pos,
+    contribution = contrib[[weakest_pos]],
+    member = members[[weakest_pos]]
+  )
+}
+
+query_synergy_member_top_neighbors <- function(member,
+                                               candidate_cards,
+                                               format_name,
+                                               registry,
+                                               k = 12L,
+                                               exclude_ids = character(0)) {
+  if (!is.list(member) || length(candidate_cards) == 0L) {
+    return(list())
+  }
+  member_profile <- query_synergy_build_compact_profile(member, registry = registry)
+  scored <- lapply(candidate_cards, function(card) {
+    cid <- query_api_scalar(card$id, default = "")
+    if (!nzchar(cid) || cid %in% exclude_ids) {
+      return(NULL)
+    }
+    profile <- query_synergy_build_compact_profile(card, registry = registry)
+    s <- suppressWarnings(as.numeric(
+      query_synergy_score_candidate_lightweight(member_profile, profile, format_name)$score
+    ))
+    if (!is.finite(s) || s <= 0) return(NULL)
+    list(card = card, cheap_score = s)
+  })
+  scored <- Filter(Negate(is.null), scored)
+  if (length(scored) == 0L) return(list())
+  ord <- order(vapply(scored, function(e) e$cheap_score, numeric(1)), decreasing = TRUE)
+  scored <- scored[ord]
+  scored[seq_len(min(length(scored), k))]
+}
+
+query_synergy_refine_single_group <- function(group,
+                                              seed,
+                                              broader_pool,
+                                              format_name,
+                                              registry,
+                                              k_member = 12L,
+                                              theta_seed_score = 18,
+                                              max_replacements_to_try = 6L,
+                                              min_edge_score = 28L,
+                                              max_branching = 6L,
+                                              max_paths = 60L) {
+  if (!is.list(group)) return(group)
+  members <- query_synergy_to_list(group$members)
+  if (length(members) < 3L) return(group)
+
+  weakness <- query_synergy_group_member_weakness(group)
+  if (is.null(weakness)) return(group)
+
+  weakest_id <- query_api_scalar(weakness$member$id, default = "")
+  group_ids <- vapply(members, function(m) query_api_scalar(m$id, default = ""), character(1))
+  seed_id <- query_api_scalar(seed$id, default = "")
+
+  anchors <- Filter(function(m) {
+    mid <- query_api_scalar(m$id, default = "")
+    nzchar(mid) && mid != seed_id && mid != weakest_id
+  }, members)
+  if (length(anchors) == 0L) return(group)
+
+  # Resolve full normalized cards for anchors from the broader pool (members
+  # in the group object are summaries, not full normalized cards).
+  pool_by_id <- list()
+  for (card in broader_pool) {
+    cid <- query_api_scalar(card$id, default = "")
+    if (nzchar(cid)) pool_by_id[[cid]] <- card
+  }
+  pool_by_id[[seed_id]] <- seed
+
+  anchor_cards <- Filter(Negate(is.null), lapply(anchors, function(a) {
+    pool_by_id[[query_api_scalar(a$id, default = "")]]
+  }))
+  weakest_card <- pool_by_id[[weakest_id]]
+  if (length(anchor_cards) == 0L || is.null(weakest_card)) return(group)
+
+  # Gather replacement candidates from each anchor's neighborhood.
+  exclude <- c(seed_id, group_ids)
+  replacement_pool <- list()
+  for (anchor_card in anchor_cards) {
+    neighbors <- query_synergy_member_top_neighbors(
+      member = anchor_card,
+      candidate_cards = broader_pool,
+      format_name = format_name,
+      registry = registry,
+      k = k_member,
+      exclude_ids = exclude
+    )
+    for (entry in neighbors) {
+      cid <- query_api_scalar(entry$card$id, default = "")
+      if (nzchar(cid) && is.null(replacement_pool[[cid]])) {
+        replacement_pool[[cid]] <- entry$card
+      }
+    }
+  }
+  if (length(replacement_pool) == 0L) return(group)
+
+  # Filter by a minimum score with the seed (we want acceptable, not
+  # necessarily great, seed-pair quality so the chain stays anchored to A).
+  candidates_with_seed_score <- list()
+  for (cid in names(replacement_pool)) {
+    cand <- replacement_pool[[cid]]
+    fwd <- suppressWarnings(as.numeric(query_synergy_score_pair(seed, cand, format_name)$score))
+    bwd <- suppressWarnings(as.numeric(query_synergy_score_pair(cand, seed, format_name)$score))
+    seed_pair <- max(
+      if (is.finite(fwd)) fwd else 0,
+      if (is.finite(bwd)) bwd else 0
+    )
+    if (seed_pair >= theta_seed_score) {
+      candidates_with_seed_score[[cid]] <- list(card = cand, seed_score = seed_pair)
+    }
+  }
+  if (length(candidates_with_seed_score) == 0L) return(group)
+
+  # Order by seed_score desc, cap.
+  cand_list <- unname(candidates_with_seed_score)
+  ord <- order(vapply(cand_list, function(e) e$seed_score, numeric(1)), decreasing = TRUE)
+  cand_list <- cand_list[ord][seq_len(min(length(cand_list), max_replacements_to_try))]
+
+  # For each candidate, build a small pool { remaining group members + d },
+  # re-run group detection, and keep the best resulting group.
+  remaining <- Filter(function(card) {
+    cid <- query_api_scalar(card$id, default = "")
+    nzchar(cid) && cid != weakest_id && cid != seed_id
+  }, lapply(group_ids, function(gid) pool_by_id[[gid]]))
+  remaining <- Filter(Negate(is.null), remaining)
+  if (length(remaining) == 0L) return(group)
+
+  group_size <- length(members)
+  best_group <- group
+  best_score <- suppressWarnings(as.numeric(group$total_score))
+  if (!is.finite(best_score)) best_score <- 0
+  refinement <- NULL
+
+  for (entry in cand_list) {
+    candidate_pool <- c(remaining, list(entry$card))
+    res <- query_synergy_detect_groups_for_seed(
+      seed = seed,
+      candidates = candidate_pool,
+      format_name = format_name,
+      max_groups = 1L,
+      min_edge_score = min_edge_score,
+      max_group_size = group_size,
+      max_paths = max_paths,
+      max_branching = max_branching,
+      registry = registry
+    )
+    new_groups <- query_synergy_to_list(res$groups)
+    if (length(new_groups) == 0L) next
+    new_group <- new_groups[[1]]
+    new_member_ids <- vapply(
+      query_synergy_to_list(new_group$members),
+      function(m) query_api_scalar(m$id, default = ""),
+      character(1)
+    )
+    cand_id <- query_api_scalar(entry$card$id, default = "")
+    if (!(cand_id %in% new_member_ids)) next  # detector dropped the candidate
+    new_score <- suppressWarnings(as.numeric(new_group$total_score))
+    if (!is.finite(new_score)) next
+    if (new_score > best_score) {
+      best_score <- new_score
+      best_group <- new_group
+      refinement <- list(
+        replaced_member_id = weakest_id,
+        replaced_member_name = query_api_scalar(weakness$member$name, default = ""),
+        with_member_id = cand_id,
+        with_member_name = query_api_scalar(entry$card$name, default = ""),
+        delta_score = round(new_score - suppressWarnings(as.numeric(group$total_score)), 2)
+      )
+    }
+  }
+
+  if (!is.null(refinement)) {
+    best_group$refinement_provenance <- refinement
+    best_group$reasons <- c(
+      query_synergy_to_vector(best_group$reasons),
+      sprintf(
+        "Refined: replaced %s with %s (anchor neighborhood, +%.1f pts)",
+        refinement$replaced_member_name,
+        refinement$with_member_name,
+        refinement$delta_score
+      )
+    )
+  }
+
+  best_group
+}
+
+query_synergy_refine_groups <- function(groups,
+                                        seed,
+                                        broader_pool,
+                                        format_name,
+                                        registry,
+                                        max_iterations = 2L,
+                                        max_groups_to_refine = 3L,
+                                        k_member = 12L,
+                                        theta_seed_score = 18,
+                                        max_replacements_to_try = 6L,
+                                        min_edge_score = 28L,
+                                        max_branching = 6L,
+                                        max_paths = 60L) {
+  group_list <- query_synergy_to_list(groups)
+  if (length(group_list) == 0L || max_iterations <= 0L || length(broader_pool) == 0L) {
+    return(group_list)
+  }
+
+  refine_n <- min(length(group_list), max_groups_to_refine)
+  for (i in seq_len(refine_n)) {
+    current <- group_list[[i]]
+    seen_ids <- character(0)
+    for (iter in seq_len(max_iterations)) {
+      group_signature <- query_api_scalar(current$id, default = "")
+      if (group_signature %in% seen_ids) break
+      seen_ids <- c(seen_ids, group_signature)
+      refined <- query_synergy_refine_single_group(
+        group = current,
+        seed = seed,
+        broader_pool = broader_pool,
+        format_name = format_name,
+        registry = registry,
+        k_member = k_member,
+        theta_seed_score = theta_seed_score,
+        max_replacements_to_try = max_replacements_to_try,
+        min_edge_score = min_edge_score,
+        max_branching = max_branching,
+        max_paths = max_paths
+      )
+      old_score <- suppressWarnings(as.numeric(current$total_score))
+      new_score <- suppressWarnings(as.numeric(refined$total_score))
+      if (!is.finite(new_score) || !is.finite(old_score)) break
+      if (new_score <= old_score) break  # no improvement, stop iterating this group
+      current <- refined
+    }
+    group_list[[i]] <- current
+  }
+
+  # Re-sort groups by total_score in case refinement reordered them.
+  ord <- order(
+    vapply(group_list, function(g) suppressWarnings(as.numeric(g$total_score)), numeric(1)),
+    decreasing = TRUE
+  )
+  group_list[ord]
+}
+
 
 query_synergy_detect_groups_for_seed <- function(seed,
                                                  candidates,

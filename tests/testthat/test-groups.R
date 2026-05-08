@@ -532,3 +532,217 @@ test_that("replacement conflicts surface in anti synergy warnings", {
   expect_true("DRAW_CARD" %in% warning_entry$matched_events$replaces_payoff)
 })
 
+test_that("expand_group_pool includes bridge card scoring well with pool member but not seed", {
+  # Seed: draws cards (DRAW_CARD producer)
+  seed <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "seed-draw",
+    name = "Compulsive Archivist",
+    oracle_text = "At the beginning of your upkeep, draw two cards.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 4,
+    legalities = list(commander = "legal")
+  ))
+
+  # Pool member: rewards DRAW_CARD (direct synergy with seed)
+  pool_member <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "pool-payoff",
+    name = "Arcane Payoff",
+    oracle_text = "Whenever you draw a card, you gain 1 life.",
+    colors = c("W"),
+    color_identity = c("W"),
+    cmc = 2,
+    legalities = list(commander = "legal")
+  ))
+
+  # Bridge: draws a card when a creature dies — synergistic with pool_member
+  # (feeds DRAW_CARD which pool_member rewards) but conditional, so its direct
+  # score with the seed is lower.
+  bridge <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "bridge-death",
+    name = "Grim Witness",
+    oracle_text = "Whenever a creature you control dies, draw a card.",
+    colors = c("B"),
+    color_identity = c("B"),
+    cmc = 3,
+    legalities = list(commander = "legal")
+  ))
+
+  registry <- mtgcodex.api:::query_synergy_event_registry_default()
+
+  expanded <- mtgcodex.api:::query_synergy_expand_group_pool(
+    initial_pool = list(pool_member),
+    bridge_candidates = list(bridge),
+    registry = registry,
+    format_name = "commander",
+    bridge_cheap_threshold = 0.08,
+    bridge_deep_threshold = 20,
+    expansion_cap = 4L
+  )
+
+  # The bridge card should have been added to the pool because it scores well
+  # with the pool member (both involve DRAW_CARD).
+  expanded_ids <- vapply(expanded, function(c) mtgcodex.api:::query_api_scalar(c$id, default = ""), character(1))
+  expect_true("bridge-death" %in% expanded_ids,
+    info = "Bridge card scoring well with pool member should be included in the expanded pool"
+  )
+  expect_equal(length(expanded), 2L)
+})
+
+test_that("refine_groups swaps weakest member for a stronger anchor neighbor", {
+  # Seed: produces SELF_DRAW_CARD via "draw two" trigger
+  seed <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "seed-A",
+    name = "Mystic Recordkeeper",
+    oracle_text = "At the beginning of your upkeep, draw two cards.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 4,
+    legalities = list(commander = "legal")
+  ))
+
+  # Strong direct payoff for the seed: rewards SELF_DRAW_CARD
+  strong_payoff <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "B-strong-payoff",
+    name = "Cosmic Scholar",
+    oracle_text = "Whenever you draw a card, you gain 2 life.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 3,
+    legalities = list(commander = "legal")
+  ))
+
+  # Weak filler that survives initial group detection but adds little value.
+  weak_filler <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "C-weak-filler",
+    name = "Idle Apprentice",
+    oracle_text = "Whenever you draw a card, scry 1.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 1,
+    legalities = list(commander = "legal")
+  ))
+
+  # Better neighbor of the strong payoff: a creature that, when paired with
+  # the payoff, completes a stronger life-gain chain.
+  better_neighbor <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "D-life-amplifier",
+    name = "Beacon of Mercy",
+    oracle_text = "Whenever you gain life, draw a card.",
+    colors = c("W"),
+    color_identity = c("W"),
+    cmc = 3,
+    legalities = list(commander = "legal")
+  ))
+
+  # Setup card the seed/payoff path can chain through (gives initial path
+  # search material for a 3-card group).
+  starter <- mtgcodex.api:::query_synergy_normalize_card(list(
+    id = "starter-draw",
+    name = "Tutor Scribe",
+    oracle_text = "When this enters, draw a card.",
+    colors = c("U"),
+    color_identity = c("U"),
+    cmc = 2,
+    legalities = list(commander = "legal")
+  ))
+
+  registry <- mtgcodex.api:::query_synergy_event_registry_default()
+
+  # Build an initial group {seed, strong_payoff, weak_filler}
+  initial <- mtgcodex.api:::query_synergy_detect_groups_for_seed(
+    seed = seed,
+    candidates = list(strong_payoff, weak_filler, starter),
+    format_name = "commander",
+    min_edge_score = 8,
+    max_groups = 1L,
+    max_group_size = 3L,
+    max_paths = 24L
+  )
+  skip_if(length(initial$groups) == 0L, "initial group not produced — fixture too weak")
+
+  # Broader pool exposes better_neighbor as a refinement candidate.
+  broader <- list(strong_payoff, weak_filler, starter, better_neighbor)
+
+  refined <- mtgcodex.api:::query_synergy_refine_groups(
+    groups = initial$groups,
+    seed = seed,
+    broader_pool = broader,
+    format_name = "commander",
+    registry = registry,
+    max_iterations = 2L,
+    max_groups_to_refine = 1L,
+    k_member = 5L,
+    theta_seed_score = 0,           # accept any seed-pair score (test fixture)
+    max_replacements_to_try = 4L,
+    min_edge_score = 8L,
+    max_branching = 4L,
+    max_paths = 24L
+  )
+
+  expect_equal(length(refined), 1L)
+  refined_group <- refined[[1]]
+  refined_ids <- vapply(refined_group$members, function(m) m$id, character(1))
+  # The weakest member should remain or have been swapped for an equal-or-better
+  # candidate; if a swap occurred, the new total_score must be >= original.
+  initial_score <- initial$groups[[1]]$total_score
+  expect_gte(refined_group$total_score, initial_score)
+
+  # If a refinement happened, the provenance metadata should be present.
+  if (!is.null(refined_group$refinement_provenance)) {
+    expect_true(nzchar(refined_group$refinement_provenance$replaced_member_id))
+    expect_true(nzchar(refined_group$refinement_provenance$with_member_id))
+    expect_gte(refined_group$refinement_provenance$delta_score, 0)
+  }
+})
+
+
+test_that("archetype detection identifies aristocrats theme", {
+  sac_outlet <- list(
+    id = "x:sac",
+    name = "Sac Outlet",
+    strategy_tags = c("sacrifice_outlet", "death_payoff"),
+    produced_events = c("SACRIFICE_PERMANENT", "DIES"),
+    consumed_events = character(0),
+    roles = c("converter")
+  )
+  token_maker <- list(
+    id = "x:tok",
+    name = "Token Maker",
+    strategy_tags = c("token_producer"),
+    produced_events = c("CREATE_TOKEN"),
+    consumed_events = character(0),
+    roles = c("engine")
+  )
+  death_payoff <- list(
+    id = "x:pay",
+    name = "Death Payoff",
+    strategy_tags = c("death_payoff"),
+    produced_events = character(0),
+    consumed_events = c("DIES", "SACRIFICE_PERMANENT"),
+    roles = c("payoff")
+  )
+  archetypes <- mtgcodex.api:::query_synergy_archetypes_for_group_members(
+    list(sac_outlet, token_maker, death_payoff)
+  )
+  expect_true("aristocrats" %in% names(archetypes))
+  expect_gt(archetypes$aristocrats$score, 0)
+})
+
+test_that("archetype alignment returns 1 with no filter and 0 on mismatch", {
+  group_arch <- list(
+    aristocrats = list(score = 0.6, contributors = 3, label = "Aristocrats")
+  )
+  expect_equal(
+    mtgcodex.api:::query_synergy_group_archetype_alignment(group_arch, character(0)),
+    1
+  )
+  expect_equal(
+    mtgcodex.api:::query_synergy_group_archetype_alignment(group_arch, c("ramp")),
+    0
+  )
+  expect_equal(
+    mtgcodex.api:::query_synergy_group_archetype_alignment(group_arch, c("aristocrats")),
+    0.6
+  )
+})

@@ -484,6 +484,113 @@ query_synergy_list_mechanics <- function() {
   )
 }
 
+# List the registered strategic archetypes (Aggro, Aristocrats, etc.) used
+# to filter and annotate group results.
+query_synergy_list_archetypes <- function() {
+  archetypes <- query_synergy_archetypes_list()
+  list(
+    ok = TRUE,
+    count = length(archetypes),
+    archetypes = archetypes
+  )
+}
+
+# List the supported play formats and their key behavioural flags
+# (singleton, color identity strictness).
+query_synergy_list_formats <- function() {
+  formats <- query_synergy_formats_list()
+  list(
+    ok = TRUE,
+    count = length(formats),
+    formats = formats
+  )
+}
+
+# Expand the group pool with "bridge" candidates: cards that score weakly
+# with the seed but strongly with at least one card already in the initial
+# pool.  This allows the group detector to find paths such as
+#   seed -> pool_member_A -> bridge_card -> pool_member_B
+# where bridge_card would never appear if we restricted the pool to the
+# top-N direct seed scores.
+#
+# Two-phase filtering keeps the cost bounded:
+#   Phase 1 – cheap scan (compact profile dot-product) to pre-rank
+#              bridge_candidates against pool members.
+#   Phase 2 – full pair scoring only for the top cheap scorers.
+#
+# Returns the expanded pool (initial_pool + up to expansion_cap bridges).
+query_synergy_expand_group_pool <- function(
+  initial_pool,
+  bridge_candidates,
+  registry,
+  format_name,
+  bridge_cheap_threshold = 0.12,
+  bridge_deep_threshold = 30,
+  expansion_cap = 8L
+) {
+  if (expansion_cap <= 0L || length(initial_pool) == 0L || length(bridge_candidates) == 0L) {
+    return(initial_pool)
+  }
+
+  pool_profiles <- lapply(initial_pool, function(card) {
+    query_synergy_build_compact_profile(card, registry = registry)
+  })
+
+  # Phase 1: cheap pre-filter — score each bridge candidate against every
+  # pool member profile, keep its best cheap score.
+  cheap_scores <- vapply(bridge_candidates, function(bridge_card) {
+    bridge_profile <- query_synergy_build_compact_profile(bridge_card, registry = registry)
+    best <- 0
+    for (pool_profile in pool_profiles) {
+      s <- suppressWarnings(as.numeric(
+        query_synergy_score_candidate_lightweight(pool_profile, bridge_profile, format_name)$score
+      ))
+      if (is.finite(s) && s > best) best <- s
+    }
+    best
+  }, numeric(1))
+
+  cheap_ord <- order(cheap_scores, decreasing = TRUE)
+  n_deep <- min(length(bridge_candidates), expansion_cap * 2L)
+  deep_candidates_idx <- cheap_ord[seq_len(n_deep)]
+  deep_candidates_idx <- deep_candidates_idx[cheap_scores[deep_candidates_idx] >= bridge_cheap_threshold]
+  if (length(deep_candidates_idx) == 0L) {
+    return(initial_pool)
+  }
+
+  # Phase 2: full bidirectional pair score for cheap-filtered bridges.
+  deep_scores <- vapply(deep_candidates_idx, function(i) {
+    bridge_card <- bridge_candidates[[i]]
+    best <- 0
+    for (pool_card in initial_pool) {
+      fwd <- suppressWarnings(as.numeric(
+        query_synergy_score_pair(bridge_card, pool_card, format_name)$score
+      ))
+      bwd <- suppressWarnings(as.numeric(
+        query_synergy_score_pair(pool_card, bridge_card, format_name)$score
+      ))
+      s <- max(
+        if (is.finite(fwd)) fwd else 0,
+        if (is.finite(bwd)) bwd else 0
+      )
+      if (s > best) best <- s
+    }
+    best
+  }, numeric(1))
+
+  eligible_mask <- deep_scores >= bridge_deep_threshold
+  if (!any(eligible_mask)) {
+    return(initial_pool)
+  }
+
+  eligible_idx <- deep_candidates_idx[eligible_mask]
+  eligible_idx <- eligible_idx[order(deep_scores[eligible_mask], decreasing = TRUE)]
+  eligible_idx <- eligible_idx[seq_len(min(length(eligible_idx), expansion_cap))]
+
+  expanded_cards <- lapply(eligible_idx, function(i) bridge_candidates[[i]])
+  c(initial_pool, expanded_cards)
+}
+
 query_synergy_find_in_catalog <- function(payload = list(),
                                           catalog = list(),
                                           progress_callback = NULL) {
@@ -527,6 +634,26 @@ query_synergy_find_in_catalog <- function(payload = list(),
   lotusnoir_posts_override <- if (is.list(payload$lotusnoir_posts)) payload$lotusnoir_posts else NULL
   color_filter <- query_synergy_parse_color_identity(payload$color_identity)
 
+  # Format-driven filtering. The format spec controls:
+  #   * which legality status is accepted on candidates (e.g. commander -> "legal")
+  #   * whether color identity should be enforced (Commander/Brawl only)
+  # `allow_illegal = TRUE` opts out of legality filtering for exploratory work.
+  # The color filter is always honoured: in Commander/Brawl it means color identity;
+  # in other formats it filters by the candidate's card colors.
+  format_spec <- query_synergy_format_spec(format_name)
+  allow_illegal <- query_api_parse_bool(payload$allow_illegal, default = FALSE)
+
+  # Archetype filter: payload$archetype_filter may be a character vector of
+  # archetype keys (e.g. c("aristocrats", "graveyard")). When empty or all
+  # archetypes are selected, no filter is applied. Strict mode drops groups
+  # that don't match any selected archetype; soft mode just penalises them.
+  archetype_filter <- character(0)
+  if (!is.null(payload$archetype_filter)) {
+    archetype_filter <- unique(query_synergy_to_vector(payload$archetype_filter))
+    archetype_filter <- archetype_filter[nzchar(archetype_filter)]
+  }
+  archetype_filter_strict <- query_api_parse_bool(payload$archetype_filter_strict, default = FALSE)
+
   registry <- query_synergy_event_registry_default()
   timings <- list()
   stage_start <- proc.time()[["elapsed"]]
@@ -555,6 +682,10 @@ query_synergy_find_in_catalog <- function(payload = list(),
     profile <- precomputed$profiles[[index]]
     candidate_id <- query_api_scalar(profile$id, default = "")
     if (!nzchar(candidate_id) || identical(candidate_id, target_normalized$id)) {
+      return(FALSE)
+    }
+
+    if (!query_synergy_card_legal_in_format(profile, format_name, allow_illegal)) {
       return(FALSE)
     }
 
@@ -795,6 +926,33 @@ query_synergy_find_in_catalog <- function(payload = list(),
   timings$explanation_generation_ms <- timings$explanation_assembly_ms
 
   package_pool <- lapply(utils::head(scored_positive, package_top_n), function(entry) entry$card)
+
+  # Bridge expansion: cards ranked just below the initial pool that score
+  # strongly with at least one pool member are added as group candidates.
+  # This surfaces multi-hop combos (seed -> pool_member -> bridge) that
+  # would be missed if we only look at direct seed scores.
+  expansion_bridge_n <- query_synergy_as_int(
+    payload$expansion_bridge_n,
+    default = 8L, min_value = 0L, max_value = 20L
+  )
+  if (expansion_bridge_n > 0L && length(scored_positive) > package_top_n) {
+    pool_ids <- vapply(package_pool, function(c) query_api_scalar(c$id, default = ""), character(1))
+    bridge_tier <- Filter(function(entry) {
+      cid <- query_api_scalar(entry$card$id, default = "")
+      nzchar(cid) && !(cid %in% pool_ids)
+    }, utils::head(scored_positive, package_top_n + expansion_bridge_n * 3L))
+    bridge_cards <- lapply(bridge_tier, function(entry) entry$card)
+    if (length(bridge_cards) > 0L) {
+      package_pool <- query_synergy_expand_group_pool(
+        initial_pool = package_pool,
+        bridge_candidates = bridge_cards,
+        registry = registry,
+        format_name = format_name,
+        expansion_cap = expansion_bridge_n
+      )
+    }
+  }
+
   stage_start <- proc.time()[["elapsed"]]
   query_synergy_runtime_metrics_set_stage("package_detection")
   query_synergy_runtime_metrics_add("package_candidates", length(package_pool))
@@ -810,6 +968,117 @@ query_synergy_find_in_catalog <- function(payload = list(),
     progress_range = c(88, 97)
   )
   timings$package_detection_ms <- query_synergy_elapsed_ms(stage_start)
+
+  # Group refinement: for each top group, try replacing the weakest non-seed
+  # member with a card drawn from the top-K neighborhood of one of the OTHER
+  # group members.  This surfaces cards that score weakly with the seed but
+  # strongly with a group peer — exactly the "bridge through B or C" pattern.
+  group_refine_iters <- query_synergy_as_int(
+    payload$group_refine_iterations,
+    default = 2L, min_value = 0L, max_value = 4L
+  )
+  group_refine_top_n <- query_synergy_as_int(
+    payload$group_refine_top_n,
+    default = 3L, min_value = 0L, max_value = 10L
+  )
+  if (group_refine_iters > 0L && group_refine_top_n > 0L && length(groups_out$groups) > 0L) {
+    stage_start <- proc.time()[["elapsed"]]
+    query_synergy_runtime_metrics_set_stage("group_refinement")
+    # Broader pool used for member-neighborhood lookup: top-100 direct
+    # synergies (configurable). Wider than package_pool so cards that score
+    # weakly with the seed but strongly with a peer can surface as bridges.
+    refine_broader_n <- query_synergy_as_int(
+      payload$group_refine_broader_n,
+      default = 100L, min_value = 20L, max_value = 500L
+    )
+    refine_broader_pool <- lapply(
+      utils::head(scored_positive, refine_broader_n),
+      function(entry) entry$card
+    )
+    refined_groups <- query_synergy_refine_groups(
+      groups = groups_out$groups,
+      seed = target_normalized,
+      broader_pool = refine_broader_pool,
+      format_name = format_name,
+      registry = registry,
+      max_iterations = group_refine_iters,
+      max_groups_to_refine = group_refine_top_n,
+      max_branching = group_branching_cap,
+      max_paths = max_group_paths
+    )
+    groups_out$groups <- refined_groups
+    groups_out$package_lines <- Filter(function(g) {
+      identical(query_api_scalar(g$bucket, default = ""), "package_lines")
+    }, refined_groups)
+    timings$group_refinement_ms <- query_synergy_elapsed_ms(stage_start)
+  } else {
+    timings$group_refinement_ms <- 0
+  }
+
+  # Archetype-based group reordering / filtering.
+  # AGENTS.md § 4: synergy must remain explainable. We expose the alignment
+  # score per group AND apply an ADDITIVE boost (not multiplicative) so a
+  # specialist group that happens not to match the requested archetype is
+  # not silently decimated. Strict mode is the explicit opt-in for hard
+  # filtering: it drops groups whose alignment falls below a small threshold.
+  if (length(archetype_filter) > 0L && length(groups_out$groups) > 0L) {
+    arch_cfg <- query_synergy_archetype_tuning()
+    aligned_groups <- lapply(groups_out$groups, function(g) {
+      alignment <- query_synergy_group_archetype_alignment(g$archetypes, archetype_filter)
+      g$archetype_alignment <- round(alignment, 3)
+      # Record the additive score modifier so the breakdown stays auditable.
+      boost <- as.integer(round(arch_cfg$max_boost * min(1, max(0, alignment))))
+      base <- if (!is.null(g$score_base)) as.integer(g$score_base) else
+        as.integer(round(suppressWarnings(as.numeric(g$total_score))))
+      if (is.null(g$score_base)) g$score_base <- base
+      modifiers <- if (is.list(g$score_modifiers)) g$score_modifiers else list()
+      modifiers$archetype <- list(
+        amount = boost,
+        alignment = round(alignment, 3),
+        archetypes = archetype_filter
+      )
+      g$score_modifiers <- modifiers
+      g$total_score <- min(100L, base + sum(vapply(modifiers,
+        function(m) as.integer(m$amount %||% 0L), integer(1))))
+      g
+    })
+    if (isTRUE(archetype_filter_strict)) {
+      aligned_groups <- Filter(function(g) {
+        suppressWarnings(as.numeric(g$archetype_alignment)) >= arch_cfg$strict_min_alignment
+      }, aligned_groups)
+    }
+    if (length(aligned_groups) > 0L) {
+      ord <- order(
+        vapply(aligned_groups, function(g) suppressWarnings(as.numeric(g$total_score)), numeric(1)),
+        decreasing = TRUE
+      )
+      aligned_groups <- aligned_groups[ord]
+    }
+    groups_out$groups <- aligned_groups
+    groups_out$package_lines <- Filter(function(g) {
+      identical(query_api_scalar(g$bucket, default = ""), "package_lines")
+    }, aligned_groups)
+  }
+
+  # Annotate groups with deck co-occurrence counts (Archidekt + Spellbook).
+  # We only need the top-N groups that will actually surface in the response.
+  cooc_limit <- min(max_groups, max_results)
+  if (length(groups_out$groups) > 0L) {
+    head_groups <- utils::head(groups_out$groups, cooc_limit)
+    tail_groups <- if (length(groups_out$groups) > cooc_limit) {
+      utils::tail(groups_out$groups, length(groups_out$groups) - cooc_limit)
+    } else {
+      list()
+    }
+    annotated_head <- query_synergy_cooccurrence_annotate_groups(head_groups)
+    # Apply Spellbook combo match bonus + attach match details.
+    annotated_head <- query_synergy_spellbook_annotate_groups(annotated_head)
+    groups_out$groups <- c(annotated_head, tail_groups)
+    groups_out$package_lines <- Filter(function(g) {
+      identical(query_api_scalar(g$bucket, default = ""), "package_lines")
+    }, groups_out$groups)
+  }
+
   packages <- query_synergy_to_list(groups_out$groups)
   synergy_groups <- query_synergy_to_list(groups_out$groups)
   package_lines <- query_synergy_to_list(groups_out$package_lines)

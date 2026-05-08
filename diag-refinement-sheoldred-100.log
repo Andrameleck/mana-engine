@@ -1,0 +1,160 @@
+================================================================================
+Diagnostic refinement trace
+  seed:           Sheoldred, the Apocalypse
+  max_iterations: 2
+  top_n_groups:   3
+  package_top_n:  12
+================================================================================
+
+[1] Loading catalog...
+    catalog size: 35561 cards (48.4s)
+
+[2] Resolving seed card...
+    resolved: Sheoldred, the Apocalypse (id=34f34409-326d-4994-a0ea-1a69aa278f03)
+    produced events: GAIN_LIFE, LOSE_LIFE, OPPONENT_LOSE_LIFE
+    consumed events: SELF_DRAW_CARD, DRAW_CARD, OPPONENT_DRAW_CARD
+
+[3] Running engine to get initial groups + broader pool...
+    engine done in 60.6s
+    initial groups detected: 10
+
+[3b] Building broader pool from best_matches (n=100)...
+    broader pool size: 100 normalized cards
+
+==============================================================================
+Group #1 (of 3 traced)
+==============================================================================
+    [BEFORE] score=68 | id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f|34f34409-326d-4994-a0ea-1a69aa278f03|b0394cf2-12a0-4d4f-87e0-fe8937e6faff|7d3b14c9-0a0a-479b-a7fe-a87ec708e74d
+        1. Well of Ideas                    [role=engine, id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f]
+        2. Sheoldred, the Apocalypse        [role=converter, id=34f34409-326d-4994-a0ea-1a69aa278f03]  (SEED)
+        3. Well of Lost Dreams              [role=amplifier, id=b0394cf2-12a0-4d4f-87e0-fe8937e6faff]
+        4. The Gunky Runner                 [role=payoff, id=7d3b14c9-0a0a-479b-a7fe-a87ec708e74d]
+        edges: (1ed24fc6→34f34409 s=85 c=0.89) (34f34409→b0394cf2 s=86 c=0.59) (b0394cf2→7d3b14c9 s=42 c=0.55)
+
+    --- iteration 1 ---
+    weakest member: The Gunky Runner (pos=4, mean_continuity=0.552)
+    anchors used for neighbor lookup: 1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f, b0394cf2-12a0-4d4f-87e0-fe8937e6faff
+        anchor=Well of Ideas top-8 neighbors:
+            Ethereal Investigator            (cheap_score=58.000)
+            Mind's Eye                       (cheap_score=57.000)
+            Loxodon Eavesdropper             (cheap_score=48.000)
+            Demonic Lore                     (cheap_score=36.000)
+            Scrounging Skyray                (cheap_score=35.000)
+            Mob Lookout                      (cheap_score=34.000)
+            Prowler, Clawed Thief            (cheap_score=34.000)
+            Satoru, the Infiltrator          (cheap_score=32.000)
+        anchor=Well of Lost Dreams top-8 neighbors:
+            Dennick, Pious Apprentice        (cheap_score=68.000)
+            The Archimandrite                (cheap_score=66.000)
+            Toxin Analysis                   (cheap_score=65.000)
+            Ethereal Investigator            (cheap_score=62.000)
+            Mind's Eye                       (cheap_score=60.000)
+            Oloro, Ageless Ascetic           (cheap_score=59.000)
+            Loxodon Eavesdropper             (cheap_score=59.000)
+            Professor Dellian Fel            (cheap_score=58.000)
+    OUTCOME: replaced 'The Gunky Runner' with 'The Archimandrite' (delta=+3.0 pts)
+
+    [AFTER iter 1] score=71 | id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f|34f34409-326d-4994-a0ea-1a69aa278f03|e5e8368d-43af-4f83-8565-25d03da64360|b0394cf2-12a0-4d4f-87e0-fe8937e6faff
+        1. Well of Ideas                    [role=engine, id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f]
+        2. Sheoldred, the Apocalypse        [role=converter, id=34f34409-326d-4994-a0ea-1a69aa278f03]  (SEED)
+        3. The Archimandrite                [role=amplifier, id=e5e8368d-43af-4f83-8565-25d03da64360]
+        4. Well of Lost Dreams              [role=payoff, id=b0394cf2-12a0-4d4f-87e0-fe8937e6faff]
+        edges: (1ed24fc6→34f34409 s=85 c=0.89) (34f34409→e5e8368d s=75 c=0.54) (e5e8368d→b0394cf2 s=80 c=0.65)
+
+    --- iteration 2 ---
+    weakest member: The Archimandrite (pos=3, mean_continuity=0.598)
+    anchors used for neighbor lookup: 1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f, b0394cf2-12a0-4d4f-87e0-fe8937e6faff
+        anchor=Well of Ideas top-8 neighbors:
+            Ethereal Investigator            (cheap_score=58.000)
+            Mind's Eye                       (cheap_score=57.000)
+            Loxodon Eavesdropper             (cheap_score=48.000)
+            Demonic Lore                     (cheap_score=36.000)
+            Scrounging Skyray                (cheap_score=35.000)
+            Mob Lookout                      (cheap_score=34.000)
+            Prowler, Clawed Thief            (cheap_score=34.000)
+            Satoru, the Infiltrator          (cheap_score=32.000)
+        anchor=Well of Lost Dreams top-8 neighbors:
+            Dennick, Pious Apprentice        (cheap_score=68.000)
+            Toxin Analysis                   (cheap_score=65.000)
+            Ethereal Investigator            (cheap_score=62.000)
+            Mind's Eye                       (cheap_score=60.000)
+            Oloro, Ageless Ascetic           (cheap_score=59.000)
+            Loxodon Eavesdropper             (cheap_score=59.000)
+            Professor Dellian Fel            (cheap_score=58.000)
+            Rabaroo Troop                    (cheap_score=55.000)
+    OUTCOME: replaced 'The Archimandrite' with 'Scrounging Skyray' (delta=+4.0 pts)
+
+    [AFTER iter 2] score=75 | id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f|3a46d85b-ce1a-4842-a342-92a5bddb1053|34f34409-326d-4994-a0ea-1a69aa278f03
+        1. Well of Ideas                    [role=engine, id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f]
+        2. Scrounging Skyray                [role=amplifier, id=3a46d85b-ce1a-4842-a342-92a5bddb1053]
+        3. Sheoldred, the Apocalypse        [role=payoff, id=34f34409-326d-4994-a0ea-1a69aa278f03]  (SEED)
+        edges: (1ed24fc6→3a46d85b s=53 c=0.68) (3a46d85b→34f34409 s=74 c=0.82)
+
+------------------------------------------------------------------------------
+    [FINAL] score=75 | id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f|3a46d85b-ce1a-4842-a342-92a5bddb1053|34f34409-326d-4994-a0ea-1a69aa278f03
+        1. Well of Ideas                    [role=engine, id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f]
+        2. Scrounging Skyray                [role=amplifier, id=3a46d85b-ce1a-4842-a342-92a5bddb1053]
+        3. Sheoldred, the Apocalypse        [role=payoff, id=34f34409-326d-4994-a0ea-1a69aa278f03]  (SEED)
+        edges: (1ed24fc6→3a46d85b s=53 c=0.68) (3a46d85b→34f34409 s=74 c=0.82)
+
+==============================================================================
+Group #2 (of 3 traced)
+==============================================================================
+    [BEFORE] score=67 | id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f|34f34409-326d-4994-a0ea-1a69aa278f03|7d3b14c9-0a0a-479b-a7fe-a87ec708e74d
+        1. Well of Ideas                    [role=engine, id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f]
+        2. Sheoldred, the Apocalypse        [role=converter, id=34f34409-326d-4994-a0ea-1a69aa278f03]  (SEED)
+        3. The Gunky Runner                 [role=payoff, id=7d3b14c9-0a0a-479b-a7fe-a87ec708e74d]
+        edges: (1ed24fc6→34f34409 s=85 c=0.89) (34f34409→7d3b14c9 s=84 c=0.65)
+
+    --- iteration 1 ---
+    weakest member: The Gunky Runner (pos=3, mean_continuity=0.645)
+    anchors used for neighbor lookup: 1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f
+        anchor=Well of Ideas top-8 neighbors:
+            Ethereal Investigator            (cheap_score=58.000)
+            Mind's Eye                       (cheap_score=57.000)
+            Loxodon Eavesdropper             (cheap_score=48.000)
+            Demonic Lore                     (cheap_score=36.000)
+            Scrounging Skyray                (cheap_score=35.000)
+            Mob Lookout                      (cheap_score=34.000)
+            Prowler, Clawed Thief            (cheap_score=34.000)
+            Satoru, the Infiltrator          (cheap_score=32.000)
+    OUTCOME: no improvement found; group unchanged.
+    [iter 1] no score improvement (old=67, new=67); stopping.
+------------------------------------------------------------------------------
+    [FINAL] score=67 | id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f|34f34409-326d-4994-a0ea-1a69aa278f03|7d3b14c9-0a0a-479b-a7fe-a87ec708e74d
+        1. Well of Ideas                    [role=engine, id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f]
+        2. Sheoldred, the Apocalypse        [role=converter, id=34f34409-326d-4994-a0ea-1a69aa278f03]  (SEED)
+        3. The Gunky Runner                 [role=payoff, id=7d3b14c9-0a0a-479b-a7fe-a87ec708e74d]
+        edges: (1ed24fc6→34f34409 s=85 c=0.89) (34f34409→7d3b14c9 s=84 c=0.65)
+
+==============================================================================
+Group #3 (of 3 traced)
+==============================================================================
+    [BEFORE] score=67 | id=3b9d587c-39d2-44a2-9802-e4217ed389c0|34f34409-326d-4994-a0ea-1a69aa278f03|7d3b14c9-0a0a-479b-a7fe-a87ec708e74d
+        1. Ludevic, Necro-Alchemist         [role=engine, id=3b9d587c-39d2-44a2-9802-e4217ed389c0]
+        2. Sheoldred, the Apocalypse        [role=converter, id=34f34409-326d-4994-a0ea-1a69aa278f03]  (SEED)
+        3. The Gunky Runner                 [role=payoff, id=7d3b14c9-0a0a-479b-a7fe-a87ec708e74d]
+        edges: (3b9d587c→34f34409 s=84 c=0.88) (34f34409→7d3b14c9 s=84 c=0.65)
+
+    --- iteration 1 ---
+    weakest member: The Gunky Runner (pos=3, mean_continuity=0.645)
+    anchors used for neighbor lookup: 3b9d587c-39d2-44a2-9802-e4217ed389c0
+        anchor=Ludevic, Necro-Alchemist top-8 neighbors:
+            Ethereal Investigator            (cheap_score=57.000)
+            Mind's Eye                       (cheap_score=57.000)
+            Loxodon Eavesdropper             (cheap_score=48.000)
+            Demonic Lore                     (cheap_score=36.000)
+            Scrounging Skyray                (cheap_score=35.000)
+            Mob Lookout                      (cheap_score=34.000)
+            Prowler, Clawed Thief            (cheap_score=34.000)
+            Satoru, the Infiltrator          (cheap_score=32.000)
+    OUTCOME: no improvement found; group unchanged.
+    [iter 1] no score improvement (old=67, new=67); stopping.
+------------------------------------------------------------------------------
+    [FINAL] score=67 | id=3b9d587c-39d2-44a2-9802-e4217ed389c0|34f34409-326d-4994-a0ea-1a69aa278f03|7d3b14c9-0a0a-479b-a7fe-a87ec708e74d
+        1. Ludevic, Necro-Alchemist         [role=engine, id=3b9d587c-39d2-44a2-9802-e4217ed389c0]
+        2. Sheoldred, the Apocalypse        [role=converter, id=34f34409-326d-4994-a0ea-1a69aa278f03]  (SEED)
+        3. The Gunky Runner                 [role=payoff, id=7d3b14c9-0a0a-479b-a7fe-a87ec708e74d]
+        edges: (3b9d587c→34f34409 s=84 c=0.88) (34f34409→7d3b14c9 s=84 c=0.65)
+
+Done.

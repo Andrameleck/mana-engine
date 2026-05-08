@@ -1110,6 +1110,15 @@ body {
   padding: 0;
 }
 
+.strategy-mana-toggle.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.strategy-mana-toggle.is-disabled input[type="checkbox"] {
+  pointer-events: none;
+}
+
 .strategy-mana-icon {
   width: 16px;
   height: 16px;
@@ -1528,6 +1537,61 @@ body {
   background: rgba(93, 56, 12, 0.42);
 }
 
+/* Role badges */
+.strategy-card-badge.is-role-engine {
+  color: #ffd6a0;
+  border-color: rgba(255, 165, 50, 0.5);
+  background: rgba(90, 45, 0, 0.45);
+}
+
+.strategy-card-badge.is-role-payoff {
+  color: #ffa8c0;
+  border-color: rgba(230, 80, 120, 0.5);
+  background: rgba(80, 10, 30, 0.45);
+}
+
+.strategy-card-badge.is-role-setup {
+  color: #b8e4ff;
+  border-color: rgba(80, 170, 240, 0.5);
+  background: rgba(10, 45, 80, 0.45);
+}
+
+.strategy-card-badge.is-role-amplifier {
+  color: #e0c6ff;
+  border-color: rgba(170, 100, 255, 0.5);
+  background: rgba(40, 10, 80, 0.45);
+}
+
+.strategy-card-badge.is-role-converter {
+  color: #c6f4e0;
+  border-color: rgba(60, 200, 140, 0.5);
+  background: rgba(5, 55, 35, 0.45);
+}
+
+.strategy-card-badge.is-role-producer {
+  color: #fff4a8;
+  border-color: rgba(230, 210, 50, 0.5);
+  background: rgba(60, 50, 0, 0.45);
+}
+
+.strategy-card-badge.is-role-bridge {
+  color: #d0e8ff;
+  border-color: rgba(120, 170, 255, 0.4);
+  background: rgba(22, 45, 86, 0.42);
+}
+
+.strategy-card-badge.is-role-finisher {
+  color: #ffb8b8;
+  border-color: rgba(255, 80, 80, 0.5);
+  background: rgba(80, 10, 10, 0.45);
+}
+
+.strategy-card-badge.is-role-target {
+  color: #ffb8b8;
+  border-color: rgba(255, 80, 80, 0.5);
+  background: rgba(80, 10, 10, 0.45);
+}
+
 .strategy-card-mana {
   margin: 0;
   min-height: 18px;
@@ -1626,6 +1690,377 @@ body {
   color: var(--muted);
   line-height: 1.35;
   min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.strategy-combo-chain {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #d8e7fb;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.strategy-combo-score {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #cff8dd;
+  background: rgba(21, 65, 36, 0.55);
+  border: 1px solid rgba(102, 217, 132, 0.42);
+  flex-shrink: 0;
+}
+
+.strategy-combo-details {
+  border: 1px solid rgba(120, 140, 170, 0.18);
+  border-radius: 7px;
+  padding: 6px 8px;
+  background: rgba(12, 18, 28, 0.4);
+}
+
+.strategy-combo-details summary {
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  color: #a8c4e8;
+  list-style: none;
+  user-select: none;
+}
+
+.strategy-combo-details summary::before {
+  content: '▶ ';
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+.strategy-combo-details[open] summary::before {
+  content: '▼ ';
+}
+
+.strategy-combo-details[open] {
+  display: grid;
+  gap: 8px;
+}
+
+.strategy-combo-edge {
+  display: grid;
+  gap: 4px;
+  padding: 6px 0 6px 8px;
+  border-left: 2px solid rgba(120, 170, 255, 0.3);
+}
+
+.strategy-combo-edge-pair {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #d8e7fb;
+}
+
+.strategy-combo-edge-events {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.strategy-combo-event-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #ffe8c0;
+  background: rgba(93, 56, 12, 0.5);
+  border: 1px solid rgba(255, 191, 94, 0.4);
+}
+
+.strategy-archetype-filter {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  grid-column: 1 / -1;
+}
+
+.strategy-archetype-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.strategy-archetype-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.strategy-archetype-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.strategy-archetype-actions button {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.strategy-archetype-strict-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.strategy-archetype-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.strategy-archetype-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #cfd6e4;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.strategy-archetype-chip:hover {
+  background: rgba(120, 168, 255, 0.12);
+  border-color: rgba(120, 168, 255, 0.4);
+}
+
+.strategy-archetype-chip.is-selected {
+  background: rgba(120, 168, 255, 0.28);
+  border-color: rgba(120, 168, 255, 0.7);
+  color: #f0f4ff;
+}
+
+.strategy-archetype-hint {
+  margin: 0;
+  font-size: 11px;
+}
+
+.strategy-score-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 6px;
+  align-items: center;
+}
+
+.strategy-score-base {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #cfd6e4;
+  background: rgba(120, 130, 150, 0.18);
+  border: 1px solid rgba(120, 130, 150, 0.4);
+}
+
+.strategy-score-mod {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.strategy-score-mod.is-positive {
+  color: #c8f0c8;
+  background: rgba(80, 170, 90, 0.18);
+  border: 1px solid rgba(80, 170, 90, 0.45);
+}
+
+.strategy-score-mod.is-negative {
+  color: #f0c8c8;
+  background: rgba(200, 80, 80, 0.18);
+  border: 1px solid rgba(200, 80, 80, 0.45);
+}
+
+.strategy-score-mod.mod-spellbook {
+  color: #ffe2a8;
+  background: rgba(220, 170, 60, 0.22);
+  border-color: rgba(255, 200, 90, 0.5);
+}
+
+.strategy-group-archetypes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 6px;
+}
+
+.strategy-archetype-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #d8e0ff;
+  background: rgba(98, 126, 209, 0.22);
+  border: 1px solid rgba(98, 126, 209, 0.45);
+}
+
+.strategy-archetype-tag.is-alignment {
+  color: #ffe8c0;
+  background: rgba(190, 132, 60, 0.22);
+  border-color: rgba(255, 191, 94, 0.5);
+}
+
+.strategy-group-cooccurrence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 2px 0 6px;
+}
+
+.strategy-cooc-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #d6f0d6;
+  background: rgba(60, 140, 80, 0.22);
+  border: 1px solid rgba(110, 200, 130, 0.5);
+}
+
+.strategy-cooc-tag.is-zero {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Spellbook combo block */
+.strategy-spellbook-block {
+  display: grid;
+  gap: 5px;
+  margin: 4px 0 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(220, 150, 30, 0.08);
+  border: 1px solid rgba(255, 190, 60, 0.35);
+}
+
+.strategy-spellbook-header {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ffe080;
+  margin-bottom: 2px;
+}
+
+.strategy-spellbook-match {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.strategy-spellbook-title {
+  font-weight: 600;
+  color: #f5e8c0;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.strategy-spellbook-produces {
+  color: var(--muted);
+  font-size: 10px;
+  flex-basis: 100%;
+  padding-left: 2px;
+}
+
+.strategy-spellbook-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.strategy-spellbook-badge.is-exact {
+  color: #fff0a0;
+  background: rgba(210, 160, 0, 0.35);
+  border: 1px solid rgba(255, 210, 60, 0.6);
+}
+
+.strategy-spellbook-badge.is-contains {
+  color: #d6f0d6;
+  background: rgba(60, 140, 80, 0.3);
+  border: 1px solid rgba(110, 200, 130, 0.5);
+}
+
+.strategy-spellbook-badge.is-partial {
+  color: #cdd6f0;
+  background: rgba(90, 110, 200, 0.22);
+  border: 1px solid rgba(130, 160, 230, 0.4);
+}
+
+
+.strategy-combo-edge-reason {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.strategy-combo-oracle-block {
+  display: grid;
+  gap: 4px;
+  margin-top: 2px;
+  padding: 5px 7px;
+  border-radius: 5px;
+  background: rgba(10, 16, 26, 0.45);
+  border: 1px solid rgba(120, 140, 170, 0.12);
+}
+
+.strategy-combo-oracle {
+  margin: 0;
+  font-size: 10px;
+  color: rgba(180, 200, 230, 0.7);
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 

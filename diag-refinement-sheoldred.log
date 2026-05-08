@@ -1,0 +1,114 @@
+================================================================================
+Diagnostic refinement trace
+  seed:           Sheoldred, the Apocalypse
+  max_iterations: 2
+  top_n_groups:   3
+  package_top_n:  12
+================================================================================
+
+[1] Loading catalog...
+    catalog size: 35561 cards (48.8s)
+
+[2] Resolving seed card...
+    resolved: Sheoldred, the Apocalypse (id=34f34409-326d-4994-a0ea-1a69aa278f03)
+    produced events: GAIN_LIFE, LOSE_LIFE, OPPONENT_LOSE_LIFE
+    consumed events: SELF_DRAW_CARD, DRAW_CARD, OPPONENT_DRAW_CARD
+
+[3] Running engine to get initial groups + broader pool...
+    engine done in 56.9s
+    initial groups detected: 10
+
+[3b] Building broader pool from best_matches (n=60)...
+    broader pool size: 60 normalized cards
+
+==============================================================================
+Group #1 (of 3 traced)
+==============================================================================
+    [BEFORE] score=72 | id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f|3d747c43-a09b-4209-b042-2b89156612d8|34f34409-326d-4994-a0ea-1a69aa278f03
+        1. Well of Ideas                    [role=engine, id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f]
+        2. Vile Manifestation               [role=amplifier, id=3d747c43-a09b-4209-b042-2b89156612d8]
+        3. Sheoldred, the Apocalypse        [role=payoff, id=34f34409-326d-4994-a0ea-1a69aa278f03]  (SEED)
+        edges: (1ed24fc6→3d747c43 s=43 c=0.57) (3d747c43→34f34409 s=77 c=0.84)
+
+    --- iteration 1 ---
+    weakest member: Well of Ideas (pos=1, mean_continuity=0.573)
+    anchors used for neighbor lookup: 3d747c43-a09b-4209-b042-2b89156612d8
+        anchor=Vile Manifestation top-8 neighbors:
+            Scrounging Skyray                (cheap_score=47.000)
+            Ethereal Investigator            (cheap_score=47.000)
+            Mob Lookout                      (cheap_score=47.000)
+            Spectral Snatcher                (cheap_score=41.000)
+            Robber Fly                       (cheap_score=37.000)
+            Demonic Lore                     (cheap_score=35.000)
+            Refurbished Familiar             (cheap_score=32.000)
+            Ancient Excavation               (cheap_score=31.000)
+    OUTCOME: no improvement found; group unchanged.
+    [iter 1] no score improvement (old=72, new=72); stopping.
+------------------------------------------------------------------------------
+    [FINAL] score=72 | id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f|3d747c43-a09b-4209-b042-2b89156612d8|34f34409-326d-4994-a0ea-1a69aa278f03
+        1. Well of Ideas                    [role=engine, id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f]
+        2. Vile Manifestation               [role=amplifier, id=3d747c43-a09b-4209-b042-2b89156612d8]
+        3. Sheoldred, the Apocalypse        [role=payoff, id=34f34409-326d-4994-a0ea-1a69aa278f03]  (SEED)
+        edges: (1ed24fc6→3d747c43 s=43 c=0.57) (3d747c43→34f34409 s=77 c=0.84)
+
+==============================================================================
+Group #2 (of 3 traced)
+==============================================================================
+    [BEFORE] score=71 | id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f|25012c1f-c069-43d7-b930-a3a5a7eb1389|34f34409-326d-4994-a0ea-1a69aa278f03
+        1. Well of Ideas                    [role=engine, id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f]
+        2. Dismantling Wave                 [role=amplifier, id=25012c1f-c069-43d7-b930-a3a5a7eb1389]
+        3. Sheoldred, the Apocalypse        [role=payoff, id=34f34409-326d-4994-a0ea-1a69aa278f03]  (SEED)
+        edges: (1ed24fc6→25012c1f s=43 c=0.57) (25012c1f→34f34409 s=76 c=0.85)
+
+    --- iteration 1 ---
+    weakest member: Well of Ideas (pos=1, mean_continuity=0.572)
+    anchors used for neighbor lookup: 25012c1f-c069-43d7-b930-a3a5a7eb1389
+        anchor=Dismantling Wave top-8 neighbors:
+            Scrounging Skyray                (cheap_score=46.000)
+            Ethereal Investigator            (cheap_score=46.000)
+            Mob Lookout                      (cheap_score=44.000)
+            Spectral Snatcher                (cheap_score=34.000)
+            Demonic Lore                     (cheap_score=32.000)
+            Robber Fly                       (cheap_score=32.000)
+            Vile Manifestation               (cheap_score=30.000)
+            Webstrike Elite                  (cheap_score=30.000)
+    OUTCOME: no improvement found; group unchanged.
+    [iter 1] no score improvement (old=71, new=71); stopping.
+------------------------------------------------------------------------------
+    [FINAL] score=71 | id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f|25012c1f-c069-43d7-b930-a3a5a7eb1389|34f34409-326d-4994-a0ea-1a69aa278f03
+        1. Well of Ideas                    [role=engine, id=1ed24fc6-b1d5-47f8-a1d1-3243372e0c9f]
+        2. Dismantling Wave                 [role=amplifier, id=25012c1f-c069-43d7-b930-a3a5a7eb1389]
+        3. Sheoldred, the Apocalypse        [role=payoff, id=34f34409-326d-4994-a0ea-1a69aa278f03]  (SEED)
+        edges: (1ed24fc6→25012c1f s=43 c=0.57) (25012c1f→34f34409 s=76 c=0.85)
+
+==============================================================================
+Group #3 (of 3 traced)
+==============================================================================
+    [BEFORE] score=71 | id=b0394cf2-12a0-4d4f-87e0-fe8937e6faff|3d747c43-a09b-4209-b042-2b89156612d8|34f34409-326d-4994-a0ea-1a69aa278f03
+        1. Well of Lost Dreams              [role=engine, id=b0394cf2-12a0-4d4f-87e0-fe8937e6faff]
+        2. Vile Manifestation               [role=amplifier, id=3d747c43-a09b-4209-b042-2b89156612d8]
+        3. Sheoldred, the Apocalypse        [role=payoff, id=34f34409-326d-4994-a0ea-1a69aa278f03]  (SEED)
+        edges: (b0394cf2→3d747c43 s=42 c=0.55) (3d747c43→34f34409 s=77 c=0.84)
+
+    --- iteration 1 ---
+    weakest member: Well of Lost Dreams (pos=1, mean_continuity=0.551)
+    anchors used for neighbor lookup: 3d747c43-a09b-4209-b042-2b89156612d8
+        anchor=Vile Manifestation top-8 neighbors:
+            Scrounging Skyray                (cheap_score=47.000)
+            Ethereal Investigator            (cheap_score=47.000)
+            Mob Lookout                      (cheap_score=47.000)
+            Spectral Snatcher                (cheap_score=41.000)
+            Robber Fly                       (cheap_score=37.000)
+            Demonic Lore                     (cheap_score=35.000)
+            Refurbished Familiar             (cheap_score=32.000)
+            Ancient Excavation               (cheap_score=31.000)
+    OUTCOME: no improvement found; group unchanged.
+    [iter 1] no score improvement (old=71, new=71); stopping.
+------------------------------------------------------------------------------
+    [FINAL] score=71 | id=b0394cf2-12a0-4d4f-87e0-fe8937e6faff|3d747c43-a09b-4209-b042-2b89156612d8|34f34409-326d-4994-a0ea-1a69aa278f03
+        1. Well of Lost Dreams              [role=engine, id=b0394cf2-12a0-4d4f-87e0-fe8937e6faff]
+        2. Vile Manifestation               [role=amplifier, id=3d747c43-a09b-4209-b042-2b89156612d8]
+        3. Sheoldred, the Apocalypse        [role=payoff, id=34f34409-326d-4994-a0ea-1a69aa278f03]  (SEED)
+        edges: (b0394cf2→3d747c43 s=42 c=0.55) (3d747c43→34f34409 s=77 c=0.84)
+
+Done.
