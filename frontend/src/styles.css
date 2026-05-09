@@ -7284,7 +7284,7 @@ label.strategy-mana-filter {
    Adds a warm amber glow to panels/cards to distinguish from the rail
    ====================================================================== */
 
-/* Panels / cards get a very subtle warm tint vs flat dark rail */
+/* Workspace relief theme */
 .workspace .lab-sidebar-inner {
   background: rgba(30, 22, 12, 0.90) !important;
   border-color: rgba(201, 169, 97, 0.16) !important;
@@ -7304,3 +7304,230 @@ label.strategy-mana-filter {
 .app-rail {
   border-right-color: rgba(201, 169, 97, 0.22) !important;
 }
+
+/* ======================================================================
+   CREDITS PAGE — Mosaic layout
+   ====================================================================== */
+
+.tab-view.page--credits.is-active { display: block; }
+
+.credits-mosaic {
+  display: grid;
+  grid-template-columns: minmax(160px, 200px) repeat(2, minmax(0, 1fr)) minmax(200px, 260px);
+  grid-auto-rows: auto;
+  gap: 12px;
+  align-items: stretch;
+}
+
+/* ── Cards base ── */
+.credits-card {
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+.credits-card--brand {
+  align-items: center;
+  text-align: center;
+}
+.credits-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  opacity: 0.4;
+}
+
+/* ── Card typography ── */
+.credits-card-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gold-soft);
+}
+.credits-card-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-strong);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.credits-card-subtitle {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.01em;
+}
+.credits-card-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+.credits-card-body em { color: var(--gold); font-style: italic; }
+.credits-card-disclaimer {
+  margin: 0;
+  font-size: 11px;
+  color: rgba(201, 169, 97, 0.7);
+}
+.credits-card-disclaimer strong { color: var(--gold); }
+
+/* ── Tag list (engine features) ── */
+.credits-tag-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.credits-tag-list li {
+  background: rgba(201, 169, 97, 0.10);
+  border: 1px solid rgba(201, 169, 97, 0.22);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--gold-soft);
+  padding: 3px 9px;
+}
+
+/* ── Reference list (data sources / stack / links) ── */
+.credits-ref-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.credits-ref-link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-decoration: none;
+}
+.credits-ref-link:hover .credits-ref-name { color: var(--gold); }
+.credits-ref-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+  transition: color 150ms;
+}
+.credits-ref-desc {
+  font-size: 11px;
+  color: var(--muted-soft);
+  line-height: 1.45;
+}
+
+/* ── Brand card ── */
+.credits-logo {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  align-self: center;
+  border-radius: 50%;
+  border: none;
+  filter: drop-shadow(0 2px 8px rgba(201, 169, 97, 0.25));
+}
+.credits-brand-name {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+}
+.credits-brand-sub {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted-soft);
+}
+.credits-brand-tagline {
+  margin-top: 4px;
+  font-style: italic;
+  font-size: 12px;
+}
+.credits-brand-author {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+  letter-spacing: 0.03em;
+}
+.credits-brand-license {
+  font-size: 10px;
+  color: var(--gold);
+  text-decoration: none;
+  opacity: 0.75;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.credits-brand-license:hover { opacity: 1; text-decoration: underline; }
+
+/* ── Mosaic grid placement (4-col × 2-row) ── */
+.credits-card--brand  { grid-column: 1;     grid-row: 1; }
+.credits-card--main   { grid-column: 2 / 4; grid-row: 1; }
+.credits-card--engine { grid-column: 4;     grid-row: 1; }
+.credits-card--links  { grid-column: 1;     grid-row: 2; }
+.credits-card--data   { grid-column: 2 / 4; grid-row: 2; }
+.credits-card--stack  { grid-column: 4;     grid-row: 2; }
+
+/* ── Responsive ── */
+@media (max-width: 1100px) {
+  .credits-mosaic {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .credits-card--brand,
+  .credits-card--main,
+  .credits-card--engine,
+  .credits-card--data,
+  .credits-card--stack,
+  .credits-card--links {
+    grid-column: auto;
+    grid-row: auto;
+  }
+}
+@media (max-width: 600px) {
+  .credits-mosaic { grid-template-columns: 1fr; }
+}
+
+/* ── WIP disclaimer banner ── */
+.credits-wip-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  border: 1px solid rgba(201, 169, 97, 0.3);
+  border-left: 3px solid var(--gold);
+  border-radius: 8px;
+  background: rgba(201, 169, 97, 0.05);
+}
+.credits-wip-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  color: var(--gold);
+  opacity: 0.8;
+  line-height: 1.6;
+}
+.credits-wip-banner p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+.credits-wip-banner strong { color: rgba(201, 169, 97, 0.9); }

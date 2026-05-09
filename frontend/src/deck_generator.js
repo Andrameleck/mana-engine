@@ -6,16 +6,46 @@
 // section and respond to the "Générer" button.
 
 import { fetchSynergyDeckGenerate, listStoredCollections } from "./api.js";
+import { getCollectionLanguage } from "./ui.js";
 
-const ROLE_LABELS = {
-  land: "Terrains",
-  ramp: "Ramp",
-  card_draw: "Pioche",
-  removal: "Réponses",
-  threat: "Menaces",
-  core: "Cœur synergique",
-  filler: "Divers"
+// Minimal translation helper for this module
+const GEN_TEXT = {
+  en: {
+    role_land: "Lands",
+    role_ramp: "Ramp",
+    role_card_draw: "Card draw",
+    role_removal: "Removal",
+    role_threat: "Threats",
+    role_core: "Synergy core",
+    role_filler: "Other",
+    no_collection: "No collection loaded",
+    import_hint: "Import a collection in the Collections tab.",
+    cards_count: "cards",
+    copied: "Copied \u2713",
+    copy: "Copy",
+    error: "Error"
+  },
+  fr: {
+    role_land: "Terrains",
+    role_ramp: "Ramp",
+    role_card_draw: "Pioche",
+    role_removal: "R\u00e9ponses",
+    role_threat: "Menaces",
+    role_core: "C\u0153ur synergique",
+    role_filler: "Divers",
+    no_collection: "Aucune collection charg\u00e9e",
+    import_hint: "Importez une collection dans l'onglet Collections.",
+    cards_count: "cartes",
+    copied: "Copi\u00e9 \u2713",
+    copy: "Copier",
+    error: "Erreur"
+  }
 };
+
+function tGen(key) {
+  const lang = getCollectionLanguage() === "fr" ? "fr" : "en";
+  return GEN_TEXT[lang]?.[key] ?? GEN_TEXT.en?.[key] ?? key;
+}
 
 const ROLE_ORDER = ["land", "ramp", "card_draw", "removal", "threat", "core", "filler"];
 
@@ -90,14 +120,14 @@ async function ensureCollections() {
     if (state.collections.length === 0) {
       const opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = "Aucune collection chargée";
+      opt.textContent = tGen("no_collection");
       sel.appendChild(opt);
-      if (status) status.textContent = "Importe une collection dans l'onglet Collection.";
+      if (status) status.textContent = tGen("import_hint");
     } else {
       state.collections.forEach((c) => {
         const opt = document.createElement("option");
         opt.value = c.id || "";
-        opt.textContent = `${c.name || c.id} (${c.row_count ?? "?"} cartes)`;
+        opt.textContent = `${c.name || c.id} (${c.row_count ?? "?"} ${tGen("cards_count")})`;
         sel.appendChild(opt);
       });
       if (status) status.textContent = "";
@@ -185,7 +215,7 @@ function renderRoleSection(role, cards) {
     .join("");
   return `<section class="deck-gen-section">
     <header class="deck-gen-section-head">
-      <span class="deck-gen-section-title">${escapeHtml(ROLE_LABELS[role] || role)}</span>
+      <span class="deck-gen-section-title">${escapeHtml(tGen("role_" + role) || role)}</span>
       <span class="deck-gen-section-count">${cards.length}</span>
     </header>
     <ul class="deck-gen-card-list">${items}</ul>
@@ -223,7 +253,7 @@ function renderRoleCounts(role_counts, role_target) {
       const cls = off ? "deck-gen-role-row deck-gen-role-row--off" : "deck-gen-role-row";
       const tgt = (target != null) ? `<span class="deck-gen-role-target">/ ${target}</span>` : "";
       return `<li class="${cls}">
-        <span class="deck-gen-role-label">${escapeHtml(ROLE_LABELS[r] || r)}</span>
+        <span class="deck-gen-role-label">${escapeHtml(tGen("role_" + r) || r)}</span>
         <span class="deck-gen-role-actual">${actual}</span>
         ${tgt}
       </li>`;
@@ -396,14 +426,14 @@ async function copyDeckToClipboard(deck, ctx, btn) {
     }
     if (btn) {
       const prev = btn.textContent;
-      btn.textContent = "Copié ✓";
+      btn.textContent = tGen("copied");
       btn.classList.add("is-success");
       setTimeout(() => { btn.textContent = prev; btn.classList.remove("is-success"); }, 1500);
     }
   } catch (err) {
     if (btn) {
-      btn.textContent = "Erreur";
-      setTimeout(() => { btn.textContent = "Copier"; }, 1500);
+      btn.textContent = tGen("error");
+      setTimeout(() => { btn.textContent = tGen("copy"); }, 1500);
     }
   }
 }

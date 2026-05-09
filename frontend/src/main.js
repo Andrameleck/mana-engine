@@ -26,12 +26,12 @@ import {
       tabs_collections: "Collections",
       tabs_decks: "Decks",
       tabs_strategy: "Synergy Lab",
-      tabs_generator: "Generator",
+      tabs_generator: "Decks Lab",
       tabs_spellbook: "Spellbook",
       subtitle_collections: "Organise your cards into searchable folders.",
       subtitle_decks: "Import, browse and analyse any deck list.",
       subtitle_strategy: "Find mechanical synergies, combos and packages around any card.",
-      subtitle_generator: "Build complete deck lists from format, colour identity and archetype.",
+      subtitle_generator: "Build complete decks from format, color identity and archetypes.",
       subtitle_spellbook: "Explore infinite combos via Commander Spellbook.",
       pick_csv: "Choose CSV",
       pick_deck_file: "Choose deck file",
@@ -82,18 +82,87 @@ import {
       decks_list: "Deck list",
       source_meta_waiting: "Select a collection folder to enable computation.",
       create_folder: "Create folder",
-      add_deck: "Add deck"
+      add_deck: "Add deck",
+      // ── Extended UI text ──
+      import_collection_title: "Import collection",
+      import_collection_sub: "CSV from Manabox, Archidekt, Moxfield\u2026",
+      folders_section_title: "Folders",
+      all_collections_meta: "All collections",
+      import_deck_sub: "Paste or upload a .txt / .dec file.",
+      decks_section_meta: "Imported decks",
+      filter_seed_card: "Seed card",
+      filter_format: "Format",
+      format_none_option: "None (no filter)",
+      allow_out_of_format: "Off-format",
+      filter_colors: "Colors",
+      filter_archetypes_label: "Archetypes",
+      archetype_targeted_label: "Targeted archetypes",
+      archetype_all: "All",
+      archetype_none: "None",
+      archetype_filter_hint: "No selection = no filter. Strict mode = ignore groups outside archetype.",
+      filter_depth: "Depth",
+      filter_advanced: "Advanced",
+      meta_direct_synergies: "Cards that pair directly with the seed",
+      meta_card_groups: "Mechanical packages and combo clusters",
+      preview_card_header: "Card preview",
+      gen_build_deck: "Build a deck",
+      gen_build_deck_sub: "Pick your shell, then generate variants",
+      gen_format_commander: "Format \u0026 commander",
+      gen_random_option: "\uD83C\uDFB2 Random",
+      gen_color_identity: "Color identity",
+      gen_archetypes_step: "Archetypes",
+      gen_archetype_targeted: "Targeted archetypes",
+      gen_archetype_deck_hint: "Pick one or more archetypes to steer the deck.",
+      gen_card_pool: "Card pool",
+      gen_use_collection: "Use only my collection",
+      gen_generate_btn: "Generate decks",
+      gen_status_hint: "Pick your options then click Generate.",
+      gen_no_collection: "No collection loaded",
+      gen_import_collection_hint: "Import a collection in the Collections tab.",
+      gen_cards_count: "cards",
+      deck_stats_title_label: "Statistics",
+      deck_stats_waiting_text: "Select a deck to display statistics.",
+      card_preview_default_title: "Card",
+      // ── Credits ──
+      tabs_credits: "Credits",
+      subtitle_credits: "About this project, data sources, tech stack and references.",
+      credits_about_eyebrow: "About",
+      credits_about_body: "A Magic: The Gathering deckbuilding API built around a generalized, explainable, mechanics-first synergy engine. It identifies which cards work together \u2014 and <em>why</em> \u2014 by modelling cards through their normalized mechanical behaviour: what events they produce, reward, consume, replace or prevent.",
+      credits_about_body2: "The engine supports direct synergies, group / package detection, role-aware bidirectional scoring, anti-synergy modelling, and integration with public combo databases. Results always include human-readable explanations, not just numeric scores.",
+      credits_disclaimer: "<strong>Status:</strong> active development \u2014 APIs and output schemas may change.",
+      credits_engine_eyebrow: "Synergy engine",
+      credits_engine_title: "Mechanics-first",
+      credits_engine_body: "Cards are represented through normalized structures \u2014 produces, rewards, requires, replaces, prevents, amplifies \u2014 mapped from Oracle text and keyword expansion. Synergy scoring is role-aware and bidirectional: each card\u2019s role (engine, payoff, fuel, tool, protection\u2026) is inferred from the pair, not from which card was the input.",
+      credits_data_eyebrow: "Data sources",
+      credits_ref_scryfall: "Card data, Oracle text, images, autocomplete & localization API",
+      credits_ref_spellbook: "Public combo database \u2014 infinite combos & synergy clusters",
+      credits_ref_mtgjson: "Comprehensive machine-readable card and set data",
+      credits_ref_lotus: "French MTG community deck lists \u2014 cross-validation signal (beta)",
+      credits_ref_collections: "Collection CSV export sources supported for import",
+      credits_stack_eyebrow: "Tech stack",
+      credits_ref_r: "Core language \u2014 synergy engine, API logic, data pipelines",
+      credits_ref_plumber: "HTTP API framework for R \u2014 routes, middleware, serialization",
+      credits_ref_vite: "Frontend build tool \u2014 bundles the SPA served at /ui/",
+      credits_ref_sqlite: "Persistent storage for collections, deck lists and synergy cache",
+      credits_links_eyebrow: "Links",
+      credits_link_github: "Source code, issues, contribution guide",
+      credits_link_apidocs: "Interactive Swagger / Redoc endpoint reference",
+      credits_link_agents: "Design principles & contribution rules for the synergy engine",
+      credits_brand_tagline: "Mechanics-first synergy engine for deckbuilders.",
+      credits_author: "Florian Ricquier",
+      credits_license: "GNU AGPL v3",
+      credits_wip_notice: "<strong>Work in progress.</strong> Synergy scoring is still under active development and far from perfect — results can be inconsistent, incomplete, or wrong. The mechanical ontology, scoring weights, and role-inference logic are all subject to significant change. Use results as a starting point, not a ground truth."
     },
     fr: {
       tabs_collections: "Collections",
       tabs_decks: "Decks",
       tabs_strategy: "Synergy Lab",
-      tabs_generator: "Générateur",
+      tabs_generator: "Decks Lab",
       tabs_spellbook: "Spellbook",
       subtitle_collections: "Organisez vos cartes en dossiers consultables.",
       subtitle_decks: "Importez, parcourez et analysez vos listes de decks.",
-      subtitle_strategy: "Découvrez les synergies mécaniques, combos et packages autour de n'importe quelle carte.",
-      subtitle_generator: "Construisez des decks complets à partir d'un format, d'une identité de couleur et d'un archétype.",
+      subtitle_strategy: "D\u00e9couvrez les synergies m\u00e9caniques, combos et packages autour de n'importe quelle carte.",
+      subtitle_generator: "Construisez des decks complets \u00e0 partir d'un format, de couleurs et d'arch\u00e9types.",
       subtitle_spellbook: "Explorez les combos infinis via Commander Spellbook.",
       pick_csv: "Choisir CSV",
       pick_deck_file: "Choisir un fichier deck",
@@ -143,8 +212,77 @@ import {
       import_deck: "Import deck",
       decks_list: "Decks list",
       source_meta_waiting: "Selectionne un dossier collection pour activer le calcul.",
-      create_folder: "Creer le dossier",
-      add_deck: "Ajouter le deck"
+      create_folder: "Cr\u00e9er le dossier",
+      add_deck: "Ajouter le deck",
+      // ── Texte UI \u00e9tendu ──
+      import_collection_title: "Importer une collection",
+      import_collection_sub: "CSV depuis Manabox, Archidekt, Moxfield\u2026",
+      folders_section_title: "Dossiers",
+      all_collections_meta: "Toutes les collections",
+      import_deck_sub: "Collez ou importez un fichier .txt / .dec.",
+      decks_section_meta: "Decks import\u00e9s",
+      filter_seed_card: "Carte seed",
+      filter_format: "Format",
+      format_none_option: "Aucun (pas de filtre)",
+      allow_out_of_format: "Hors format",
+      filter_colors: "Couleurs",
+      filter_archetypes_label: "Arch\u00e9types",
+      archetype_targeted_label: "Arch\u00e9types cibl\u00e9s",
+      archetype_all: "Tout",
+      archetype_none: "Aucun",
+      archetype_filter_hint: "Aucune s\u00e9lection = pas de filtre. Mode strict = ignore les groupes hors arch\u00e9type.",
+      filter_depth: "Profondeur",
+      filter_advanced: "Avanc\u00e9",
+      meta_direct_synergies: "Cartes en synergie directe avec la seed",
+      meta_card_groups: "Packages m\u00e9caniques et clusters de combos",
+      preview_card_header: "Aper\u00e7u de la carte",
+      gen_build_deck: "Construire un deck",
+      gen_build_deck_sub: "Choisissez votre base, puis g\u00e9n\u00e9rez des variantes",
+      gen_format_commander: "Format \u0026 commandant",
+      gen_random_option: "\uD83C\uDFB2 Al\u00e9atoire",
+      gen_color_identity: "Identit\u00e9 de couleur",
+      gen_archetypes_step: "Arch\u00e9types",
+      gen_archetype_targeted: "Arch\u00e9types cibl\u00e9s",
+      gen_archetype_deck_hint: "Choisissez un ou plusieurs arch\u00e9types pour orienter le deck.",
+      gen_card_pool: "Cartes disponibles",
+      gen_use_collection: "Utiliser uniquement ma collection",
+      gen_generate_btn: "G\u00e9n\u00e9rer les decks",
+      gen_status_hint: "Choisissez vos options puis cliquez sur G\u00e9n\u00e9rer.",
+      gen_no_collection: "Aucune collection charg\u00e9e",
+      gen_import_collection_hint: "Importez une collection dans l'onglet Collections.",
+      gen_cards_count: "cartes",
+      deck_stats_title_label: "Statistiques",
+      deck_stats_waiting_text: "S\u00e9lectionnez un deck pour afficher ses statistiques.",
+      card_preview_default_title: "Carte",
+      // ── Credits ──
+      tabs_credits: "Cr\u00e9dits",
+      subtitle_credits: "\u00c0 propos du projet, sources de donn\u00e9es, stack technique et r\u00e9f\u00e9rences.",
+      credits_about_eyebrow: "\u00c0 propos",
+      credits_about_body: "Une API de construction de decks Magic: The Gathering construite autour d'un moteur de synergies g\u00e9n\u00e9ralis\u00e9, explicable et centr\u00e9 sur les m\u00e9caniques. Il identifie quelles cartes fonctionnent ensemble \u2014 et <em>pourquoi</em> \u2014 en mod\u00e9lisant les cartes par leur comportement m\u00e9canique normalis\u00e9\u00a0: les \u00e9v\u00e9nements qu'elles produisent, r\u00e9compensent, consomment, remplacent ou emp\u00eachent.",
+      credits_about_body2: "Le moteur supporte les synergies directes, la d\u00e9tection de groupes / packages, le scoring bidirectionnel et orient\u00e9 r\u00f4les, la mod\u00e9lisation des anti-synergies et l'int\u00e9gration avec des bases de donn\u00e9es de combos publiques. Les r\u00e9sultats incluent toujours des explications lisibles, pas seulement des scores.",
+      credits_disclaimer: "<strong>Statut\u00a0:</strong> en d\u00e9veloppement actif \u2014 les APIs et sch\u00e9mas de sortie peuvent \u00e9voluer.",
+      credits_engine_eyebrow: "Moteur de synergies",
+      credits_engine_title: "M\u00e9caniques d'abord",
+      credits_engine_body: "Les cartes sont repr\u00e9sent\u00e9es via des structures normalis\u00e9es \u2014 produit, r\u00e9compense, requiert, remplace, emp\u00eache, amplifie \u2014 extraites du texte Oracle et des mots-cl\u00e9s \u00e9tendus. Le scoring est orient\u00e9 r\u00f4les et bidirectionnel\u00a0: le r\u00f4le de chaque carte (moteur, payoff, carburant, outil, protection\u2026) est inf\u00e9r\u00e9 depuis la paire, pas depuis l'ordre d'entr\u00e9e.",
+      credits_data_eyebrow: "Sources de donn\u00e9es",
+      credits_ref_scryfall: "Donn\u00e9es de cartes, texte Oracle, images, autocompl\u00e9tion & API de localisation",
+      credits_ref_spellbook: "Base de combos publique \u2014 combos infinis & clusters de synergies",
+      credits_ref_mtgjson: "Donn\u00e9es compl\u00e8tes sur les cartes et sets en format lisible par machine",
+      credits_ref_lotus: "Listes de decks de la communaut\u00e9 MTG fran\u00e7aise \u2014 signal de validation crois\u00e9e (b\u00eata)",
+      credits_ref_collections: "Sources d'export CSV de collections support\u00e9es pour l'import",
+      credits_stack_eyebrow: "Stack technique",
+      credits_ref_r: "Langage principal \u2014 moteur de synergies, logique API, pipelines de donn\u00e9es",
+      credits_ref_plumber: "Framework API HTTP pour R \u2014 routes, middleware, s\u00e9rialisation",
+      credits_ref_vite: "Outil de build frontend \u2014 compile le SPA servi depuis /ui/",
+      credits_ref_sqlite: "Stockage persistant pour les collections, listes de decks et cache de synergies",
+      credits_links_eyebrow: "Liens",
+      credits_link_github: "Code source, issues, guide de contribution",
+      credits_link_apidocs: "R\u00e9f\u00e9rence interactive des endpoints Swagger / Redoc",
+      credits_link_agents: "Principes de conception & r\u00e8gles de contribution pour le moteur de synergies",
+      credits_brand_tagline: "Moteur de synergies m\u00e9caniques pour les constructeurs de decks.",
+      credits_author: "Florian Ricquier",
+      credits_license: "GNU AGPL v3",
+      credits_wip_notice: "<strong>Travail en cours.</strong> Le calcul de synergies est encore en d\u00e9veloppement actif et loin d'\u00eatre parfait\u00a0\u2014 les r\u00e9sultats peuvent \u00eatre incoh\u00e9rents, incomplets ou erron\u00e9s. L'ontologie m\u00e9canique, les poids de scoring et la logique d'inf\u00e9rence des r\u00f4les sont tous susceptibles d'\u00e9voluer significativement. Utilisez les r\u00e9sultats comme point de d\u00e9part, pas comme v\u00e9rit\u00e9 absolue."
     }
   };
 
@@ -174,6 +312,10 @@ import {
       generator: {
         title: t("tabs_generator"),
         subtitle: t("subtitle_generator")
+      },
+      credits: {
+        title: t("tabs_credits"),
+        subtitle: t("subtitle_credits")
       },
       spellbook: {
         title: t("tabs_spellbook"),
@@ -442,6 +584,8 @@ import {
       collections: t("tabs_collections"),
       decks: t("tabs_decks"),
       strategy: t("tabs_strategy"),
+      generator: t("tabs_generator"),
+      credits: t("tabs_credits"),
       spellbook: t("tabs_spellbook")
     };
     nodes.tabButtons.forEach((button) => {
@@ -449,6 +593,11 @@ import {
       const label = tabLabels[tabId] || tabLabels.collections;
       button.setAttribute("aria-label", label);
       button.setAttribute("title", label);
+      // Update visible rail label
+      const labelNode = button.querySelector(".rail-tab-label, .side-tab-label");
+      if (labelNode) {
+        labelNode.textContent = label;
+      }
       const hidden = button.querySelector(".visually-hidden");
       if (hidden) {
         hidden.textContent = label;
@@ -468,11 +617,24 @@ import {
       }
     };
 
-    setText("#tab-collections .panel-head h3", t("new_collection_folder"));
-    setText("#tab-collections .panel.panel-compact:nth-of-type(2) .panel-head h3", t("collections_folders"));
-    setText("#tab-decks .panel-head h3", t("import_deck"));
-    setText("#tab-decks .deck-list-panel .panel-head h3", t("decks_list"));
-    setText("#tab-strategy .panel-head h3", "Synergy Finder");
+    // Apply data-i18n attributes (generic static text)
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
+      el.textContent = t(el.dataset.i18n);
+    });
+    document.querySelectorAll("[data-i18n-html]").forEach((el) => {
+      el.innerHTML = t(el.dataset.i18nHtml);
+    });
+    document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+      el.placeholder = t(el.dataset.i18nPlaceholder);
+    });
+
+    // Select option translations
+    const fmtNoneOpt = document.querySelector('#strategy-format option[value="none"]');
+    if (fmtNoneOpt) fmtNoneOpt.textContent = t("format_none_option");
+    const genRandOpt = document.querySelector('#deck-gen-format option[value="random"]');
+    if (genRandOpt) genRandOpt.textContent = t("gen_random_option");
+
+    // ID-targeted overrides
     setText("#tab-strategy #strategy-status", t("strategy_waiting"));
     setText("#strategy-seed-label", t("strategy_seed_label"));
     setText("#strategy-direct-limit-label", t("strategy_direct_limit_label"));
@@ -480,14 +642,12 @@ import {
     setText("#strategy-force-recompute-hint", t("strategy_force_recompute_hint"));
     setText("#strategy-only-collection-hint", t("strategy_only_collection_hint"));
     setText("#strategy-mana-filter-label", t("strategy_mana_filter_label"));
-    setText("#tab-strategy .strategy-result-block:nth-of-type(1) .strategy-result-head h4", t("direct_synergies"));
-    setText("#tab-strategy .strategy-result-block:nth-of-type(2) .strategy-result-head h4", t("card_groups"));
-    setText("#tab-spellbook .panel-head h3", "Commander Spellbook Lookup");
     setText("#spellbook-run-btn", t("spellbook_search"));
     setText("#strategy-run-btn", t("compute"));
     setText("#strategy-source-meta", t("source_meta_waiting"));
     setText("#strategy-card-preview-text", t("strategy_preview_hint"));
     setText("#spellbook-status", t("spellbook_hint"));
+    setText("#deck-stats-panel .panel-head h3", t("deck_stats_title_label"));
 
     setPlaceholder("#strategy-seed-input", "Entomb");
     setPlaceholder("#spellbook-card-input", "Entomb");
@@ -495,6 +655,17 @@ import {
     const tableSummary = document.getElementById("load-summary");
     if (tableSummary && (!tableSummary.textContent || tableSummary.textContent === "No data loaded." || tableSummary.textContent === "Aucune donnee chargee.")) {
       tableSummary.textContent = t("table_no_data");
+    }
+
+    const deckStatsContent = document.getElementById("deck-stats-content");
+    if (deckStatsContent) {
+      const cur = deckStatsContent.textContent.trim();
+      const isDefault = cur === "Selectionne un deck pour afficher ses statistiques."
+        || cur === "Select a deck to display statistics."
+        || cur === t("deck_stats_waiting_text");
+      if (!cur || isDefault) {
+        deckStatsContent.textContent = t("deck_stats_waiting_text");
+      }
     }
   }
 
@@ -721,6 +892,7 @@ import {
     nodes.tabViews.forEach((view) => {
       view.classList.toggle("is-active", view.id === `tab-${tabId}`);
     });
+    nodes.workspaceLower.classList.toggle("is-hidden", tabId === "credits");
 
     const meta = tabMetaFor(tabId);
     nodes.workspaceTitle.textContent = meta.title;
@@ -1102,6 +1274,12 @@ import {
       setWorkspaceLowerHidden(true);
       renderDeckStatsPanel(null);
       renderSpellbookPanel();
+      return;
+    }
+
+    if (state.activeTab === "credits") {
+      setWorkspaceLowerHidden(true);
+      renderDeckStatsPanel(null);
       return;
     }
 
@@ -2757,7 +2935,9 @@ import {
     }
 
     if (!rawSeed) {
-      strategyNodes.status.textContent = "Saisis une carte seed (ex: Entomb).";
+      strategyNodes.status.textContent = currentUiLanguage() === "fr"
+        ? "Saisis une carte seed (ex: Entomb)."
+        : "Enter a seed card (ex: Entomb).";
       return;
     }
 
@@ -2770,22 +2950,30 @@ import {
     const strategyLanguage = normalizeStrategyLanguage(getCollectionLanguage());
     let seedCard = resolveSeedCard(rawSeed, model.cards);
     if (!seedCard && includeKnown) {
-      strategyNodes.status.textContent = `Recherche de la seed "${rawSeed}" via Scryfall...`;
+      strategyNodes.status.textContent = currentUiLanguage() === "fr"
+        ? `Recherche de "${rawSeed}" via Scryfall…`
+        : `Looking up "${rawSeed}" via Scryfall…`;
       seedCard = await resolveStrategySeedFromScryfall(rawSeed, strategyLanguage);
       if (runToken !== state.strategy.runToken) {
         return;
       }
     }
     if (!seedCard) {
-      strategyNodes.status.textContent = includeKnown
-        ? `Carte "${rawSeed}" introuvable (collection et Scryfall).`
-        : `Carte "${rawSeed}" introuvable dans la collection.`;
+      strategyNodes.status.textContent = currentUiLanguage() === "fr"
+        ? (includeKnown
+          ? `"${rawSeed}" introuvable (collection et Scryfall).`
+          : `"${rawSeed}" introuvable dans la collection.`)
+        : (includeKnown
+          ? `"${rawSeed}" not found (collection and Scryfall).`
+          : `"${rawSeed}" not found in the collection.`);
       return;
     }
 
     let activeModel = model;
     if (includeKnown) {
-      strategyNodes.status.textContent = `Recherche Scryfall en cours pour ${seedCard.name}...`;
+      strategyNodes.status.textContent = currentUiLanguage() === "fr"
+        ? `Recherche Scryfall pour ${seedCard.name}…`
+        : `Fetching Scryfall data for ${seedCard.name}…`;
       const knownModel = await getKnownCardsStrategyModel(seedCard, strategyLanguage).catch(() => ({ cards: [] }));
       if (runToken !== state.strategy.runToken) {
         return;

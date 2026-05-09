@@ -319,7 +319,7 @@ async function fetchSynergyDeckGenerate(payload = {}) {
   return apiRequest(API_ENDPOINTS.synergyDeckGenerate, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload || {}),
+    body: JSON.stringify({ ...(payload || {}), client_id: getClientId() }),
     fallback: {
       ok: false,
       decks: [],
