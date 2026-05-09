@@ -54,3 +54,4 @@ inst/extdata/*/*.rds
 # Local/generated Scryfall databases
 inst/collection/library_scryfall.sqlite
 inst/collection/library_scryfall.sqlite-*
+inst/collection/library_scryfall.sqlite.bak
