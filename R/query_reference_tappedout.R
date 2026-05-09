@@ -10,7 +10,7 @@
 #
 # No session cookie required.
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+# \u2500\u2500 helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 tappedout_empty_cards_df <- function() {
   data.frame(
@@ -144,7 +144,7 @@ tappedout_parse_csv_export <- function(text, deck_slug = "", deck_url = "") {
   )
 }
 
-# ── public functions ──────────────────────────────────────────────────────────
+# \u2500\u2500 public functions \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 #' Fetch a TappedOut deck by its URL slug (no auth required)
 #'
@@ -263,7 +263,7 @@ query_tappedout_download_decks_sqlite <- function(db_path,
       }
       inserted <- inserted + 1L
       if (isTRUE(verbose)) {
-        cat(sprintf("  [%d/%d] %s — %d cards\n", i, n_total, slug, nrow(result$cards)))
+        cat(sprintf("  [%d/%d] %s -- %d cards\n", i, n_total, slug, nrow(result$cards)))
       }
     }, error = function(e) {
       errors <<- errors + 1L
@@ -272,7 +272,7 @@ query_tappedout_download_decks_sqlite <- function(db_path,
   }
 
   if (isTRUE(verbose)) {
-    cat(sprintf("Done — inserted=%d skipped=%d errors=%d\n", inserted, skipped, errors))
+    cat(sprintf("Done -- inserted=%d skipped=%d errors=%d\n", inserted, skipped, errors))
   }
   list(ok = TRUE, source = "tappedout", db_path = target_path,
        inserted = inserted, skipped = skipped, errors = errors)

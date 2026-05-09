@@ -382,7 +382,7 @@
       basic_card <- list(
         id = paste0("basic::", tolower(basic_name)),
         name = basic_name,
-        type_line = paste("Basic Land", "—", sub("s$", "", basic_name)),
+        type_line = paste("Basic Land", "--", sub("s$", "", basic_name)),
         cmc = 0,
         score = 0,
         roles = c("land", "basic_land"),
@@ -493,7 +493,7 @@
 .deck_pick_core <- function(seed, scored_candidates, registry,
                             archetype_filter = character(0),
                             core_size = 8L) {
-  # Score each candidate as: pair score with seed × archetype fit.
+  # Score each candidate as: pair score with seed x archetype fit.
   # We require non-trivial mechanical content: at least one produced or
   # consumed event so that the picked card actually drives a game plan.
   if (length(scored_candidates) == 0L) return(integer(0))
@@ -1050,7 +1050,7 @@ query_synergy_deck_generate <- function(req = NULL) {
       ok                = TRUE,
       randomized        = TRUE,
       format            = format_name,
-      format_label      = if (format_is_free) "Aléatoire" else format_spec$label,
+      format_label      = if (format_is_free) "Al\u00e9atoire" else format_spec$label,
       requires_commander = any(vapply(rand_decks, function(d) isTRUE(d$requires_commander), logical(1))),
       using_collection  = using_collection,
       collection_id     = if (using_collection) collection_id else NULL,

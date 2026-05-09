@@ -16,7 +16,7 @@
 # The functions below are stubs that return a clear error rather than
 # silently failing.
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+# \u2500\u2500 helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 MOXFIELD_BLOCKED_MSG <- paste(
   "Moxfield API is protected by Cloudflare and cannot be accessed",
@@ -40,7 +40,7 @@ moxfield_empty_cards_df <- function() {
   )
 }
 
-# ── public functions ──────────────────────────────────────────────────────────
+# \u2500\u2500 public functions \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 #' Fetch a Moxfield deck by its public hash ID
 #'
@@ -289,7 +289,7 @@ query_moxfield_download_decks_sqlite <- function(db_path,
   }
 
   if (isTRUE(verbose)) {
-    message(sprintf("Moxfield done — inserted=%d  skipped=%d  errors=%d",
+    message(sprintf("Moxfield done -- inserted=%d  skipped=%d  errors=%d",
                     inserted, skipped, errors))
   }
 

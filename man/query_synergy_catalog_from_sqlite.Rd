@@ -26,6 +26,9 @@ the rows pulled (for example \code{"lang = 'en'"}).}
 
 \item{source_label}{Logical source name attached as \code{synergy_source} on the
 returned list. Defaults to \code{"sqlite_cards"}.}
+
+\item{dedupe_by_name}{Logical. If \code{TRUE} (default), keep only the first row
+per card name when the table contains duplicates.}
 }
 \value{
 A list of card records on success, or a \code{query_api_error} payload

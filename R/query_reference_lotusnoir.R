@@ -534,7 +534,7 @@ query_lotusnoir_parse_deck_page <- function(html,
 
   author <- ""
   created_date <- ""
-  created_match <- regexec("Créé par\\s+(.+?)\\s+le\\s+([0-9]{1,2}\\s+[^ ]+\\s+[0-9]{4})", plain_text, perl = TRUE)
+  created_match <- regexec("Cr\u00e9\u00e9 par\\s+(.+?)\\s+le\\s+([0-9]{1,2}\\s+[^ ]+\\s+[0-9]{4})", plain_text, perl = TRUE)
   created_groups <- regmatches(plain_text, created_match)[[1]]
   if (length(created_groups) >= 3L) {
     author <- trimws(created_groups[[2]])
@@ -545,17 +545,17 @@ query_lotusnoir_parse_deck_page <- function(html,
   category_match <- regexec("Categorie\\s*:\\s*(.+?)\\s+Format de Tournoi\\s*:", plain_text, perl = TRUE)
   category_groups <- regmatches(plain_text, category_match)[[1]]
   if (length(category_groups) >= 2L) {
-    category <- trimws(gsub("\\s*•\\s*$", "", category_groups[[2]]))
+    category <- trimws(gsub("\\s*\u2022\\s*$", "", category_groups[[2]]))
   }
 
   format_name <- ""
-  format_match <- regexec("Format de Tournoi\\s*:\\s*(.+?)\\s+Balise à copier", plain_text, perl = TRUE)
+  format_match <- regexec("Format de Tournoi\\s*:\\s*(.+?)\\s+Balise \u00e0 copier", plain_text, perl = TRUE)
   format_groups <- regmatches(plain_text, format_match)[[1]]
   if (length(format_groups) >= 2L) {
-    format_name <- trimws(gsub("\\s*•\\s*$", "", format_groups[[2]]))
+    format_name <- trimws(gsub("\\s*\u2022\\s*$", "", format_groups[[2]]))
   }
 
-  deck_legal <- grepl("Ce deck est légal", plain_text, fixed = TRUE)
+  deck_legal <- grepl("Ce deck est l\u00e9gal", plain_text, fixed = TRUE)
   list_start <- match("Liste", plain_lines)
   list_end <- if (!is.na(list_start)) {
     candidate_ends <- which(plain_lines %in% c("Retour aux Decks", "Description"))

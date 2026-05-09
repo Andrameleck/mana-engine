@@ -23,6 +23,8 @@
 #' @param limit Optional integer row cap.
 #' @param source_label Logical source name attached as `synergy_source` on the
 #'   returned list. Defaults to `"sqlite_cards"`.
+#' @param dedupe_by_name Logical. If `TRUE` (default), keep only the first row
+#'   per card name when the table contains duplicates.
 #' @return A list of card records on success, or a `query_api_error` payload
 #'   when dependencies/files are missing.
 #' @export

@@ -4,8 +4,8 @@
 # No authentication required for public decks.
 #
 # API endpoint:
-#   GET https://archidekt.com/api/decks/{id}/       — full deck with cards
-#   GET https://archidekt.com/api/decks/{id}/small/ — metadata only (faster)
+#   GET https://archidekt.com/api/decks/{id}/       -- full deck with cards
+#   GET https://archidekt.com/api/decks/{id}/small/ -- metadata only (faster)
 #
 # deckFormat codes (not exhaustive):
 #   1 = Standard, 2 = Modern, 3 = Commander / EDH, 4 = Legacy
@@ -16,7 +16,7 @@
 # Deck IDs are sequential integers starting at 1. Upper bound is currently
 # in the low-8-million range (as of 2026).
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+# \u2500\u2500 helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 archidekt_fetch_json <- function(url) {
   if (!requireNamespace("jsonlite", quietly = TRUE)) {
@@ -76,7 +76,7 @@ archidekt_empty_cards_df <- function() {
   )
 }
 
-# ── public functions ──────────────────────────────────────────────────────────
+# \u2500\u2500 public functions \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 #' Fetch metadata for an Archidekt deck (no cards)
 #'
@@ -346,7 +346,7 @@ query_archidekt_download_decks_sqlite <- function(db_path,
   }
 
   if (isTRUE(verbose)) {
-    message(sprintf("Archidekt done — inserted=%d  skipped=%d  errors=%d",
+    message(sprintf("Archidekt done -- inserted=%d  skipped=%d  errors=%d",
                     inserted, skipped, errors))
   }
 

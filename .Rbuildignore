@@ -15,3 +15,12 @@
 ^docker-compose\.yml$
 ^\.dockerignore$
 ^\.gitattributes$
+^frontend/node_modules
+^\.\.Rcheck$
+^\.Renviron$
+^\.gitignore$
+^\.gitattributes$
+^test_refac\.md$
+^diag-.*\.txt$
+^scripts/
+^dev/
