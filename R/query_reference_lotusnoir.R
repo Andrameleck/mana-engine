@@ -249,6 +249,20 @@ query_lotusnoir_default_index_urls <- function() {
   paste0(base, actions)
 }
 
+#' Discover Deck URLs from LotusNoir Index Pages
+#'
+#' Crawls LotusNoir index pages to collect all deck page URLs.
+#'
+#' @param index_urls Character vector of index page URLs to crawl.
+#'   Defaults to the standard LotusNoir index pages.
+#' @param request_delay Numeric. Seconds to wait between HTTP requests
+#'   (default `0`).
+#' @param verbose Logical. Print progress messages (default `FALSE`).
+#'
+#' @return A list with `ok` (logical), `urls` (character vector of discovered
+#'   deck URLs), and `failed` (character vector of URLs that could not be read).
+#'
+#' @export
 query_lotusnoir_discover_deck_urls <- function(index_urls = NULL,
                                                request_delay = 0,
                                                verbose = FALSE) {
@@ -655,6 +669,17 @@ query_lotusnoir_parse_deck_page <- function(html,
   )
 }
 
+#' Fetch and Parse a LotusNoir Deck
+#'
+#' Downloads a deck page from LotusNoir, extracts its card list and metadata.
+#'
+#' @param deck_url Character scalar. Full URL of the deck page.
+#'
+#' @return A list with `ok` (logical), `deck_did` (character identifier),
+#'   `cards` (data.frame with columns `name`, `quantity`, `section`),
+#'   and `url` (the original URL).
+#'
+#' @export
 query_lotusnoir_fetch_deck <- function(deck_url) {
   target <- query_api_scalar(deck_url, default = "")
   if (!nzchar(target)) {
@@ -1195,6 +1220,31 @@ query_lotusnoir_probe_neighbor_dids <- function(con,
   )
 }
 
+#' Download LotusNoir Decks to SQLite
+#'
+#' Crawls LotusNoir deck pages and stores card data in a local SQLite database.
+#' Can be run incrementally: existing decks are skipped unless
+#' `overwrite_existing = TRUE`.
+#'
+#' @param db_path Character scalar. Path to the SQLite database file.
+#'   Created if it does not exist.
+#' @param max_decks Integer. Maximum number of decks to download (default `100`).
+#' @param request_delay Numeric. Seconds to wait between HTTP requests
+#'   (default `5`).
+#' @param refresh_urls Logical. If `TRUE`, clears cached URLs before
+#'   re-discovering them (default `FALSE`).
+#' @param probe_radius Integer. Extra index pages to probe beyond the default
+#'   set (default `0`).
+#' @param probe_max_dids Integer. Cap on additional deck IDs to probe
+#'   (default `0`).
+#' @param overwrite_existing Logical. Re-download decks already in the database
+#'   (default `FALSE`).
+#' @param verbose Logical. Print progress messages (default `TRUE`).
+#'
+#' @return A list with `ok` (logical), `n_downloaded` (integer),
+#'   `n_skipped` (integer), and `db_path` (character).
+#'
+#' @export
 query_lotusnoir_download_decks_sqlite <- function(db_path = "",
                                                   max_decks = 100L,
                                                   request_delay = 5,
@@ -1347,6 +1397,25 @@ query_lotusnoir_download_decks_sqlite <- function(db_path = "",
   )
 }
 
+#' Card Co-occurrence Statistics from the LotusNoir Database
+#'
+#' Queries the local LotusNoir SQLite database for decks containing a given
+#' seed card and returns co-occurrence frequency statistics for the top
+#' companion cards.
+#'
+#' @param card_name Character scalar. Name of the seed card.
+#' @param db_path Character scalar. Path to the LotusNoir SQLite database.
+#'   Uses the default path if empty.
+#' @param format_name Character scalar. Filter decks by format name
+#'   (empty string = no filter).
+#' @param top_n Integer. Number of top companion cards to return (default `25`).
+#' @param deck_limit Integer. Maximum number of decks to sample (default `20`).
+#'
+#' @return A list with `ok` (logical), `seed` (character), `decks_sampled`
+#'   (integer), and `stats` (data.frame with columns `name`, `count`,
+#'   `frequency`).
+#'
+#' @export
 query_lotusnoir_card_stats <- function(card_name,
                                        db_path = "",
                                        format_name = "",
@@ -1487,6 +1556,26 @@ query_lotusnoir_card_stats <- function(card_name,
   )
 }
 
+#' Download LotusNoir Decks to CSV
+#'
+#' Crawls LotusNoir deck pages and appends card rows to a CSV file.
+#' Suitable for a lightweight export without SQLite.
+#'
+#' @param output_csv Character scalar. Path to the output CSV file.
+#' @param deck_urls Character vector. Specific deck URLs to download.
+#'   If empty, URLs are discovered from `index_urls`.
+#' @param index_urls Character vector. Index page URLs used for discovery
+#'   when `deck_urls` is empty. Defaults to standard LotusNoir index pages.
+#' @param max_decks Integer. Maximum number of decks to download (default `100`).
+#' @param request_delay Numeric. Seconds to wait between HTTP requests
+#'   (default `20`).
+#' @param append Logical. Append to existing CSV file (default `TRUE`).
+#' @param verbose Logical. Print progress messages (default `TRUE`).
+#'
+#' @return A list with `ok` (logical), `n_downloaded` (integer),
+#'   `n_skipped` (integer), and `output_csv` (character).
+#'
+#' @export
 query_lotusnoir_download_decks_csv <- function(output_csv,
                                                deck_urls = NULL,
                                                index_urls = NULL,

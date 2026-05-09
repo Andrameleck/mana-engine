@@ -1,10 +1,10 @@
-#' Clamp Numeric Values to [0, 1]
+#' Clamp Numeric Values to \[0, 1\]
 #'
-#' Clamp numeric values to the inclusive range [0, 1].
+#' Clamp numeric values to the inclusive range \[0, 1\].
 #'
 #' @param x Numeric vector.
 #'
-#' @return Numeric vector with all values clamped to [0, 1].
+#' @return Numeric vector with all values clamped to \[0, 1\].
 #'
 #' @examples
 #' stopifnot(identical(clamp01(c(-1, 0.4, 3)), c(0, 0.4, 1)))
@@ -23,7 +23,7 @@ clamp01 <- function(x) {
 #' @param a Named numeric vector.
 #' @param b Named numeric vector.
 #'
-#' @return Numeric scalar in [0, 1].
+#' @return Numeric scalar in \[0, 1\].
 #'
 #' @examples
 #' a <- c(sac = 1, etb = 0.5)
@@ -243,7 +243,7 @@ top_k_neighbors <- function(
 #' @param cards List of cards.
 #' @param depth_N Propagation depth (>= 1).
 #' @param top_k Top-k neighbors per parent and frontier cap per level.
-#' @param gamma Depth damping factor in [0, 1].
+#' @param gamma Depth damping factor in \[0, 1\].
 #' @param options List of options:
 #' `enforce_color_identity`, `unique_nodes`, `max_candidates`.
 #'

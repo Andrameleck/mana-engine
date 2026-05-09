@@ -1,6 +1,6 @@
 #' Find synergies for a card by name
 #'
-#' Convenience wrapper around [query_synergy_find_in_catalog()] that loads the
+#' Convenience wrapper around `query_synergy_find_in_catalog()` that loads the
 #' default catalog (sqlite-backed) on first call, runs the synergy pipeline for
 #' the requested seed card, and returns the result as tidy data.frames suitable
 #' for inspection in the R console or further processing.
@@ -15,7 +15,7 @@
 #' @param cheap_scan_cap Integer. Cheap pre-filter cap forwarded to the engine
 #'   (default `1500`).
 #' @param cards Optional pre-loaded catalog (list of normalized cards). When
-#'   `NULL` (default) the function calls [query_synergy_get_catalog()].
+#'   `NULL` (default) the function calls `query_synergy_get_catalog()`.
 #'
 #' @return A list with the following entries:
 #'   \describe{

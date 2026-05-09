@@ -22,7 +22,7 @@ propagate_scores(
 
 \item{top_k}{Top-k neighbors per parent and frontier cap per level.}
 
-\item{gamma}{Depth damping factor in \link{0, 1}.}
+\item{gamma}{Depth damping factor in [0, 1].}
 
 \item{options}{List of options:
 \code{enforce_color_identity}, \code{unique_nodes}, \code{max_candidates}.}

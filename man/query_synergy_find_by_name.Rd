@@ -31,7 +31,7 @@ query_synergy_find_by_name(
 (default \code{1500}).}
 
 \item{cards}{Optional pre-loaded catalog (list of normalized cards). When
-\code{NULL} (default) the function calls \code{\link[=query_synergy_get_catalog]{query_synergy_get_catalog()}}.}
+\code{NULL} (default) the function calls \code{query_synergy_get_catalog()}.}
 }
 \value{
 A list with the following entries:
@@ -49,7 +49,7 @@ A list with the following entries:
 On error returns \verb{list(ok = FALSE, error = <message>)}.
 }
 \description{
-Convenience wrapper around \code{\link[=query_synergy_find_in_catalog]{query_synergy_find_in_catalog()}} that loads the
+Convenience wrapper around \code{query_synergy_find_in_catalog()} that loads the
 default catalog (sqlite-backed) on first call, runs the synergy pipeline for
 the requested seed card, and returns the result as tidy data.frames suitable
 for inspection in the R console or further processing.

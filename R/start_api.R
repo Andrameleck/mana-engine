@@ -1,3 +1,19 @@
+#' Start the mtgcodex.api Plumber Server
+#'
+#' Starts the Plumber HTTP API server. The API exposes endpoints for
+#' collection management, synergy scoring, deck generation, and a
+#' browser-based UI served at `/ui/`.
+#'
+#' @param host Character scalar. IP address to bind to (default `"0.0.0.0"`).
+#' @param port Integer. TCP port to listen on (default `8000`).
+#' @param swagger Logical. Enable Swagger UI (default `TRUE`).
+#' @param hide_ui_from_swagger Logical. Hide `/ui/` routes from Swagger
+#'   to reduce noise (default `TRUE`).
+#' @param ... Additional arguments passed to `plumber::pr_run()`.
+#'
+#' @return Invisible `NULL`. Called for side effects.
+#'
+#' @export
 start_api <- function(
     host = "0.0.0.0",
     port = 8000L,

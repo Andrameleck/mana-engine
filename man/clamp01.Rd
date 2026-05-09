@@ -2,7 +2,7 @@
 % Please edit documentation in R/bridge_synergy.R
 \name{clamp01}
 \alias{clamp01}
-\title{Clamp Numeric Values to \link{0, 1}}
+\title{Clamp Numeric Values to [0, 1]}
 \usage{
 clamp01(x)
 }
@@ -10,10 +10,10 @@ clamp01(x)
 \item{x}{Numeric vector.}
 }
 \value{
-Numeric vector with all values clamped to \link{0, 1}.
+Numeric vector with all values clamped to [0, 1].
 }
 \description{
-Clamp numeric values to the inclusive range \link{0, 1}.
+Clamp numeric values to the inclusive range [0, 1].
 }
 \examples{
 stopifnot(identical(clamp01(c(-1, 0.4, 3)), c(0, 0.4, 1)))

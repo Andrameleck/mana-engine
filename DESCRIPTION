@@ -1,16 +1,18 @@
 Package: mtgcodex.api
 Type: Package
-Title: MTG Codex Toolkit
+Title: Magic: The Gathering Synergy Engine and Deckbuilding API
 Version: 0.0.0.9000
-Authors@R: 
-    person("Florian", "Ricquier", email = "florian.ricquier@example.com", role = c("aut", "cre"))
-Description: Lightweight API and web interface to load and display MTG
-    collections from SQLite, CSV, or text files. The package exposes a
-    Plumber service plus a simple browser UI focused on ingestion and
-    tabular preview.
+Authors@R: person("Florian", "Ricquier", email = "florian.ricquier@mtgcodex.dev", role = c("aut", "cre"))
+Author: Florian Ricquier [aut, cre]
+Maintainer: Florian Ricquier <florian.ricquier@mtgcodex.dev>
+Description: A mechanics-first synergy engine and Plumber API for Magic: The
+    Gathering deckbuilding. Models cards through normalized mechanical
+    behaviour (produces, rewards, requires, replaces, prevents, amplifies)
+    to identify synergies, score pairs bidirectionally, detect packages and
+    combos, and generate decks. Includes a browser-based UI served at /ui/.
 License: AGPL (>= 3)
-BugReports: https://gitlab.com/mtgcodex.api/mtgcodex.api_api/-/issues
-URL: https://gitlab.com/mtgcodex.api/mtgcodex.api_api
+BugReports: https://github.com/Andrameleck/mtgcodex.api/issues
+URL: https://github.com/Andrameleck/mtgcodex.api
 LazyData: true
 Depends:
     R (>= 4.1.0)
@@ -19,12 +21,10 @@ Imports:
     RSQLite,
     jsonlite,
     logger,
-    plumber,
-    knitr
+    plumber
 Suggests:
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 Encoding: UTF-8
-VignetteBuilder: knitr
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
