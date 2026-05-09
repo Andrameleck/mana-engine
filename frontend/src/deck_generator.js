@@ -5,7 +5,7 @@
 // based on `data-tab="generator"` clicks, so we only need to populate the
 // section and respond to the "Générer" button.
 
-import { fetchSynergyDeckGenerate } from "./api.js";
+import { fetchSynergyDeckGenerate, listStoredCollections } from "./api.js";
 
 const ROLE_LABELS = {
   land: "Terrains",
@@ -79,11 +79,8 @@ async function ensureCollections() {
   const sel = $("deck-gen-collection-select");
   const status = $("deck-gen-collection-status");
   try {
-    const res = await fetch("/collections", { headers: { Accept: "application/json" } });
-    if (res.ok) {
-      const data = await res.json();
-      state.collections = Array.isArray(data?.collections) ? data.collections : [];
-    }
+    const data = await listStoredCollections();
+    state.collections = Array.isArray(data?.collections) ? data.collections : [];
   } catch (err) {
     state.collections = [];
   }
@@ -610,6 +607,7 @@ function attachHandlers() {
     useCollCb.addEventListener("change", () => {
       if (useCollCb.checked) {
         collPicker.classList.remove("is-hidden");
+        state.collectionsLoaded = false;
         ensureCollections();
       } else {
         collPicker.classList.add("is-hidden");

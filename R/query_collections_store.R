@@ -253,6 +253,7 @@ query_collections_get <- function(collection_id = "", client_id = "") {
         params = list(id)
       )
       rows <- query_collections_enrich_rows(rows)
+      meta_record <- query_db_rows_to_records(meta)[[1]]
 
       list(
         ok = TRUE,
@@ -260,9 +261,10 @@ query_collections_get <- function(collection_id = "", client_id = "") {
         columns = colnames(rows),
         rows = query_db_rows_to_records(rows),
         row_count = nrow(rows),
-        source_type = "collection_store",
-        path = store_path,
-        collection = query_db_rows_to_records(meta)[[1]]
+        source_type = "csv",
+        path = as.character(meta$source_file[[1]]),
+        storage_path = store_path,
+        collection = meta_record
       )
     },
     error = function(e) {
@@ -322,6 +324,152 @@ query_collections_delete <- function(collection_id = "", client_id = "") {
       list(
         ok = TRUE,
         deleted = as.integer(deleted_collections) > 0L || as.integer(deleted_cards) > 0L
+      )
+    },
+    error = function(e) {
+      if (!is.null(con) && DBI::dbIsValid(con)) {
+        try(DBI::dbRollback(con), silent = TRUE)
+      }
+      list(ok = FALSE, error = e$message)
+    },
+    finally = {
+      query_db_disconnect(con)
+    }
+  )
+
+  out
+}
+
+query_collections_add_card <- function(collection_id = "",
+                                       client_id = "",
+                                       name = "",
+                                       quantity = "1",
+                                       set_code = "",
+                                       collector_number = "",
+                                       mana_cost = "",
+                                       oracle_text = "",
+                                       keywords = "",
+                                       language = "en",
+                                       finish = "",
+                                       card_condition = "",
+                                       scryfall_id = "",
+                                       notes = "") {
+  query_collections_mutate_card(
+    collection_id = collection_id,
+    client_id = client_id,
+    quantity_delta = abs(query_collections_parse_number(quantity, default = 1)[[1]]),
+    selector = list(
+      name = name,
+      set_code = set_code,
+      collector_number = collector_number,
+      mana_cost = mana_cost,
+      oracle_text = oracle_text,
+      keywords = keywords,
+      language = language,
+      finish = finish,
+      card_condition = card_condition,
+      scryfall_id = scryfall_id,
+      notes = notes
+    )
+  )
+}
+
+query_collections_remove_card <- function(collection_id = "",
+                                          client_id = "",
+                                          name = "",
+                                          quantity = "1",
+                                          set_code = "",
+                                          collector_number = "",
+                                          language = "en",
+                                          finish = "",
+                                          card_condition = "",
+                                          scryfall_id = "",
+                                          notes = "") {
+  delta <- abs(query_collections_parse_number(quantity, default = 1)[[1]])
+  query_collections_mutate_card(
+    collection_id = collection_id,
+    client_id = client_id,
+    quantity_delta = -delta,
+    selector = list(
+      name = name,
+      set_code = set_code,
+      collector_number = collector_number,
+      language = language,
+      finish = finish,
+      card_condition = card_condition,
+      scryfall_id = scryfall_id,
+      notes = notes
+    )
+  )
+}
+
+query_collections_mutate_card <- function(collection_id = "",
+                                          client_id = "",
+                                          quantity_delta = 0,
+                                          selector = list()) {
+  deps <- query_api_require_db()
+  if (!isTRUE(deps)) {
+    return(deps)
+  }
+
+  id <- trimws(as.character(collection_id))
+  if (!nzchar(id)) {
+    return(list(ok = FALSE, error = "collection_id is required"))
+  }
+
+  delta <- suppressWarnings(as.numeric(quantity_delta))
+  if (!is.finite(delta) || delta == 0) {
+    return(list(ok = FALSE, error = "quantity delta must be non-zero"))
+  }
+
+  clean_selector <- query_collections_normalize_card_selector(selector)
+  if (!nzchar(clean_selector$name)) {
+    return(list(ok = FALSE, error = "card name is required"))
+  }
+
+  owner_id <- query_collections_normalize_client_id(client_id)
+  store_path <- query_collections_store_path()
+  if (!file.exists(store_path)) {
+    return(list(ok = FALSE, error = "collections store not initialized", path = store_path))
+  }
+
+  con <- NULL
+  out <- tryCatch(
+    {
+      con <- query_collections_connect(store_path)
+      DBI::dbBegin(con)
+
+      collection_exists <- DBI::dbGetQuery(
+        con,
+        paste(
+          "SELECT collection_id FROM collections",
+          "WHERE collection_id = ? AND owner_id = ?"
+        ),
+        params = list(id, owner_id)
+      )
+      if (nrow(collection_exists) == 0L) {
+        return(list(ok = FALSE, error = "collection not found"))
+      }
+
+      if (delta > 0) {
+        mutate_out <- query_collections_increment_card_row(con, id, clean_selector, delta)
+      } else {
+        mutate_out <- query_collections_decrement_card_rows(con, id, clean_selector, abs(delta))
+      }
+
+      if (!isTRUE(mutate_out$ok)) {
+        return(mutate_out)
+      }
+
+      total_quantity <- query_collections_update_row_count(con, id)
+      DBI::dbCommit(con)
+
+      list(
+        ok = TRUE,
+        collection_id = id,
+        quantity_delta = delta,
+        total_quantity = total_quantity,
+        action = if (delta > 0) "added" else "removed"
       )
     },
     error = function(e) {
@@ -412,6 +560,209 @@ query_collections_ensure_schema <- function(con) {
   query_collections_ensure_column(con, "collection_cards", "mana_cost", "TEXT")
   query_collections_ensure_column(con, "collection_cards", "oracle_text", "TEXT")
   query_collections_ensure_column(con, "collection_cards", "keywords", "TEXT")
+}
+
+query_collections_normalize_card_selector <- function(selector = list()) {
+  raw <- if (is.list(selector)) selector else list()
+  normalize_text <- function(value, default = "") {
+    if (is.null(value) || length(value) == 0L) {
+      value <- default
+    }
+    text <- trimws(as.character(value))
+    if (!nzchar(text)) {
+      return(default)
+    }
+    text
+  }
+
+  list(
+    name = normalize_text(raw$name, ""),
+    set_code = normalize_text(raw$set_code, ""),
+    collector_number = normalize_text(raw$collector_number, ""),
+    mana_cost = normalize_text(raw$mana_cost, ""),
+    oracle_text = normalize_text(raw$oracle_text, ""),
+    keywords = normalize_text(raw$keywords, ""),
+    language = tolower(normalize_text(raw$language, "en")),
+    finish = tolower(normalize_text(raw$finish, "")),
+    card_condition = tolower(normalize_text(raw$card_condition, "")),
+    scryfall_id = tolower(normalize_text(raw$scryfall_id, "")),
+    notes = normalize_text(raw$notes, "")
+  )
+}
+
+query_collections_match_clause <- function(selector = list()) {
+  clauses <- c("collection_id = ?", "lower(coalesce(name, '')) = lower(?)")
+  params <- list(selector$name)
+
+  field_specs <- list(
+    c("set_code", "upper(coalesce(set_code, '')) = upper(?)"),
+    c("collector_number", "coalesce(collector_number, '') = ?"),
+    c("language", "lower(coalesce(language, '')) = lower(?)"),
+    c("finish", "lower(coalesce(finish, '')) = lower(?)"),
+    c("card_condition", "lower(coalesce(card_condition, '')) = lower(?)"),
+    c("scryfall_id", "lower(coalesce(scryfall_id, '')) = lower(?)"),
+    c("notes", "coalesce(notes, '') = ?")
+  )
+
+  for (spec in field_specs) {
+    key <- spec[[1]]
+    clause <- spec[[2]]
+    value <- selector[[key]]
+    if (is.null(value) || length(value) == 0L) {
+      value <- ""
+    }
+    value <- trimws(as.character(value))
+    clauses <- c(clauses, clause)
+    params <- c(params, list(value))
+  }
+
+  list(
+    sql = paste(clauses, collapse = " AND "),
+    params = params
+  )
+}
+
+query_collections_increment_card_row <- function(con, collection_id, selector, quantity_delta) {
+  match <- query_collections_match_clause(selector)
+  rows <- DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT id, quantity FROM collection_cards",
+      "WHERE", match$sql,
+      "ORDER BY id ASC LIMIT 1"
+    ),
+    params = c(list(collection_id), match$params)
+  )
+
+  if (nrow(rows) > 0L) {
+    row_id <- as.integer(rows$id[[1]])
+    current_quantity <- suppressWarnings(as.numeric(rows$quantity[[1]]))
+    if (!is.finite(current_quantity) || current_quantity <= 0) {
+      current_quantity <- 0
+    }
+    DBI::dbExecute(
+      con,
+      "UPDATE collection_cards SET quantity = ? WHERE id = ?",
+      params = list(current_quantity + quantity_delta, row_id)
+    )
+    return(list(ok = TRUE, mode = "updated"))
+  }
+
+  next_row_index <- DBI::dbGetQuery(
+    con,
+    "SELECT COALESCE(MAX(row_index), 0) + 1 AS next_row_index FROM collection_cards WHERE collection_id = ?",
+    params = list(collection_id)
+  )
+  row_index <- suppressWarnings(as.integer(next_row_index$next_row_index[[1]]))
+  if (!is.finite(row_index) || row_index <= 0) {
+    row_index <- 1L
+  }
+
+  DBI::dbExecute(
+    con,
+    paste(
+      "INSERT INTO collection_cards",
+      "(collection_id, row_index, quantity, name, set_code, collector_number, mana_cost, oracle_text, keywords, language, finish, card_condition, scryfall_id, notes)",
+      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ),
+    params = list(
+      collection_id,
+      row_index,
+      quantity_delta,
+      selector$name,
+      selector$set_code,
+      selector$collector_number,
+      selector$mana_cost,
+      selector$oracle_text,
+      selector$keywords,
+      selector$language,
+      selector$finish,
+      selector$card_condition,
+      selector$scryfall_id,
+      selector$notes
+    )
+  )
+
+  list(ok = TRUE, mode = "inserted")
+}
+
+query_collections_decrement_card_rows <- function(con, collection_id, selector, quantity_delta) {
+  match <- query_collections_match_clause(selector)
+  rows <- DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT id, quantity FROM collection_cards",
+      "WHERE", match$sql,
+      "ORDER BY id ASC"
+    ),
+    params = c(list(collection_id), match$params)
+  )
+
+  if (nrow(rows) == 0L) {
+    return(list(ok = FALSE, error = "card not found in collection"))
+  }
+
+  available_quantity <- sum(suppressWarnings(as.numeric(rows$quantity)), na.rm = TRUE)
+  if (!is.finite(available_quantity) || available_quantity < quantity_delta) {
+    return(list(ok = FALSE, error = "insufficient quantity in collection"))
+  }
+
+  remaining <- quantity_delta
+  for (row_index in seq_len(nrow(rows))) {
+    if (remaining <= 0) {
+      break
+    }
+    row_id <- as.integer(rows$id[[row_index]])
+    current_quantity <- suppressWarnings(as.numeric(rows$quantity[[row_index]]))
+    if (!is.finite(current_quantity) || current_quantity <= 0) {
+      current_quantity <- 0
+    }
+    if (current_quantity <= remaining) {
+      DBI::dbExecute(
+        con,
+        "DELETE FROM collection_cards WHERE id = ?",
+        params = list(row_id)
+      )
+      remaining <- remaining - current_quantity
+    } else {
+      DBI::dbExecute(
+        con,
+        "UPDATE collection_cards SET quantity = ? WHERE id = ?",
+        params = list(current_quantity - remaining, row_id)
+      )
+      remaining <- 0
+    }
+  }
+
+  if (remaining > 0) {
+    return(list(ok = FALSE, error = "insufficient quantity in collection"))
+  }
+
+  list(ok = TRUE, mode = "updated")
+}
+
+query_collections_update_row_count <- function(con, collection_id) {
+  totals <- DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT COALESCE(SUM(COALESCE(quantity, 1)), 0) AS total_quantity",
+      "FROM collection_cards WHERE collection_id = ?"
+    ),
+    params = list(collection_id)
+  )
+
+  total_quantity <- suppressWarnings(as.numeric(totals$total_quantity[[1]]))
+  if (!is.finite(total_quantity) || total_quantity < 0) {
+    total_quantity <- 0
+  }
+
+  DBI::dbExecute(
+    con,
+    "UPDATE collections SET row_count = ? WHERE collection_id = ?",
+    params = list(as.integer(round(total_quantity)), collection_id)
+  )
+
+  as.integer(round(total_quantity))
 }
 
 query_collections_read_csv_file <- function(path) {

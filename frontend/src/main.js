@@ -16,7 +16,8 @@ import {
   getCollectionLanguage,
   setCollectionLanguage,
   bindRowPreviewEvents,
-  renderManaCostCell
+  renderManaCostCell,
+  configureCollectionUiHandlers
 } from "./ui.js";
 
 (function bootstrap() {
@@ -24,19 +25,23 @@ import {
     en: {
       tabs_collections: "Collections",
       tabs_decks: "Decks",
-      tabs_strategy: "Strategy",
+      tabs_strategy: "Synergy Lab",
       tabs_generator: "Generator",
       tabs_spellbook: "Spellbook",
-      subtitle_collections: "Create and manage multiple collection folders.",
-      subtitle_decks: "Import and browse multiple decks.",
-      subtitle_strategy: "Workspace for synergy and combo exploration.",
-      subtitle_generator: "Generate complete deck lists from format, colors and archetypes.",
-      subtitle_spellbook: "Query Commander Spellbook by card name.",
+      subtitle_collections: "Organise your cards into searchable folders.",
+      subtitle_decks: "Import, browse and analyse any deck list.",
+      subtitle_strategy: "Find mechanical synergies, combos and packages around any card.",
+      subtitle_generator: "Build complete deck lists from format, colour identity and archetype.",
+      subtitle_spellbook: "Explore infinite combos via Commander Spellbook.",
       pick_csv: "Choose CSV",
       pick_deck_file: "Choose deck file",
       open: "Open",
       delete: "Delete",
       folder: "Folder",
+      file: "File",
+      source: "Source",
+      loaded_at: "Loaded",
+      actions: "Actions",
       rows: "rows",
       decks_empty: "No deck yet.",
       collections_empty: "No collection folder yet.",
@@ -64,8 +69,8 @@ import {
       strategy_include_spellbook_label: "Include combo references (Commander Spellbook)",
       strategy_include_spellbook_hint: "Prioritize cards present in public combos (adds a score bonus)",
       strategy_include_lotus_hint: "Cross-check with LotusNoir community decks (beta)",
-      strategy_force_recompute_hint: "Force recompute (ignore cache)",
-      strategy_only_collection_hint: "Restrict the calculator to cards from the loaded collection",
+      strategy_force_recompute_hint: "Ignore cache",
+      strategy_only_collection_hint: "Collection only",
       strategy_mana_filter_label: "Mana filter (allowed colors)",
       direct_synergies: "Direct synergies",
       card_groups: "Card groups",
@@ -82,19 +87,23 @@ import {
     fr: {
       tabs_collections: "Collections",
       tabs_decks: "Decks",
-      tabs_strategy: "Strategy",
+      tabs_strategy: "Synergy Lab",
       tabs_generator: "Générateur",
       tabs_spellbook: "Spellbook",
-      subtitle_collections: "Creer et gerer plusieurs dossiers de collection.",
-      subtitle_decks: "Importer et visualiser plusieurs decks.",
-      subtitle_strategy: "Zone reservee au module de strategies.",
-      subtitle_generator: "Génère des decks complets à partir d'un format, de couleurs et d'archétypes.",
-      subtitle_spellbook: "Interroger Commander Spellbook par nom de carte.",
+      subtitle_collections: "Organisez vos cartes en dossiers consultables.",
+      subtitle_decks: "Importez, parcourez et analysez vos listes de decks.",
+      subtitle_strategy: "Découvrez les synergies mécaniques, combos et packages autour de n'importe quelle carte.",
+      subtitle_generator: "Construisez des decks complets à partir d'un format, d'une identité de couleur et d'un archétype.",
+      subtitle_spellbook: "Explorez les combos infinis via Commander Spellbook.",
       pick_csv: "Choisir CSV",
       pick_deck_file: "Choisir un fichier deck",
       open: "Ouvrir",
       delete: "Supprimer",
       folder: "Dossier",
+      file: "Fichier",
+      source: "Source",
+      loaded_at: "Charge le",
+      actions: "Actions",
       rows: "lignes",
       decks_empty: "Aucun deck pour le moment.",
       collections_empty: "Aucun dossier collection pour le moment.",
@@ -122,8 +131,8 @@ import {
       strategy_include_spellbook_label: "Inclure reference combos (Commander Spellbook)",
       strategy_include_spellbook_hint: "Prioriser les cartes presentes dans les combos publics (ajoute un bonus de score)",
       strategy_include_lotus_hint: "Croiser avec les decks communautaires LotusNoir (beta)",
-      strategy_force_recompute_hint: "Forcer le recalcul (ignorer le cache)",
-      strategy_only_collection_hint: "Limiter le calcul aux cartes de la collection chargee",
+      strategy_force_recompute_hint: "Ignorer le cache",
+      strategy_only_collection_hint: "Collection uniquement",
       strategy_mana_filter_label: "Filtre mana (couleurs autorisees)",
       direct_synergies: "Synergies directes",
       card_groups: "Groupes de cartes",
@@ -587,9 +596,12 @@ import {
         if (!"WUBRGC".includes(code)) {
           return;
         }
+        const toggle = inputNode.closest(".strategy-mana-toggle");
         inputNode.checked = state.strategy.manaFilter[code] === true;
+        toggle?.classList.toggle("is-checked", inputNode.checked === true);
         inputNode.addEventListener("change", () => {
           state.strategy.manaFilter[code] = inputNode.checked === true;
+          toggle?.classList.toggle("is-checked", inputNode.checked === true);
         });
       });
     }
@@ -724,9 +736,13 @@ import {
         error: "No data loaded."
       };
     }
+    const normalizedContext = String(uiContext || "").toLowerCase();
+    const resolvedTable = normalizedContext === "decks"
+      ? (name || payload.table || "Deck")
+      : (payload.table || name);
     return {
       ...payload,
-      table: payload.table || name,
+      table: resolvedTable,
       path: payload.path || fallbackSummary,
       view_mode: viewMode,
       ui_context: uiContext || ""
@@ -766,25 +782,88 @@ import {
       return;
     }
 
-    list.innerHTML = state.collections.map((entry) => {
+    const rowsHtml = state.collections.map((entry) => {
       const activeClass = entry.id === state.selectedCollectionId ? "is-active" : "";
-      const platform = entry.platform || "auto";
       const createdAt = entry.created_at || "";
       const rowCount = entry.row_count ?? "-";
+      const sourceFile = entry.source_file || entry.file_name || entry.filename || entry.path || "—";
+      const createdLabel = formatCollectionTimestamp(createdAt);
+      const nameLabel = entry.name || entry.id;
 
       return `
-        <article class="entity-item ${activeClass}" data-entity-id="${escapeHtml(entry.id)}">
-          <div>
-            <p class="entity-item-name">${escapeHtml(t("folder"))}: ${escapeHtml(entry.name || entry.id)}</p>
-            <p class="entity-item-meta">${escapeHtml(platform)} | ${escapeHtml(String(rowCount))} ${escapeHtml(t("rows"))} | ${escapeHtml(createdAt)}</p>
-          </div>
-          <div class="entity-actions">
-            <button type="button" class="entity-select" data-action="select">${escapeHtml(t("open"))}</button>
-            <button type="button" class="entity-delete" data-action="delete">${escapeHtml(t("delete"))}</button>
-          </div>
-        </article>
+        <tr class="entity-table-row ${activeClass}" data-entity-id="${escapeHtml(entry.id)}">
+          <td class="entity-table-cell entity-table-cell--name">
+            <svg viewBox="0 0 24 24" class="entity-folder-icon" aria-hidden="true">
+              <path d="M16.5 5.5H8.25a2.25 2.25 0 0 0 0 4.5h8.25"></path>
+              <path d="M16.5 10H8.25a2.25 2.25 0 0 0 0 4.5h8.25"></path>
+              <path d="M16.5 14.5H8.25a2.25 2.25 0 0 0 0 4.5h8.25"></path>
+              <path d="M9.5 15.5v5l2-1.55 2 1.55v-5"></path>
+            </svg>
+          </td>
+          <td class="entity-table-cell entity-table-cell--numeric">
+            <span class="entity-item-meta">${escapeHtml(formatCollectionCount(rowCount))}</span>
+          </td>
+          <td class="entity-table-cell">
+            <span class="entity-item-meta entity-item-meta--truncate" title="${escapeHtml(sourceFile)}">${escapeHtml(sourceFile)}</span>
+          </td>
+          <td class="entity-table-cell">
+            <span class="entity-item-meta">${escapeHtml(createdLabel)}</span>
+          </td>
+          <td class="entity-table-cell entity-table-cell--actions">
+            <div class="entity-actions">
+              <button type="button" class="entity-select" data-action="select">${escapeHtml(t("open"))}</button>
+              <button type="button" class="entity-delete" data-action="delete">${escapeHtml(t("delete"))}</button>
+            </div>
+          </td>
+        </tr>
       `;
     }).join("");
+
+    list.innerHTML = `
+      <div class="entity-table-shell">
+        <table class="entity-table" aria-label="${escapeHtml(t("collections_folders"))}">
+          <thead>
+            <tr>
+              <th>${escapeHtml(t("folder"))}</th>
+              <th>${escapeHtml(t("rows"))}</th>
+              <th>${escapeHtml(t("file"))}</th>
+              <th>${escapeHtml(t("loaded_at"))}</th>
+              <th>${escapeHtml(t("actions"))}</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function formatCollectionCount(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) {
+      return String(value ?? "-");
+    }
+    return num.toLocaleString(currentUiLanguage() === "fr" ? "fr-FR" : "en-US");
+  }
+
+  function formatCollectionTimestamp(value) {
+    const raw = String(value || "").trim();
+    if (!raw) {
+      return "—";
+    }
+
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) {
+      return raw;
+    }
+
+    const locale = currentUiLanguage() === "fr" ? "fr-FR" : "en-US";
+    return new Intl.DateTimeFormat(locale, {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(parsed);
   }
 
   async function loadStoredCollectionIntoTable(collectionId) {
@@ -811,41 +890,63 @@ import {
       return;
     }
 
-    list.innerHTML = state.decks.map((entry, index) => {
+    const rowsHtml = state.decks.map((entry) => {
       const activeClass = entry.id === state.selectedDeckId ? "is-active" : "";
-      const rowCount = entry.payload?.row_count ?? "-";
+      const rowCount = entry.payload?.row_count ?? entry.payload?.rows?.length ?? "-";
       const deckName = escapeHtml(entry.name);
       const deckId = escapeHtml(entry.id);
-      const glyph = escapeHtml(deckGlyph(entry.name, index + 1));
+      const sourceFile = entry.payload?.path || entry.payload?.source_file || "—";
+      const sourceLabel = entry.payload?.source_type || inferDeckSourceType(sourceFile);
       return `
-        <article class="deck-icon-item ${activeClass}" data-entity-id="${deckId}">
-          <button type="button" class="deck-icon-open" data-action="select" aria-label="${escapeHtml(t("open"))} ${deckName}" title="${escapeHtml(t("open"))} ${deckName}">
-            <span class="deck-icon-glyph">${glyph}</span>
-          </button>
-          <button type="button" class="deck-icon-delete" data-action="delete" aria-label="${escapeHtml(t("delete"))} ${deckName}" title="${escapeHtml(t("delete"))} ${deckName}">
-            <svg viewBox="0 0 24 24" class="deck-icon-delete-svg" aria-hidden="true">
-              <path d="M6 7h12"></path>
-              <path d="M9 7V5h6v2"></path>
-              <path d="M8 7l1 12h6l1-12"></path>
+        <tr class="entity-table-row ${activeClass}" data-entity-id="${deckId}">
+          <td class="entity-table-cell entity-table-cell--name">
+            <svg viewBox="0 0 24 24" class="entity-folder-icon" aria-hidden="true">
+              <path d="M6 4.75h8.75a2.25 2.25 0 0 1 2.25 2.25v10.25A2.75 2.75 0 0 1 14.25 20H8.5A2.5 2.5 0 0 1 6 17.5z"></path>
+              <path d="M8.5 4.75V20"></path>
+              <path d="M10.75 9h3.5"></path>
+              <path d="M10.75 12h3.5"></path>
+              <path d="M10.75 15h2.5"></path>
             </svg>
-          </button>
-          <p class="deck-icon-name">${deckName}</p>
-          <p class="deck-icon-meta">${escapeHtml(String(rowCount))} ${escapeHtml(t("rows"))}</p>
-        </article>
+          </td>
+          <td class="entity-table-cell">
+            <span class="entity-item-meta entity-item-meta--truncate" title="${deckName}">${deckName}</span>
+          </td>
+          <td class="entity-table-cell entity-table-cell--numeric">
+            <span class="entity-item-meta">${escapeHtml(formatCollectionCount(rowCount))}</span>
+          </td>
+          <td class="entity-table-cell">
+            <span class="entity-item-meta entity-item-meta--truncate" title="${escapeHtml(String(sourceFile))}">${escapeHtml(String(sourceFile))}</span>
+          </td>
+          <td class="entity-table-cell">
+            <span class="entity-item-meta">${escapeHtml(String(sourceLabel).toUpperCase())}</span>
+          </td>
+          <td class="entity-table-cell entity-table-cell--actions">
+            <div class="entity-actions">
+              <button type="button" class="entity-select" data-action="select">${escapeHtml(t("open"))}</button>
+              <button type="button" class="entity-delete" data-action="delete">${escapeHtml(t("delete"))}</button>
+            </div>
+          </td>
+        </tr>
       `;
     }).join("");
-  }
 
-  function deckGlyph(name, fallbackIndex) {
-    const raw = String(name || "").trim();
-    if (!raw) {
-      return String(fallbackIndex || "?");
-    }
-    const cleaned = raw.replace(/[^A-Za-z0-9]+/g, "");
-    if (!cleaned) {
-      return String(fallbackIndex || "?");
-    }
-    return cleaned.slice(0, 2).toUpperCase();
+    list.innerHTML = `
+      <div class="entity-table-shell">
+        <table class="entity-table" aria-label="${escapeHtml(t("decks_list"))}">
+          <thead>
+            <tr>
+              <th>${escapeHtml(t("folder"))}</th>
+              <th>${escapeHtml(t("deck_name_label"))}</th>
+              <th>${escapeHtml(t("rows"))}</th>
+              <th>${escapeHtml(t("file"))}</th>
+              <th>Type</th>
+              <th>${escapeHtml(t("actions"))}</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    `;
   }
 
   function loadDeckStateFromStorage() {
@@ -1096,7 +1197,10 @@ import {
     if (!container) {
       return;
     }
-    const pane = paneName === "analysis" ? "analysis" : "stats";
+    const normalized = String(paneName || "stats").toLowerCase();
+    const pane = normalized === "analysis" || normalized === "preview"
+      ? normalized
+      : "stats";
     DECK_ANALYSIS_STATE.activePane = pane;
 
     container.querySelectorAll("[data-deck-pane-tab]").forEach((button) => {
@@ -6424,6 +6528,7 @@ import {
       <div class="deck-side-tabs" role="tablist" aria-label="Deck panel tabs">
         <button type="button" class="deck-side-tab is-active" data-deck-pane-tab="stats" role="tab" aria-selected="true">Stats</button>
         <button type="button" class="deck-side-tab" data-deck-pane-tab="analysis" role="tab" aria-selected="false">Analyse</button>
+        <button type="button" class="deck-side-tab" data-deck-pane-tab="preview" role="tab" aria-selected="false">Preview</button>
       </div>
 
       <section class="deck-side-pane is-active" data-deck-pane="stats">
@@ -6506,6 +6611,20 @@ import {
             </section>
           </div>
         </section>
+      </section>
+
+      <section class="deck-side-pane" data-deck-pane="preview">
+        <aside id="deck-card-preview" class="card-preview deck-inline-preview" aria-live="polite">
+          <div class="card-preview-head">
+            <strong id="deck-card-preview-title">Card</strong>
+            <button type="button" id="deck-card-preview-close" class="card-preview-close" aria-label="Reset preview">x</button>
+          </div>
+          <div class="card-preview-body">
+            <img id="deck-card-preview-image" alt="Card preview" loading="lazy">
+            <p id="deck-card-preview-text" class="muted">Survole ou sélectionne une carte du deck pour afficher ses détails.</p>
+            <dl id="deck-card-preview-meta" class="card-preview-meta"></dl>
+          </div>
+        </aside>
       </section>
     `;
   }
@@ -7296,7 +7415,7 @@ import {
   function attachCollectionListEvents() {
     nodes.collections.list.addEventListener("click", async (event) => {
       const button = event.target.closest("button[data-action]");
-      const item = event.target.closest(".entity-item");
+      const item = event.target.closest("[data-entity-id]");
       if (!item) {
         return;
       }
@@ -7406,6 +7525,10 @@ import {
     bindStrategyControls();
     bindSpellbookControls();
     bindDeckAnalysisControls();
+    configureCollectionUiHandlers({
+      reloadStoredCollection: loadStoredCollectionIntoTable,
+      setDeckPane: (pane) => setDeckStatsPane(nodes.deckStatsContent, pane)
+    });
     loadDeckStateFromStorage();
 
     nodes.collections.form.addEventListener("submit", async (event) => {

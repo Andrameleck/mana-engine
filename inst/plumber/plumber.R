@@ -160,6 +160,95 @@ function(req, collection_id = "") {
   )
 }
 
+#* Add one card quantity to a stored collection
+#* @param collection_id Collection identifier.
+#* @param name Card name.
+#* @param quantity Quantity delta (default 1).
+#* @param set_code Optional set code selector.
+#* @param collector_number Optional collector number selector.
+#* @param mana_cost Optional mana cost for inserted cards.
+#* @param oracle_text Optional oracle text for inserted cards.
+#* @param keywords Optional keywords for inserted cards.
+#* @param language Optional language code.
+#* @param finish Optional finish selector.
+#* @param card_condition Optional condition selector.
+#* @param scryfall_id Optional Scryfall UUID.
+#* @param notes Optional notes selector.
+#* @serializer unboxedJSON
+#* @post /collections/<collection_id>/cards/add
+function(req,
+         collection_id = "",
+         name = "",
+         quantity = "1",
+         set_code = "",
+         collector_number = "",
+         mana_cost = "",
+         oracle_text = "",
+         keywords = "",
+         language = "en",
+         finish = "",
+         card_condition = "",
+         scryfall_id = "",
+         notes = "") {
+  query_call(
+    "query_collections_add_card",
+    collection_id = collection_id,
+    client_id = query_req_client_id(req),
+    name = name,
+    quantity = quantity,
+    set_code = set_code,
+    collector_number = collector_number,
+    mana_cost = mana_cost,
+    oracle_text = oracle_text,
+    keywords = keywords,
+    language = language,
+    finish = finish,
+    card_condition = card_condition,
+    scryfall_id = scryfall_id,
+    notes = notes
+  )
+}
+
+#* Remove one card quantity from a stored collection
+#* @param collection_id Collection identifier.
+#* @param name Card name.
+#* @param quantity Quantity delta (default 1).
+#* @param set_code Optional set code selector.
+#* @param collector_number Optional collector number selector.
+#* @param language Optional language code.
+#* @param finish Optional finish selector.
+#* @param card_condition Optional condition selector.
+#* @param scryfall_id Optional Scryfall UUID.
+#* @param notes Optional notes selector.
+#* @serializer unboxedJSON
+#* @post /collections/<collection_id>/cards/remove
+function(req,
+         collection_id = "",
+         name = "",
+         quantity = "1",
+         set_code = "",
+         collector_number = "",
+         language = "en",
+         finish = "",
+         card_condition = "",
+         scryfall_id = "",
+         notes = "") {
+  query_call(
+    "query_collections_remove_card",
+    collection_id = collection_id,
+    client_id = query_req_client_id(req),
+    name = name,
+    quantity = quantity,
+    set_code = set_code,
+    collector_number = collector_number,
+    language = language,
+    finish = finish,
+    card_condition = card_condition,
+    scryfall_id = scryfall_id,
+    notes = notes
+  )
+}
+
 #* Import cards into SQLite collection DB (source file can be CSV or DB)
 #* @param db_path Optional target sqlite path (default: package mtg.db).
 #* @param source_type Optional source type: db, csv, text, or auto.

@@ -222,6 +222,38 @@ async function deleteStoredCollection(collectionId) {
   });
 }
 
+async function addCardToStoredCollection(collectionId, card = {}) {
+  const id = encodeURIComponent(toText(collectionId || ""));
+  const query = {
+    client_id: getClientId()
+  };
+
+  Object.entries(card || {}).forEach(([key, value]) => {
+    query[key] = toText(value);
+  });
+
+  return apiRequest(`${API_ENDPOINTS.collections}/${id}/cards/add`, {
+    method: "POST",
+    query
+  });
+}
+
+async function removeCardFromStoredCollection(collectionId, card = {}) {
+  const id = encodeURIComponent(toText(collectionId || ""));
+  const query = {
+    client_id: getClientId()
+  };
+
+  Object.entries(card || {}).forEach(([key, value]) => {
+    query[key] = toText(value);
+  });
+
+  return apiRequest(`${API_ENDPOINTS.collections}/${id}/cards/remove`, {
+    method: "POST",
+    query
+  });
+}
+
 async function fetchSpellbookVariants(query, limit = 40) {
   return apiRequest(API_ENDPOINTS.referenceSpellbookVariants, {
     method: "GET",
@@ -344,6 +376,8 @@ window.deleteCardFromCollectionDb = deleteCardFromCollectionDb;
 window.listStoredCollections = listStoredCollections;
 window.getStoredCollection = getStoredCollection;
 window.deleteStoredCollection = deleteStoredCollection;
+window.addCardToStoredCollection = addCardToStoredCollection;
+window.removeCardFromStoredCollection = removeCardFromStoredCollection;
 window.fetchSpellbookVariants = fetchSpellbookVariants;
 window.fetchLotusNoirPosts = fetchLotusNoirPosts;
 window.fetchStrategyBridgeEquation = fetchStrategyBridgeEquation;
@@ -364,6 +398,8 @@ export {
   listStoredCollections,
   getStoredCollection,
   deleteStoredCollection,
+  addCardToStoredCollection,
+  removeCardFromStoredCollection,
   fetchSpellbookVariants,
   fetchLotusNoirPosts,
   fetchStrategyBridgeEquation,

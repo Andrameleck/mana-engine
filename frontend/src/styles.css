@@ -1,33 +1,100 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@400;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap");
 
+/* ======================================================================
+   Design tokens — MTG Editorial (deep ink + parchment + Beleren gold)
+   ====================================================================== */
 :root {
-  --bg: #0a0d13;
-  --panel: rgba(18, 22, 29, 0.9);
-  --panel-strong: #141923;
-  --text: #e7edf6;
-  --muted: #9fb3c8;
-  --accent: #ff6b6b;
-  --accent-2: #47e5c2;
-  --border: rgba(120, 140, 170, 0.25);
-  --shadow: rgba(0, 0, 0, 0.45);
-  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  --sans: "Space Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
+  /* Surfaces */
+  --bg:            #0b0908;
+  --bg-deep:       #060503;
+  --panel:         rgba(22, 17, 12, 0.92);
+  --panel-strong:  #1a1510;
+  --panel-elev:    #221b14;
+  --panel-overlay: rgba(8, 6, 4, 0.75);
+
+  /* Ink + parchment text */
+  --text:          #f1e7d3;
+  --text-strong:   #fff7e3;
+  --muted:         #a89274;
+  --muted-soft:    #6f5e47;
+
+  /* Accents */
+  --gold:          #c9a961;   /* Beleren gold */
+  --gold-soft:     #8b7547;
+  --gold-glow:     rgba(201, 169, 97, 0.35);
+  --accent:        #c9a961;   /* alias for legacy rules */
+  --accent-2:      #c9a961;
+  --danger:        #c25450;
+  --success:       #6fa46f;
+
+  /* Mana hints (used sparingly for accents per context) */
+  --mtg-w: #f7f0d8;
+  --mtg-u: #6aa9d8;
+  --mtg-b: #2d2a27;
+  --mtg-r: #d4674b;
+  --mtg-g: #6da473;
+
+  /* Lines + depth */
+  --border:        rgba(201, 169, 97, 0.16);
+  --border-strong: rgba(201, 169, 97, 0.32);
+  --shadow:        rgba(0, 0, 0, 0.55);
+  --shadow-deep:   rgba(0, 0, 0, 0.75);
+
+  /* Typography */
+  --serif: "Cormorant Garamond", "EB Garamond", "Iowan Old Style", Georgia, serif;
+  --sans:  "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono:  "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Radius scale */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+
+  /* Spacing scale */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html { color-scheme: dark; }
+
 body {
   margin: 0;
   min-height: 100vh;
   color: var(--text);
   font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: 0.005em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   background:
-    radial-gradient(circle at 0% 0%, rgba(255, 107, 107, 0.18), transparent 35%),
-    radial-gradient(circle at 100% 0%, rgba(71, 229, 194, 0.14), transparent 35%),
-    var(--bg);
+    radial-gradient(ellipse at 12% -10%, rgba(201, 169, 97, 0.10), transparent 55%),
+    radial-gradient(ellipse at 88% 110%, rgba(120, 70, 30, 0.12), transparent 55%),
+    linear-gradient(180deg, #0c0907 0%, #060503 100%);
+  background-attachment: fixed;
 }
+
+h1, h2, h3, h4 {
+  font-family: var(--serif);
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  color: var(--text-strong);
+}
+h1 { font-size: 34px; line-height: 1.15; }
+h2 { font-size: 28px; line-height: 1.2; }
+h3 { font-size: 20px; line-height: 1.25; }
+h4 { font-size: 16px; line-height: 1.3; }
+
+.muted { color: var(--muted); }
 
 .app-shell {
   display: grid;
@@ -36,12 +103,24 @@ body {
 }
 
 .sidebar {
-  padding: 14px 10px;
+  padding: 18px 10px;
   border-right: 1px solid var(--border);
-  background: rgba(10, 13, 19, 0.95);
+  background:
+    linear-gradient(180deg, rgba(14, 11, 8, 0.96) 0%, rgba(8, 6, 4, 0.98) 100%);
   display: grid;
   align-content: start;
-  gap: 18px;
+  gap: 22px;
+  position: relative;
+}
+
+.sidebar::after {
+  /* gold edge */
+  content: "";
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, var(--gold-glow) 20%, var(--gold-glow) 80%, transparent);
+  opacity: 0.6;
 }
 
 .brand {
@@ -52,17 +131,18 @@ body {
 }
 
 .brand-mark {
-  width: 42px;
-  height: 42px;
+  width: 46px;
+  height: 46px;
   border-radius: 12px;
-  border: 1px solid rgba(120, 140, 170, 0.35);
+  border: 1px solid var(--border-strong);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   background:
-    radial-gradient(circle at 20% 20%, rgba(71, 229, 194, 0.25), transparent 55%),
-    rgba(16, 21, 30, 0.9);
+    radial-gradient(circle at 30% 30%, rgba(201, 169, 97, 0.20), transparent 60%),
+    rgba(14, 10, 6, 0.95);
+  box-shadow: 0 0 0 1px rgba(201, 169, 97, 0.08), 0 6px 18px var(--shadow-deep);
 }
 
 .brand-mark img {
@@ -74,11 +154,13 @@ body {
 
 .eyebrow {
   margin: 0;
-  font-size: 10px;
-  letter-spacing: 0.24em;
+  font-family: var(--serif);
+  font-size: 11px;
+  letter-spacing: 0.32em;
   text-transform: uppercase;
-  color: #f7c65a;
+  color: var(--gold);
   text-align: center;
+  font-weight: 600;
 }
 
 .side-nav {
@@ -90,20 +172,44 @@ body {
 .side-tab {
   position: relative;
   border: 1px solid var(--border);
-  border-radius: 14px;
-  background: rgba(20, 25, 35, 0.7);
-  color: var(--text);
+  border-radius: 12px;
+  background: rgba(20, 15, 10, 0.6);
+  color: var(--muted);
   width: 52px;
   height: 52px;
   padding: 0;
   display: grid;
   place-items: center;
   cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.side-tab:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: rgba(28, 21, 14, 0.8);
 }
 
 .side-tab.is-active {
-  border-color: rgba(71, 229, 194, 0.6);
-  background: linear-gradient(135deg, rgba(255, 107, 107, 0.35), rgba(71, 229, 194, 0.2));
+  border-color: var(--gold);
+  color: var(--gold);
+  background:
+    linear-gradient(135deg, rgba(201, 169, 97, 0.18), rgba(201, 169, 97, 0.04));
+  box-shadow: inset 0 0 0 1px rgba(201, 169, 97, 0.25), 0 0 18px -6px var(--gold-glow);
+}
+
+.side-tab.is-active::before {
+  /* gold tick on the active tab */
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  width: 3px;
+  height: 24px;
+  background: var(--gold);
+  border-radius: 2px;
+  transform: translateY(-50%);
+  box-shadow: 0 0 10px var(--gold-glow);
 }
 
 .side-tab-icon {
@@ -124,20 +230,23 @@ body {
 .side-tab::after {
   content: attr(data-label);
   position: absolute;
-  left: calc(100% + 10px);
+  left: calc(100% + 12px);
   top: 50%;
   transform: translateY(-50%) translateX(-3px);
   opacity: 0;
   pointer-events: none;
-  font-size: 12px;
-  padding: 5px 8px;
+  font-family: var(--serif);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  padding: 6px 12px;
   border-radius: 8px;
-  border: 1px solid var(--border);
-  background: rgba(9, 12, 18, 0.94);
-  color: var(--text);
+  border: 1px solid var(--border-strong);
+  background: rgba(8, 6, 4, 0.96);
+  color: var(--text-strong);
   white-space: nowrap;
-  transition: opacity 120ms ease, transform 120ms ease;
+  transition: opacity 140ms ease, transform 140ms ease;
   z-index: 20;
+  box-shadow: 0 8px 24px var(--shadow-deep);
 }
 
 .side-tab:hover::after,
@@ -158,52 +267,76 @@ body {
 }
 
 .workspace {
-  padding: 22px;
+  padding: 28px 32px;
   display: grid;
-  gap: 16px;
+  gap: 20px;
   align-content: start;
+  max-width: 1600px;
+  width: 100%;
 }
 
 .workspace-head {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: flex-end;
   gap: 14px;
-  padding: 6px 2px;
+  padding: 4px 0 14px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.workspace-head::after {
+  /* gold accent under the title */
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 60px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold), transparent);
 }
 
 .workspace-head h2 {
   margin: 0;
-  font-size: 30px;
+  font-size: 32px;
+  font-family: var(--serif);
+  letter-spacing: 0.005em;
 }
 
 .workspace-head p {
   margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 14px;
 }
 
 .lang-switch {
   display: inline-flex;
-  background: rgba(11, 13, 18, 0.7);
+  background: rgba(8, 6, 4, 0.7);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 4px;
-  gap: 4px;
+  padding: 3px;
+  gap: 2px;
 }
 
 .lang-btn {
-  padding: 6px 12px;
+  padding: 6px 14px;
   border-radius: 999px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
   color: var(--muted);
   background: transparent;
   border: none;
   cursor: pointer;
+  transition: color 140ms ease, background 140ms ease;
 }
 
+.lang-btn:hover { color: var(--text); }
+
 .lang-btn.is-active {
-  color: #0b0d12;
-  background: linear-gradient(135deg, var(--accent), #ff8f6b);
+  background: var(--gold);
+  color: #1a1208;
+  font-weight: 600;
 }
 
 .tab-view {
@@ -296,9 +429,9 @@ body {
 }
 
 .spellbook-head-badge.is-ok {
-  border-color: rgba(74, 206, 142, 0.55);
-  color: #c6f9df;
-  background: rgba(19, 62, 42, 0.5);
+  border-color: rgba(201, 169, 97, 0.55);
+  color: var(--gold);
+  background: rgba(60, 45, 12, 0.5);
 }
 
 .spellbook-head-badge.is-other {
@@ -1256,6 +1389,23 @@ body {
   min-width: 0;
 }
 
+#strategy-direct-list {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+}
+
+#strategy-direct-list .strategy-card {
+  flex: 0 0 134px;
+  min-width: 134px;
+  height: 236px !important;
+  grid-template-rows: 118px auto !important;
+}
+
 .strategy-card {
   border: 1px solid rgba(120, 140, 170, 0.28);
   border-radius: 10px;
@@ -1330,8 +1480,16 @@ body {
   overflow-wrap: anywhere;
 }
 
+#strategy-direct-list .strategy-card-body {
+  padding: 6px 7px;
+  gap: 2px;
+  overflow: hidden;
+}
+
 #strategy-direct-list .strategy-card-name {
-  min-height: 31px;
+  min-height: 26px;
+  font-size: 11px;
+  line-height: 1.15;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1369,10 +1527,43 @@ body {
 }
 
 #strategy-direct-list .strategy-card-meta {
-  min-height: 14px;
-  white-space: nowrap;
+  min-height: 11px;
+  max-height: 22px;
+  font-size: 10px;
+  line-height: 1.1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+#strategy-direct-list .strategy-validation-row {
+  gap: 3px;
+  overflow: hidden;
+}
+
+#strategy-direct-list .strategy-validation-chip,
+#strategy-direct-list .strategy-card-badge {
+  font-size: 9px;
+  padding: 0;
+  border: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  line-height: 1.1;
+  color: var(--gold-soft);
+}
+
+#strategy-direct-list .strategy-card-art {
+  min-height: 118px;
+}
+
+#strategy-direct-list .strategy-card-oracle {
+  display: none;
+}
+
+#strategy-direct-list .strategy-card-badges {
+  gap: 2px;
+  min-width: 0;
 }
 
 .strategy-validation-row {
@@ -1399,8 +1590,8 @@ body {
 }
 
 .strategy-validation-chip.is-global {
-  border-color: rgba(77, 212, 138, 0.44);
-  color: #cef7de;
+  border-color: rgba(201, 169, 97, 0.44);
+  color: #f0dfaa;
 }
 
 .strategy-validation-chip.is-refs {
@@ -1430,7 +1621,7 @@ body {
 }
 
 .strategy-origin-segment.is-collection {
-  background: linear-gradient(90deg, #4dd48a 0%, #2fa86b 100%);
+  background: linear-gradient(90deg, #c9a961 0%, #a07c38 100%);
 }
 
 .strategy-origin-segment.is-api {
@@ -1465,7 +1656,7 @@ body {
 }
 
 .strategy-score-segment.is-collection {
-  background: linear-gradient(90deg, #4dd48a 0%, #2fa86b 100%);
+  background: linear-gradient(90deg, #c9a961 0%, #a07c38 100%);
 }
 
 .strategy-score-segment.is-scryfall {
@@ -1502,33 +1693,33 @@ body {
 }
 
 .strategy-card-badge.is-core {
-  color: #cff8dd;
-  border-color: rgba(102, 217, 132, 0.42);
-  background: rgba(21, 65, 36, 0.42);
+  color: var(--gold);
+  border-color: rgba(201, 169, 97, 0.45);
+  background: rgba(201, 169, 97, 0.10);
 }
 
 .strategy-card-badge.is-side {
-  color: #dbe9ff;
-  border-color: rgba(120, 170, 255, 0.4);
-  background: rgba(22, 45, 86, 0.42);
+  color: var(--muted);
+  border-color: var(--border);
+  background: transparent;
 }
 
 .strategy-card-badge.is-source-scryfall {
-  color: #ffe8c0;
-  border-color: rgba(255, 191, 94, 0.55);
-  background: rgba(93, 56, 12, 0.42);
+  color: var(--gold);
+  border-color: rgba(201, 169, 97, 0.45);
+  background: rgba(201, 169, 97, 0.07);
 }
 
 .strategy-card-badge.is-provenance-heuristic {
-  color: #dbe9ff;
-  border-color: rgba(120, 170, 255, 0.4);
-  background: rgba(22, 45, 86, 0.42);
+  color: var(--muted);
+  border-color: var(--border);
+  background: transparent;
 }
 
 .strategy-card-badge.is-provenance-spellbook {
-  color: #cff8dd;
-  border-color: rgba(102, 217, 132, 0.42);
-  background: rgba(21, 65, 36, 0.42);
+  color: #d8c8ff;
+  border-color: rgba(160, 120, 255, 0.42);
+  background: rgba(60, 20, 100, 0.38);
 }
 
 .strategy-card-badge.is-provenance-lotus {
@@ -1640,8 +1831,8 @@ body {
 }
 
 .strategy-group.is-spellbook {
-  border-color: rgba(47, 184, 115, 0.45);
-  box-shadow: inset 0 0 0 1px rgba(47, 184, 115, 0.14);
+  border-color: rgba(160, 120, 255, 0.45);
+  box-shadow: inset 0 0 0 1px rgba(160, 120, 255, 0.14);
 }
 
 .strategy-group.is-heuristic {
@@ -1673,9 +1864,9 @@ body {
 }
 
 .strategy-group-source-badge.is-spellbook {
-  color: #c6ffe3;
-  border-color: rgba(47, 184, 115, 0.45);
-  background: rgba(26, 95, 63, 0.28);
+  color: #d8c8ff;
+  border-color: rgba(160, 120, 255, 0.45);
+  background: rgba(60, 20, 100, 0.28);
 }
 
 .strategy-group-source-badge.is-heuristic {
@@ -1715,9 +1906,9 @@ body {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.03em;
-  color: #cff8dd;
-  background: rgba(21, 65, 36, 0.55);
-  border: 1px solid rgba(102, 217, 132, 0.42);
+  color: var(--gold);
+  background: rgba(201, 169, 97, 0.13);
+  border: 1px solid rgba(201, 169, 97, 0.45);
   flex-shrink: 0;
 }
 
@@ -1897,9 +2088,9 @@ body {
 }
 
 .strategy-score-mod.is-positive {
-  color: #c8f0c8;
-  background: rgba(80, 170, 90, 0.18);
-  border: 1px solid rgba(80, 170, 90, 0.45);
+  color: #f0dfaa;
+  background: rgba(190, 150, 50, 0.18);
+  border: 1px solid rgba(190, 150, 50, 0.45);
 }
 
 .strategy-score-mod.is-negative {
@@ -2163,10 +2354,6 @@ body {
   height: 292px;
 }
 
-#strategy-direct-list .strategy-card {
-  height: 372px;
-}
-
 .strategy-chip-row {
   display: flex;
   flex-wrap: wrap;
@@ -2200,13 +2387,25 @@ body {
 .panel {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 18px;
-  box-shadow: 0 12px 30px var(--shadow);
+  border-radius: var(--r-lg);
+  padding: 20px;
+  box-shadow: 0 8px 24px var(--shadow), inset 0 0 0 1px rgba(255, 255, 255, 0.015);
+  position: relative;
+}
+
+.panel::before {
+  /* subtle top gold seam */
+  content: "";
+  position: absolute;
+  top: 0; left: 14px; right: 14px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-glow), transparent);
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 .panel.panel-compact {
-  padding: 14px;
+  padding: 14px 16px;
 }
 
 .panel-head {
@@ -2214,12 +2413,14 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 
 .panel-head h3 {
   margin: 0;
-  font-size: 19px;
+  font-family: var(--serif);
+  font-size: 20px;
+  letter-spacing: 0.005em;
 }
 
 .grid {
@@ -2252,30 +2453,59 @@ body {
 
 label {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+label > span:first-child,
+label > strong:first-child {
+  text-transform: none;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 600;
 }
 
 input,
-select {
+select,
+textarea {
   background: var(--panel-strong);
-  border: 1px solid rgba(120, 140, 170, 0.35);
+  border: 1px solid var(--border);
   color: var(--text);
   padding: 10px 12px;
-  border-radius: 10px;
-  font-family: var(--mono);
+  border-radius: var(--r-md);
+  font-family: var(--sans);
+  font-size: 13px;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: var(--border-strong);
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: none;
-  border-color: rgba(71, 229, 194, 0.6);
-  box-shadow: 0 0 0 2px rgba(71, 229, 194, 0.15);
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-glow);
+  background: var(--panel-elev);
 }
 
-input:disabled {
-  opacity: 0.55;
+input[type="search"] {
+  font-family: var(--sans);
+}
+
+input:disabled,
+select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .hidden-file-input {
@@ -2290,13 +2520,51 @@ input:disabled {
 }
 
 button {
-  background: linear-gradient(135deg, var(--accent), #ff8f6b);
-  color: #0b0d12;
-  border: none;
-  padding: 10px 16px;
-  border-radius: 999px;
+  background: linear-gradient(180deg, var(--gold) 0%, #a98643 100%);
+  color: #1a1208;
+  border: 1px solid #8b6e36;
+  padding: 9px 18px;
+  border-radius: var(--r-md);
+  font-family: var(--sans);
+  font-size: 13px;
   font-weight: 600;
+  letter-spacing: 0.02em;
   cursor: pointer;
+  transition: transform 90ms ease, box-shadow 140ms ease, filter 140ms ease;
+  box-shadow: 0 1px 0 rgba(255, 220, 150, 0.18) inset, 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+button:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: 0 1px 0 rgba(255, 220, 150, 0.25) inset, 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 12px var(--gold-glow);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+  filter: brightness(0.95);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+}
+
+/* Secondary button: <button class="btn-ghost"> */
+button.btn-ghost,
+.btn-ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  box-shadow: none;
+}
+button.btn-ghost:hover:not(:disabled),
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(201, 169, 97, 0.08);
+  border-color: var(--gold);
+  color: var(--gold);
+  filter: none;
+  box-shadow: none;
 }
 
 .btn-with-icon {
@@ -2340,6 +2608,103 @@ button {
 .entity-list {
   display: grid;
   gap: 8px;
+}
+
+.collections-table-wrap {
+  display: block;
+}
+
+.entity-table-shell {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(28, 21, 14, 0.94), rgba(18, 14, 10, 0.98));
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.22);
+}
+
+.entity-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.entity-table thead {
+  background: rgba(201, 169, 97, 0.08);
+}
+
+.entity-table th {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--gold);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.entity-table-row {
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+
+.entity-table-row + .entity-table-row {
+  border-top: 1px solid rgba(201, 169, 97, 0.08);
+}
+
+.entity-table-row:hover {
+  background: rgba(201, 169, 97, 0.05);
+}
+
+.entity-table-row.is-active {
+  background:
+    linear-gradient(90deg, rgba(71, 229, 194, 0.10), rgba(201, 169, 97, 0.08));
+  box-shadow: inset 3px 0 0 rgba(71, 229, 194, 0.75);
+}
+
+.entity-table-cell {
+  padding: 14px;
+  vertical-align: middle;
+}
+
+.entity-table-cell--name {
+  width: 24%;
+}
+
+.entity-table-cell--numeric {
+  width: 10%;
+}
+
+.entity-table-cell--actions {
+  width: 160px;
+}
+
+.entity-folder-icon {
+  display: block !important;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--gold) !important;
+  stroke: currentColor !important;
+  fill: none !important;
+  stroke-width: 2.1 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+  pointer-events: none;
+}
+
+.entity-item-meta--truncate {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .folder-grid {
@@ -2466,6 +2831,7 @@ button {
 .entity-actions {
   display: inline-flex;
   gap: 6px;
+  justify-content: flex-end;
 }
 
 .entity-actions button {
@@ -2484,6 +2850,27 @@ button {
 .entity-item.is-active {
   border-color: rgba(71, 229, 194, 0.6);
   background: rgba(71, 229, 194, 0.08);
+}
+
+@media (max-width: 980px) {
+  .entity-table {
+    table-layout: auto;
+  }
+
+  .entity-table th,
+  .entity-table-cell {
+    padding: 10px 12px;
+  }
+}
+
+@media (max-width: 760px) {
+  .entity-table-shell {
+    overflow-x: auto;
+  }
+
+  .entity-table {
+    min-width: 760px;
+  }
 }
 
 .summary {
@@ -2515,6 +2902,31 @@ button {
 
 .table-panel {
   min-width: 0;
+}
+
+.table-panel.is-collection-view > .panel-head {
+  display: none;
+}
+
+.table-panel.is-collection-view .table-wrap.is-card-view {
+  max-height: none;
+  overflow: visible;
+}
+
+.table-panel.is-collection-view .collection-card-grid {
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+}
+
+@media (max-width: 1180px) {
+  .table-panel.is-collection-view .collection-card-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .table-panel.is-collection-view .collection-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .deck-stats-panel.is-hidden {
@@ -2930,7 +3342,7 @@ button {
   height: 100%;
   width: var(--fill-width, 0%);
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(223, 57, 82, 0.92), rgba(118, 138, 255, 0.92));
+  background: linear-gradient(90deg, var(--gold), rgba(201, 169, 97, 0.45));
 }
 
 .table-wrap {
@@ -2938,7 +3350,7 @@ button {
   max-height: 62vh;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: #0f1319;
+  background: var(--panel-strong);
   scrollbar-gutter: stable;
 }
 
@@ -2946,11 +3358,8 @@ button {
   max-height: 70vh;
   padding: 14px;
   border-radius: 14px;
-  border-color: rgba(120, 140, 170, 0.22);
-  background:
-    radial-gradient(circle at 5% 0%, rgba(106, 88, 163, 0.22), transparent 42%),
-    radial-gradient(circle at 95% 5%, rgba(81, 152, 255, 0.16), transparent 40%),
-    #11131b;
+  border-color: var(--border);
+  background: transparent;
 }
 
 .table-wrap.is-card-view.is-card-view-deck {
@@ -2962,7 +3371,7 @@ button {
   margin-top: 8px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: #0f1319;
+  background: var(--panel-strong);
   overflow-x: auto;
   overflow-y: hidden;
   height: 14px;
@@ -3032,7 +3441,7 @@ td {
 th {
   position: sticky;
   top: 0;
-  background: #0f1319;
+  background: var(--panel-strong);
   color: var(--muted);
   z-index: 1;
 }
@@ -3042,11 +3451,11 @@ tbody tr:nth-child(even) {
 }
 
 tbody tr:hover {
-  background: rgba(71, 229, 194, 0.08);
+  background: rgba(201, 169, 97, 0.05);
 }
 
 tbody tr.row-active {
-  background: rgba(255, 107, 107, 0.12);
+  background: rgba(201, 169, 97, 0.10);
 }
 
 th.col-name,
@@ -3229,16 +3638,29 @@ td.col-scry-fall-id {
 .collection-action-btn {
   border-radius: 8px;
   padding: 8px 11px;
-  border: 1px solid rgba(126, 145, 185, 0.35);
-  background: rgba(17, 21, 31, 0.85);
+  border: 1px solid var(--border-strong);
+  background: var(--panel-strong);
   color: var(--text);
   font-family: var(--mono);
   font-size: 12px;
+  transition: border-color 120ms, color 120ms;
+}
+
+.collection-action-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
 }
 
 .collection-action-btn.is-muted {
-  background: rgba(255, 255, 255, 0.04);
+  background: transparent;
   color: var(--muted);
+  border-color: var(--border);
+}
+
+.collection-action-btn.is-active {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: rgba(201, 169, 97, 0.08);
 }
 
 .collection-toolbar-count {
@@ -3253,10 +3675,59 @@ td.col-scry-fall-id {
   gap: 10px;
 }
 
+.collection-color-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.collection-color-filter {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  display: inline-grid;
+  place-items: center;
+  box-shadow: none;
+}
+
+.collection-color-filter img {
+  width: 18px;
+  height: 18px;
+  display: block;
+  opacity: 0.55;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.collection-color-filter:hover {
+  border-color: var(--border-strong);
+  background: rgba(201, 169, 97, 0.05);
+}
+
+.collection-color-filter:hover img {
+  opacity: 0.9;
+}
+
+.collection-color-filter.is-active,
+.collection-color-filter[aria-pressed="true"] {
+  border-color: var(--gold);
+  background: rgba(201, 169, 97, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(201, 169, 97, 0.18);
+}
+
+.collection-color-filter.is-active img,
+.collection-color-filter[aria-pressed="true"] img {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
 #collection-grid-search,
 #collection-grid-sort {
-  background: rgba(16, 20, 31, 0.85);
-  border: 1px solid rgba(120, 140, 170, 0.35);
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
   color: var(--text);
   border-radius: 9px;
   padding: 10px 12px;
@@ -3272,35 +3743,73 @@ td.col-scry-fall-id {
   grid-template-columns: repeat(auto-fill, minmax(184px, 1fr));
 }
 
+.workspace-lower .table-panel.is-collection-view .collection-card-grid,
+.workspace-lower.has-preview-panel .table-panel.is-collection-view .collection-card-grid {
+  grid-template-columns: repeat(10, minmax(0, 1fr)) !important;
+}
+
+.workspace-lower .deck-card-grid,
+.workspace-lower.has-preview-panel .deck-card-grid {
+  grid-template-columns: repeat(10, minmax(0, 1fr)) !important;
+}
+
+@media (max-width: 1180px) {
+  .workspace-lower .table-panel.is-collection-view .collection-card-grid,
+  .workspace-lower.has-preview-panel .table-panel.is-collection-view .collection-card-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  }
+
+  .workspace-lower .deck-card-grid,
+  .workspace-lower.has-preview-panel .deck-card-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 820px) {
+  .workspace-lower .table-panel.is-collection-view .collection-card-grid,
+  .workspace-lower.has-preview-panel .table-panel.is-collection-view .collection-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .workspace-lower .deck-card-grid,
+  .workspace-lower.has-preview-panel .deck-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
 .collection-card {
   display: grid;
-  gap: 8px;
-  border: 1px solid rgba(120, 140, 170, 0.22);
-  border-radius: 12px;
-  padding: 8px;
-  background: rgba(10, 13, 20, 0.65);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+  grid-template-rows: 126px auto;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0;
+  overflow: hidden;
+  background: var(--panel-strong);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
   transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
 
 .collection-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(71, 229, 194, 0.45);
-  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.45);
+  border-color: var(--gold);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.55);
 }
 
 .collection-card.row-active {
-  border-color: rgba(255, 107, 107, 0.55);
-  box-shadow: 0 0 0 1px rgba(255, 107, 107, 0.4), 0 16px 30px rgba(0, 0, 0, 0.45);
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px var(--gold-glow);
 }
 
 .collection-card-art {
   position: relative;
-  border-radius: 10px;
+  border-radius: 0;
   overflow: hidden;
-  background: rgba(11, 13, 18, 0.95);
-  border: 1px solid rgba(120, 140, 170, 0.35);
-  aspect-ratio: 5 / 4;
+  background: var(--bg-deep);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  aspect-ratio: auto;
+  min-height: 0;
 }
 
 .collection-card-art img {
@@ -3322,8 +3831,8 @@ td.col-scry-fall-id {
   font-size: 11px;
   line-height: 1.3;
   background:
-    linear-gradient(145deg, rgba(71, 229, 194, 0.08), rgba(255, 107, 107, 0.08)),
-    rgba(12, 16, 24, 0.95);
+    linear-gradient(145deg, rgba(201, 169, 97, 0.06), rgba(201, 169, 97, 0.02)),
+    var(--bg-deep);
 }
 
 .collection-card-qty {
@@ -3333,53 +3842,105 @@ td.col-scry-fall-id {
   min-width: 24px;
   padding: 3px 7px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 173, 51, 0.55);
-  background: rgba(15, 19, 27, 0.88);
-  color: #ffc769;
+  border: 1px solid rgba(201, 169, 97, 0.55);
+  background: rgba(11, 9, 8, 0.88);
+  color: var(--gold);
   font-family: var(--mono);
   font-size: 11px;
   text-align: center;
 }
 
+.collection-card-edit-controls {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 2;
+}
+
+.collection-card-edit-controls.is-busy {
+  opacity: 0.7;
+}
+
+.collection-card-edit-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(201, 169, 97, 0.55);
+  border-radius: 999px;
+  background: rgba(11, 9, 8, 0.88);
+  color: var(--gold);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+
+.collection-card-edit-btn:hover:not(:disabled) {
+  border-color: var(--gold);
+  background: rgba(201, 169, 97, 0.14);
+}
+
+.collection-card-edit-btn:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .collection-card-meta {
   display: grid;
-  gap: 3px;
+  align-content: start;
+  gap: 2px;
+  padding: 7px 8px 8px;
+  min-width: 0;
 }
 
 .collection-card-name {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 1.3;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .collection-card-line {
   margin: 0;
   color: var(--muted);
-  font-size: 11px;
-  line-height: 1.3;
+  font-size: 10px;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .collection-card-price {
-  margin: 2px 0 0;
-  font-size: 11px;
-  line-height: 1.25;
-  color: #9de6c8;
+  margin: 1px 0 0;
+  font-size: 10px;
+  line-height: 1.15;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .collection-card-mana {
-  margin: 2px 0 0;
-  min-height: 18px;
+  margin: 1px 0 0;
+  min-height: 14px;
 }
 
 .collection-card-mana .mana-symbol {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 .collection-card-mana .mana-symbol-icon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 .collection-card-mana-fallback {
@@ -3390,20 +3951,20 @@ td.col-scry-fall-id {
 .deck-card-section {
   display: grid;
   gap: 10px;
-  border: 1px solid rgba(120, 140, 170, 0.2);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px;
-  background: rgba(11, 15, 24, 0.55);
+  background: transparent;
 }
 
 .deck-card-section.is-main {
-  border-color: rgba(71, 229, 194, 0.35);
-  background: linear-gradient(180deg, rgba(20, 69, 58, 0.26), rgba(11, 15, 24, 0.62));
+  border-color: rgba(201, 169, 97, 0.28);
+  background: rgba(201, 169, 97, 0.02);
 }
 
 .deck-card-section.is-side {
-  border-color: rgba(120, 162, 255, 0.35);
-  background: linear-gradient(180deg, rgba(22, 44, 78, 0.24), rgba(11, 15, 24, 0.62));
+  border-color: var(--border);
+  background: transparent;
 }
 
 .deck-card-section-head {
@@ -3437,23 +3998,23 @@ td.col-scry-fall-id {
 }
 
 .collection-card-zone.is-main {
-  border-color: rgba(71, 229, 194, 0.55);
-  color: #9ff6df;
-  background: rgba(17, 76, 63, 0.35);
+  border-color: var(--gold-soft);
+  color: var(--gold);
+  background: rgba(201, 169, 97, 0.07);
 }
 
 .collection-card-zone.is-side {
-  border-color: rgba(120, 162, 255, 0.55);
-  color: #bdd3ff;
-  background: rgba(28, 56, 104, 0.35);
+  border-color: var(--border-strong);
+  color: var(--muted);
+  background: transparent;
 }
 
 .collection-empty-state {
   grid-column: 1 / -1;
-  border: 1px dashed rgba(120, 140, 170, 0.35);
+  border: 1px dashed var(--border);
   border-radius: 10px;
   padding: 16px;
-  background: rgba(10, 13, 20, 0.45);
+  background: var(--panel);
   text-align: center;
 }
 
@@ -3465,9 +4026,7 @@ td.col-scry-fall-id {
   max-height: calc(100vh - 38px);
   border: 1px solid var(--border);
   border-radius: 16px;
-  background:
-    radial-gradient(circle at 84% 12%, rgba(71, 229, 194, 0.08), transparent 38%),
-    rgba(13, 17, 24, 0.96);
+  background: var(--panel);
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.42);
   overflow: hidden;
   align-self: start;
@@ -3520,6 +4079,10 @@ td.col-scry-fall-id {
   border: 1px solid rgba(120, 140, 170, 0.35);
   margin-bottom: 10px;
   background: #0b0d12;
+}
+
+#card-preview-text.is-hidden {
+  display: none;
 }
 
 .card-preview-meta {
@@ -3736,7 +4299,8 @@ td.col-scry-fall-id {
 .deck-gen-archetype-block { display: flex; flex-direction: column; gap: 0.4rem; }
 .deck-gen-archetype-head { display: flex; justify-content: space-between; align-items: center; }
 .deck-gen-archetype-title { font-weight: 600; }
-.deck-gen-archetype-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.ghost--xs { font-size: 10px !important; padding: 2px 7px !important; border-radius: 999px !important; }
+.deck-gen-archetype-chips { display: flex; flex-wrap: wrap; gap: 0.2rem; }
 .deck-gen-archetype-chip {
   padding: 0.25rem 0.65rem;
   border-radius: 999px;
@@ -3998,4 +4562,2745 @@ td.col-scry-fall-id {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ======================================================================
+   MTG Editorial Refresh — global polish layer (loaded LAST so it overrides)
+   ====================================================================== */
+
+/* Selection + scrollbars in MTG colors */
+::selection {
+  background: var(--gold-glow);
+  color: var(--text-strong);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--gold-soft) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--gold-soft);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--gold); background-clip: padding-box; }
+
+/* Chips & pills shared idiom */
+[class*="chip"],
+[class$="-tag"],
+[class*="-badge"]:not(.deck-gen-coll-badge) {
+  background: rgba(201, 169, 97, 0.08);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+/* Tables (used in collection / strategy views) */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: var(--sans);
+  font-size: 13px;
+}
+th {
+  font-family: var(--serif);
+  font-weight: 600;
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-strong);
+  color: var(--gold);
+  letter-spacing: 0.04em;
+  font-size: 13px;
+}
+td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+tr:hover td { background: rgba(201, 169, 97, 0.04); }
+
+/* Code & values */
+code, kbd, samp {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: rgba(8, 6, 4, 0.6);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--gold);
+}
+
+/* ----------------------------------------------------------------------
+   Deck Generator — editorial card polish
+   ---------------------------------------------------------------------- */
+
+.deck-gen-deck-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 20px;
+  margin-top: 16px;
+}
+
+.deck-gen-card {
+  background:
+    linear-gradient(180deg, rgba(28, 22, 16, 0.6), rgba(14, 10, 6, 0.85)),
+    var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  padding: 0;
+  overflow: hidden;
+  box-shadow: 0 12px 32px var(--shadow-deep);
+  position: relative;
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+.deck-gen-card:hover {
+  border-color: var(--gold);
+  transform: translateY(-2px);
+}
+.deck-gen-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  opacity: 0.6;
+}
+
+.deck-gen-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(8, 6, 4, 0.35);
+}
+
+.deck-gen-card-head h3 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 18px;
+  color: var(--text-strong);
+  letter-spacing: 0.02em;
+}
+
+.deck-gen-variant-cfg {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+  background: rgba(201, 169, 97, 0.06);
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.deck-gen-card-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+.deck-gen-action-btn {
+  font-size: 11px;
+  padding: 5px 10px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 600;
+  box-shadow: none;
+}
+.deck-gen-action-btn:hover:not(:disabled) {
+  color: var(--gold);
+  border-color: var(--gold);
+  background: rgba(201, 169, 97, 0.06);
+  box-shadow: none;
+  filter: none;
+}
+.deck-gen-action-btn.is-success {
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.deck-gen-score {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--serif);
+}
+.deck-gen-score-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--gold);
+  line-height: 1;
+}
+.deck-gen-score-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.deck-gen-commander {
+  display: flex;
+  gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  align-items: flex-start;
+}
+.deck-gen-commander img {
+  width: 70px;
+  height: 98px;
+  object-fit: cover;
+  border-radius: 5px;
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 4px 10px var(--shadow);
+}
+.deck-gen-commander h4 {
+  margin: 0 0 4px;
+  font-family: var(--serif);
+  font-size: 17px;
+  color: var(--text-strong);
+}
+
+.deck-gen-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.deck-gen-summary-block h5 {
+  margin: 0 0 8px;
+  font-family: var(--serif);
+  font-size: 12px;
+  color: var(--gold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.deck-gen-mainboard,
+.deck-gen-combos-block,
+.deck-gen-matchups-block {
+  padding: 14px 18px;
+}
+.deck-gen-mainboard { padding-top: 10px; }
+.deck-gen-combos-block,
+.deck-gen-matchups-block {
+  border-top: 1px solid var(--border);
+}
+.deck-gen-mainboard h5,
+.deck-gen-combos-block h5,
+.deck-gen-matchups-block h5 {
+  margin: 0 0 10px;
+  font-family: var(--serif);
+  font-size: 13px;
+  color: var(--gold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.deck-gen-section {
+  margin-bottom: 12px;
+}
+.deck-gen-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 4px 0 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.deck-gen-section-title {
+  font-family: var(--serif);
+  font-size: 13px;
+  color: var(--text-strong);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.deck-gen-section-count {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.deck-gen-card-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.deck-gen-card-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  transition: background 100ms ease;
+}
+.deck-gen-card-row:hover {
+  background: rgba(201, 169, 97, 0.06);
+}
+.deck-gen-card-row.is-core {
+  background: rgba(201, 169, 97, 0.07);
+  border-left: 2px solid var(--gold);
+  padding-left: 8px;
+}
+.deck-gen-card-name {
+  color: var(--text);
+}
+.deck-gen-card-cost img.deck-gen-mana-symbol {
+  width: 14px;
+  height: 14px;
+  vertical-align: middle;
+}
+.deck-gen-card-score {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--gold-soft);
+  min-width: 28px;
+  text-align: right;
+}
+.deck-gen-card-core {
+  color: var(--gold);
+  font-size: 12px;
+}
+.deck-gen-card-filler {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Curve bars */
+.deck-gen-curve {
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+  height: 64px;
+}
+.deck-gen-curve-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+}
+.deck-gen-curve-bar-wrap {
+  position: relative;
+  width: 100%;
+  height: 40px;
+  background: rgba(8, 6, 4, 0.5);
+  border-radius: 2px;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+.deck-gen-curve-bar {
+  width: 100%;
+  background: linear-gradient(180deg, var(--gold), var(--gold-soft));
+  border-radius: 2px 2px 0 0;
+}
+.deck-gen-curve-target {
+  position: absolute;
+  left: 0; right: 0;
+  height: 1px;
+  background: rgba(255, 240, 200, 0.5);
+}
+.deck-gen-curve-label,
+.deck-gen-curve-value {
+  font-family: var(--mono);
+  color: var(--muted);
+  font-size: 9px;
+}
+.deck-gen-curve-value { color: var(--text); }
+
+/* Role list */
+.deck-gen-role-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.deck-gen-role-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  font-size: 12px;
+  font-family: var(--mono);
+}
+.deck-gen-role-label { color: var(--muted); }
+.deck-gen-role-actual { color: var(--text); font-weight: 600; }
+.deck-gen-role-target { color: var(--muted-soft); }
+.deck-gen-role-row--off .deck-gen-role-actual {
+  color: var(--danger);
+}
+
+/* Modifiers */
+.deck-gen-mod-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.deck-gen-mod-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--border);
+}
+.deck-gen-mod-pos { color: var(--success); }
+.deck-gen-mod-neg { color: var(--danger); }
+
+/* Matchup blocks */
+.deck-gen-matchups-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.deck-gen-matchup-col h6 {
+  margin: 0 0 6px;
+  font-family: var(--serif);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.deck-gen-matchup-strong { color: var(--success); }
+.deck-gen-matchup-weak { color: var(--danger); }
+.deck-gen-matchup-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.deck-gen-matchup-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: baseline;
+  padding: 6px 8px;
+  background: rgba(8, 6, 4, 0.4);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.deck-gen-matchup-item.is-strong {
+  border-left: 2px solid var(--success);
+}
+.deck-gen-matchup-item.is-weak {
+  border-left: 2px solid var(--danger);
+}
+.deck-gen-matchup-score {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 11px;
+  min-width: 28px;
+}
+.deck-gen-matchup-self-chip {
+  display: inline-block;
+  background: rgba(201, 169, 97, 0.1);
+  border: 1px solid var(--border);
+  color: var(--gold);
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 4px;
+}
+.deck-gen-matchup-signals {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  grid-column: 2;
+}
+
+/* Core game plan banner */
+.deck-gen-core-banner {
+  background:
+    linear-gradient(90deg, rgba(201, 169, 97, 0.12), rgba(201, 169, 97, 0.02)),
+    var(--panel-strong);
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--gold);
+  border-radius: var(--r-md);
+  padding: 14px 18px;
+  margin-bottom: 16px;
+}
+.deck-gen-core-banner h4 {
+  margin: 0 0 6px;
+  font-family: var(--serif);
+  font-size: 16px;
+  color: var(--gold);
+  letter-spacing: 0.02em;
+}
+.deck-gen-core-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.deck-gen-core-list li {
+  background: rgba(201, 169, 97, 0.08);
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: var(--text);
+}
+
+/* Collection filter block */
+.deck-gen-collection-block {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(8, 6, 4, 0.4);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+}
+.deck-gen-collection-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+  font-size: 13px;
+}
+.deck-gen-collection-picker {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.deck-gen-collection-picker.is-hidden { display: none; }
+.deck-gen-coll-badge {
+  display: inline-block;
+  background: rgba(201, 169, 97, 0.13);
+  border: 1px solid rgba(201, 169, 97, 0.45);
+  color: var(--gold);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Empty / error states inside the generator */
+.deck-gen-error {
+  padding: 14px 18px;
+  border: 1px solid var(--danger);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--r-md);
+  background: rgba(194, 84, 80, 0.08);
+  color: var(--danger);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+/* Status line beside the run button */
+#deck-gen-status {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+/* Archetype chips (deck generator) */
+.deck-gen-archetype-chip {
+  display: inline-block;
+  padding: 2px 7px;
+  margin: 1px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(20, 15, 10, 0.6);
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 120ms ease;
+  box-shadow: none;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.deck-gen-archetype-chip:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  filter: none;
+  box-shadow: none;
+}
+.deck-gen-archetype-chip.is-selected {
+  background: var(--gold);
+  color: #1a1208;
+  border-color: var(--gold);
+  font-weight: 600;
+}
+
+/* ======================================================================
+   SHELL RESTRUCTURE — top bar layout (overrides old sidebar rules)
+   ====================================================================== */
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+  min-height: 100vh;
+}
+
+/* Hide the old sidebar if it still exists in any partial (defensive). */
+.sidebar { display: none; }
+
+/* --------- Top bar --------- */
+.topbar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 24px;
+  padding: 0 28px;
+  height: 64px;
+  background:
+    linear-gradient(180deg, rgba(14, 11, 8, 0.98) 0%, rgba(8, 6, 4, 0.96) 100%);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  backdrop-filter: blur(8px);
+}
+.topbar::after {
+  /* gold seam under the top bar */
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 5%, var(--gold-glow) 50%, transparent 95%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Brand block on the left */
+.topbrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+.topbrand-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(201, 169, 97, 0.20), transparent 60%),
+    rgba(14, 10, 6, 0.95);
+  box-shadow: 0 0 0 1px rgba(201, 169, 97, 0.08);
+}
+.topbrand-mark img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+}
+.topbrand-text {
+  display: grid;
+  gap: 0;
+  line-height: 1.1;
+}
+.topbrand-title {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-strong);
+  letter-spacing: 0.01em;
+}
+.topbrand-eyebrow {
+  font-family: var(--serif);
+  font-size: 10px;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-weight: 600;
+}
+
+/* --------- Top nav (horizontal tabs with labels) --------- */
+.topnav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  justify-self: center;
+}
+
+/* Reset & restyle .side-tab for horizontal pill tabs. */
+.topnav .side-tab {
+  position: relative;
+  width: auto;
+  height: 40px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+  box-shadow: none;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.topnav .side-tab:hover {
+  color: var(--text);
+  background: rgba(201, 169, 97, 0.06);
+  border-color: transparent;
+}
+
+.topnav .side-tab.is-active {
+  color: var(--gold);
+  background: rgba(201, 169, 97, 0.10);
+  border-color: var(--border-strong);
+  box-shadow: none;
+}
+
+/* The vertical gold tick from the sidebar layout would now be horizontal: replace with bottom underline. */
+.topnav .side-tab::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -10px;
+  height: 2px;
+  background: var(--gold);
+  border-radius: 2px;
+  opacity: 0;
+  transform: scaleX(0.4);
+  transform-origin: center;
+  transition: opacity 160ms ease, transform 160ms ease;
+  box-shadow: 0 0 10px var(--gold-glow);
+  top: auto;
+  width: auto;
+}
+.topnav .side-tab.is-active::before {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+/* Hide the floating tooltip used in the rail layout. */
+.topnav .side-tab::after { content: none; }
+
+.topnav .side-tab-icon {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.topnav .side-tab-label {
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+/* --------- Tools cluster on the right --------- */
+.topbar-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  justify-self: end;
+}
+
+/* --------- Workspace adjustments now that nav is on top --------- */
+.workspace {
+  padding: 24px 32px 40px;
+  margin: 0 auto;
+  max-width: 1500px;
+  width: 100%;
+}
+
+.workspace-head {
+  padding-top: 0;
+}
+
+/* --------- Responsive: collapse labels on narrow screens --------- */
+@media (max-width: 960px) {
+  .topbar {
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    height: auto;
+    padding: 10px 16px 0;
+    gap: 10px;
+  }
+  .topbar-tools { grid-column: 2; grid-row: 1; }
+  .topnav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: stretch;
+    overflow-x: auto;
+    padding: 6px 0 8px;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+  }
+  .workspace { padding: 18px 16px 32px; }
+}
+@media (max-width: 600px) {
+  .topbrand-text { display: none; }
+  .topnav .side-tab-label { display: none; }
+  .topnav .side-tab { padding: 0 10px; }
+}
+
+/* ======================================================================
+   COLOR + BOXING AUDIT — override every hardcoded blue/purple
+   and flatten over-nested components
+   ====================================================================== */
+
+/* ---- Deck stats panel: strip the purple radial gradients ---- */
+.deck-stats-panel {
+  background: var(--panel) !important;
+  border-color: var(--border) !important;
+}
+
+/* ---- Side tabs inside the stats panel ---- */
+.deck-side-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.deck-side-tab {
+  flex: 1;
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  color: var(--muted) !important;
+  font-family: var(--serif) !important;
+  font-size: 12px !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 10px 12px !important;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.deck-side-tab:hover {
+  color: var(--text) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+}
+.deck-side-tab.is-active {
+  color: var(--gold) !important;
+  border-bottom-color: var(--gold) !important;
+  background: transparent !important;
+}
+
+/* ---- KPI grid: replace boxed tiles with clean rows ---- */
+.deck-kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.deck-kpi-card {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 12px 14px !important;
+  min-height: unset !important;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  box-shadow: none !important;
+}
+/* Remove right / bottom border on rightmost and last-row items */
+.deck-kpi-card:nth-child(2n) { border-right: none; }
+.deck-kpi-card:nth-last-child(-n+2) { border-bottom: none; }
+
+.deck-kpi-label {
+  color: var(--muted) !important;
+  font-family: var(--sans) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 4px !important;
+}
+
+.deck-kpi-value {
+  color: var(--text-strong) !important;
+  font-family: var(--serif) !important;
+  font-size: 28px !important;
+  font-weight: 700 !important;
+}
+
+/* ---- Visual sections (charts, breakdowns) ---- */
+.deck-visual-section {
+  border-top: 1px solid var(--border) !important;
+  padding-top: 12px !important;
+}
+
+.deck-visual-title {
+  color: var(--gold) !important;
+  font-family: var(--serif) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.10em;
+}
+
+.deck-visual-icon {
+  border-color: var(--border) !important;
+  color: var(--gold) !important;
+}
+
+/* ---- Analyse button ---- */
+.deck-analyze-btn {
+  background: transparent !important;
+  border: 1px solid var(--border-strong) !important;
+  color: var(--text) !important;
+  border-radius: var(--r-md) !important;
+  transition: border-color 120ms, color 120ms;
+}
+.deck-analyze-btn:hover {
+  border-color: var(--gold) !important;
+  color: var(--gold) !important;
+  background: rgba(201, 169, 97, 0.06) !important;
+}
+
+/* ---- Deck viewer header / action buttons ---- */
+.deck-actions button,
+[data-deck-action],
+.deck-toolbar button {
+  box-shadow: none;
+}
+
+/* ---- Any leftover blue borders from the original theme ---- */
+/* synergy / strategy flow pills */
+[style*="rgba(18, 36"] { background: var(--panel-elev) !important; }
+
+/* Generic: any component that used the old blue border approach */
+.panel-blue,
+.card-blue,
+.kpi-blue {
+  background: var(--panel-strong) !important;
+  border-color: var(--border) !important;
+}
+
+/* ---- Flatten double-border patterns ---- */
+/* Remove outer border when a panel already has inner borders */
+.deck-stats-content > .panel,
+.deck-stats-content > section {
+  padding: 0;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.deck-stats-content > .panel::before {
+  display: none;
+}
+
+/* ---- Collection item cards: strip double borders ---- */
+.collection-entry,
+.folder-entry,
+.entity-row {
+  border-bottom: 1px solid var(--border) !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-top: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.entity-list,
+.folder-grid {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--panel-strong);
+}
+.entity-row:last-child,
+.collection-entry:last-child,
+.folder-entry:last-child {
+  border-bottom: none !important;
+}
+.entity-row:hover,
+.collection-entry:hover,
+.folder-entry:hover {
+  background: rgba(201, 169, 97, 0.04) !important;
+}
+
+/* ---- Synergy / strategy pair cards ---- */
+.synergy-pair,
+.pair-card,
+.match-card {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 10px 0 !important;
+}
+
+/* ---- Score badges / pills: unify to gold ---- */
+.score-badge,
+.synergy-score,
+.pair-score {
+  background: rgba(201, 169, 97, 0.10) !important;
+  color: var(--gold) !important;
+  border: 1px solid var(--border) !important;
+  font-family: var(--mono) !important;
+  border-radius: 4px !important;
+}
+
+/* ---- Donut / pie chart wrapper: no extra boxing ---- */
+.donut-wrap,
+.chart-wrap,
+.mana-donut,
+.pie-container {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* ---- Table inside panels: remove double border ---- */
+.panel table,
+.panel-compact table {
+  border: none;
+}
+.panel table td:first-child,
+.panel-compact table td:first-child { padding-left: 0; }
+.panel table td:last-child,
+.panel-compact table td:last-child { padding-right: 0; }
+
+/* ======================================================================
+   DECK / COLLECTION VIEWER — warm palette override
+   Neutralise all blue-slate colors from the original theme
+   ====================================================================== */
+
+/* ---- Action buttons (Actions / Edit / Share) ---- */
+.collection-action-btn {
+  border-color: var(--border-strong) !important;
+  background: var(--panel-strong) !important;
+  color: var(--text) !important;
+  transition: border-color 120ms, color 120ms !important;
+}
+.collection-action-btn:hover {
+  border-color: var(--gold) !important;
+  color: var(--gold) !important;
+  background: rgba(201, 169, 97, 0.06) !important;
+}
+.collection-action-btn.is-muted {
+  background: transparent !important;
+  color: var(--muted) !important;
+  border-color: var(--border) !important;
+}
+
+/* ---- Search / sort bar ---- */
+#collection-grid-search,
+#collection-grid-sort {
+  background: var(--panel-strong) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+}
+#collection-grid-search:focus,
+#collection-grid-sort:focus {
+  border-color: var(--gold) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px var(--gold-glow) !important;
+}
+
+/* ---- Card tile: strip the blue-dark background ---- */
+.collection-card {
+  background: var(--panel-strong) !important;
+  border-color: var(--border) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+}
+.collection-card:hover {
+  border-color: var(--gold) !important;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(201,169,97,0.22) !important;
+}
+.collection-card.row-active {
+  border-color: var(--gold) !important;
+  box-shadow: 0 0 0 2px var(--gold-glow) !important;
+}
+
+/* ---- Card art frame ---- */
+.collection-card-art,
+.strategy-card-art {
+  border-color: var(--border) !important;
+  background: var(--bg-deep) !important;
+}
+
+/* ---- Card price: teal → muted warm ---- */
+.collection-card-price {
+  color: var(--muted) !important;
+}
+
+/* ---- Card zone badges (Main / Side) ---- */
+.collection-card-zone {
+  border-color: var(--border) !important;
+  color: var(--muted) !important;
+  background: transparent !important;
+}
+.collection-card-zone.is-main {
+  border-color: var(--gold-soft) !important;
+  color: var(--gold) !important;
+  background: rgba(201, 169, 97, 0.07) !important;
+}
+.collection-card-zone.is-side {
+  border-color: var(--border-strong) !important;
+  color: var(--muted) !important;
+  background: transparent !important;
+}
+
+/* ---- Deck card sections (Main Deck / Sideboard blocks) ---- */
+.deck-card-section {
+  background: transparent !important;
+  border: 1px solid var(--border) !important;
+}
+.deck-card-section.is-main {
+  border-color: rgba(201, 169, 97, 0.28) !important;
+  background: rgba(201, 169, 97, 0.03) !important;
+}
+.deck-card-section.is-side {
+  border-color: var(--border) !important;
+  background: transparent !important;
+}
+
+/* ---- Empty state ---- */
+.collection-empty-state {
+  border-color: var(--border) !important;
+  background: var(--panel) !important;
+  color: var(--muted) !important;
+}
+
+/* ---- Card preview panel ---- */
+.card-preview {
+  background: var(--panel) !important;
+  border-color: var(--border) !important;
+}
+#card-preview-image,
+#deck-card-preview-image,
+#strategy-card-preview-image {
+  border-color: var(--border) !important;
+  background: var(--bg-deep) !important;
+}
+
+#deck-card-preview-image {
+  width: 100% !important;
+  max-width: 100% !important;
+  max-height: 52vh !important;
+  height: auto !important;
+  object-fit: contain !important;
+  display: block;
+  margin-bottom: 10px;
+  border-radius: 10px;
+}
+
+.deck-inline-preview {
+  position: static !important;
+  top: auto !important;
+  max-height: 100% !important;
+  box-shadow: none !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+}
+
+.deck-inline-preview .card-preview-body {
+  max-height: min(70vh, 920px) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+/* ---- Strategy cards (synergy result grid) ---- */
+.strategy-card {
+  background: var(--panel-strong) !important;
+  border-color: var(--border) !important;
+}
+.strategy-card:hover {
+  border-color: var(--gold) !important;
+}
+.strategy-card.row-active {
+  border-color: var(--gold) !important;
+  box-shadow: 0 0 0 1px var(--gold-glow) !important;
+}
+.strategy-card.is-selected {
+  border-color: var(--gold) !important;
+  box-shadow: 0 0 0 1px rgba(201,169,97,0.35) !important;
+}
+
+/* ---- Spellbook components ---- */
+.spellbook-head-badge {
+  background: var(--panel-strong) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+}
+.spellbook-head-badge.is-ok {
+  border-color: rgba(111, 164, 111, 0.5) !important;
+  color: var(--success) !important;
+  background: rgba(111, 164, 111, 0.08) !important;
+}
+.spellbook-head-badge.is-other {
+  border-color: rgba(201, 169, 97, 0.45) !important;
+  color: var(--gold) !important;
+  background: rgba(201, 169, 97, 0.07) !important;
+}
+.spellbook-tag {
+  background: var(--panel-strong) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+}
+.spellbook-card-pill {
+  background: var(--panel-strong) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+}
+.spellbook-card-name {
+  background: var(--panel-elev) !important;
+  border-color: var(--border-strong) !important;
+  color: var(--text-strong) !important;
+  box-shadow: none !important;
+}
+.spellbook-explicit-text,
+.spellbook-details p {
+  color: var(--text) !important;
+}
+.spellbook-details summary {
+  color: var(--text-strong) !important;
+}
+.spellbook-details {
+  border-color: var(--border) !important;
+}
+.spellbook-variant-card {
+  background: var(--panel-strong) !important;
+  border-color: var(--border) !important;
+}
+.spellbook-action-block {
+  background: var(--panel) !important;
+  border-color: var(--border) !important;
+}
+.spellbook-action-list {
+  border-color: var(--border) !important;
+}
+.spellbook-action-dot {
+  background: rgba(201, 169, 97, 0.4) !important;
+  border-color: var(--gold-soft) !important;
+}
+.spellbook-action-main {
+  background: var(--panel-strong) !important;
+  border-color: var(--border) !important;
+}
+.spellbook-action-kind-tag {
+  background: rgba(201, 169, 97, 0.07) !important;
+  border-color: var(--border) !important;
+  color: var(--gold) !important;
+}
+.spellbook-card-mini-image,
+.spellbook-stack-image {
+  border-color: var(--border) !important;
+  background: var(--bg-deep) !important;
+}
+.spellbook-card-mini-more {
+  border-color: var(--border-strong) !important;
+  background: var(--panel) !important;
+  color: var(--muted) !important;
+}
+.spellbook-card-mini-name {
+  color: var(--text) !important;
+}
+
+/* ---- Deck icon grid open buttons ---- */
+.deck-icon-open {
+  background: var(--panel-strong) !important;
+  border-color: var(--border) !important;
+}
+.deck-icon-item.is-active .deck-icon-open {
+  border-color: var(--gold) !important;
+  background: rgba(201, 169, 97, 0.10) !important;
+}
+.deck-icon-delete {
+  border-color: rgba(194, 84, 80, 0.5) !important;
+  background: var(--panel-strong) !important;
+  color: var(--danger) !important;
+}
+
+/* ---- Collection highlight rows (selected file etc) ---- */
+.collection-row-selected,
+.deck-row-selected,
+[aria-selected="true"] {
+  background: rgba(201, 169, 97, 0.06) !important;
+}
+
+/* ======================================================================
+   HIERARCHY + COLOR PASS — reduce nesting, add visual contrast
+   ====================================================================== */
+
+/* ---- 1. Strip the outer table-panel box — let page bg show through ---- */
+.table-panel {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+.table-panel::before { display: none !important; }
+.table-panel > .panel-head {
+  padding: 4px 0 14px !important;
+  margin-bottom: 14px !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+/* ---- 2. Card tiles: elevated over page bg (dark bg → brighter tile) ---- */
+.collection-card {
+  background: var(--panel-elev) !important;  /* #221b14 vs bg #0b0908 = clear contrast */
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.45) !important;
+  transition: border-color 140ms, box-shadow 140ms, transform 140ms !important;
+}
+.collection-card:hover {
+  transform: translateY(-3px) !important;
+  border-color: var(--gold-soft) !important;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.6), 0 0 0 1px rgba(201,169,97,0.25) !important;
+}
+.collection-card.row-active {
+  border-color: var(--gold) !important;
+  box-shadow: 0 0 0 2px var(--gold-glow), 0 6px 18px rgba(0,0,0,0.5) !important;
+}
+
+/* ---- 3. Strip the inner art-frame border (art has enough visual weight) ---- */
+.collection-card-art {
+  border: none !important;
+}
+
+/* ---- 4. Toolbar buttons: ghost text, no box ---- */
+.collection-action-btn {
+  background: transparent !important;
+  border: none !important;
+  color: var(--muted) !important;
+  padding: 6px 10px !important;
+  font-family: var(--sans) !important;
+  font-size: 12px !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 6px !important;
+}
+.collection-action-btn:first-child {
+  color: var(--text) !important;
+}
+.collection-action-btn:hover {
+  color: var(--gold) !important;
+  background: rgba(201,169,97,0.06) !important;
+  border: none !important;
+}
+
+.collection-action-btn.is-active {
+  color: var(--gold) !important;
+  background: rgba(201,169,97,0.12) !important;
+  border: 1px solid rgba(201, 169, 97, 0.28) !important;
+}
+
+/* ---- 5. Search / sort: integrate with toolbar, not a separate box ---- */
+#collection-grid-search,
+#collection-grid-sort {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  padding: 8px 4px !important;
+  color: var(--text) !important;
+}
+#collection-grid-search:focus,
+#collection-grid-sort:focus {
+  outline: none !important;
+  border-bottom-color: var(--gold) !important;
+  box-shadow: none !important;
+}
+
+/* ---- 6. Deck sections: semantic color coding ---- */
+.deck-card-section {
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+.deck-card-section + .deck-card-section {
+  margin-top: 20px !important;
+}
+.deck-card-section-head {
+  padding-bottom: 10px !important;
+  margin-bottom: 10px !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+.deck-card-section.is-main .deck-card-section-head h3 {
+  color: var(--gold) !important;
+}
+.deck-card-section.is-side .deck-card-section-head h3 {
+  color: var(--muted) !important;
+}
+
+/* ---- 7. Section title typography — more editorial weight ---- */
+.panel-head h3,
+.workspace-head h2 {
+  font-family: var(--serif) !important;
+  font-weight: 600 !important;
+}
+.workspace-head h2 {
+  font-size: 38px !important;
+  letter-spacing: -0.01em !important;
+  color: var(--text-strong) !important;
+}
+.panel-head h3 {
+  font-size: 17px !important;
+}
+
+/* ---- 8. Workspace head: gold rule below ---- */
+.workspace-head {
+  border-bottom: 1px solid var(--border) !important;
+  padding-bottom: 18px !important;
+  margin-bottom: 22px !important;
+}
+
+/* ---- 9. Stats panel: slightly distinct from page ---- */
+.deck-stats-panel.panel {
+  background: var(--panel-strong) !important;
+  border-color: var(--border) !important;
+}
+
+/* ---- 10. Table rows: more visible alternation ---- */
+tbody tr:nth-child(even) {
+  background: rgba(255,255,255,0.025) !important;
+}
+tbody tr:hover {
+  background: rgba(201,169,97,0.06) !important;
+}
+tbody tr.row-active {
+  background: rgba(201,169,97,0.12) !important;
+}
+th {
+  background: rgba(11,9,8,0.95) !important;
+  border-bottom: 1px solid var(--border-strong) !important;
+  color: var(--gold) !important;
+  font-family: var(--sans) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.07em !important;
+  text-transform: uppercase !important;
+}
+
+/* ---- 11. Small panels at top (Import/Deck list): differentiated ---- */
+.collection-admin .panel.panel-compact {
+  background: var(--panel-strong) !important;
+}
+.collection-admin .panel.panel-compact .panel-head h3 {
+  font-size: 13px !important;
+  color: var(--muted) !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  font-family: var(--sans) !important;
+  font-weight: 500 !important;
+}
+
+/* ======================================================================
+   SYNERGY FINDER — reorganised control block
+   ====================================================================== */
+
+/* ---- 1. Explicit grid layout ---- */
+.strategy-control-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) minmax(140px, 1.2fr) 80px 80px 80px;
+  grid-template-rows: auto auto auto;
+  column-gap: 16px;
+  row-gap: 14px;
+  align-items: end;
+}
+
+/* Row 1: primary inputs */
+label[for="strategy-seed-input"]       { grid-column: 1; grid-row: 1; }
+label[for="strategy-format"]           { grid-column: 2; grid-row: 1; }
+label[for="strategy-direct-limit"]     { grid-column: 3; grid-row: 1; }
+label[for="strategy-group-limit"]      { grid-column: 4; grid-row: 1; }
+label[for="strategy-refine-iterations"]{ grid-column: 5; grid-row: 1; }
+
+/* Row 2: archetype chips (full-width) */
+.strategy-archetype-filter {
+  grid-column: 1 / -1 !important;
+  grid-row: 2;
+}
+
+/* Row 3: toggles | mana | button */
+label[for="strategy-allow-illegal"]    { grid-column: 1; grid-row: 3; }
+label[for="strategy-only-collection"]  { grid-column: 2; grid-row: 3; }
+label[for="strategy-force-recompute"]  { grid-column: 3 / 4; grid-row: 3; }
+label.strategy-mana-filter             { grid-column: 4; grid-row: 3; align-self: center; }
+.strategy-actions                      { grid-column: 5; grid-row: 3; justify-content: flex-end; display: flex; }
+
+/* ---- 2. Archetype block: no box, just a top rule ---- */
+.strategy-archetype-filter {
+  background: transparent !important;
+  border: none !important;
+  border-top: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  padding: 12px 0 0 !important;
+}
+
+/* ---- 3. Mana icons: icon-only toggles, no checkbox ---- */
+.strategy-mana-filter-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+.strategy-mana-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  padding: 0 !important;
+  border: 2px solid transparent !important;
+  background: transparent !important;
+  cursor: pointer;
+  transition: border-color 120ms, opacity 120ms;
+  opacity: 0.55;
+}
+.strategy-mana-toggle:hover {
+  opacity: 0.85;
+}
+/* checked state — can't use :has() in all browsers, rely on JS adding .is-selected
+   and also support :has as progressive enhancement */
+.strategy-mana-toggle:has(input:checked),
+.strategy-mana-toggle.is-checked {
+  border-color: var(--gold) !important;
+  opacity: 1;
+}
+.strategy-mana-toggle input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.strategy-mana-icon {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+/* ---- 4. Status bar: no box ---- */
+#strategy-status {
+  background: transparent !important;
+  border: none !important;
+  border-top: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  padding: 10px 0 !important;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ---- 5. Result blocks: no box, just a separator ---- */
+.strategy-result-block {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  border-top: 1px solid var(--border) !important;
+  padding-top: 14px !important;
+}
+.strategy-result-preview {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+}
+.strategy-result-head {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.strategy-result-head h4 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 18px;
+  color: var(--text-strong);
+}
+
+/* ---- 6. Archetype chips warm palette ---- */
+.strategy-archetype-chip {
+  color: var(--muted) !important;
+  background: transparent !important;
+  border: 1px solid var(--border) !important;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.strategy-archetype-chip:hover {
+  background: rgba(201,169,97,0.06) !important;
+  border-color: var(--gold-soft) !important;
+  color: var(--text) !important;
+}
+.strategy-archetype-chip.is-selected {
+  background: rgba(201,169,97,0.14) !important;
+  border-color: var(--gold) !important;
+  color: var(--gold) !important;
+}
+
+/* ---- 7. Compute button prominent ---- */
+.strategy-actions button {
+  width: 100%;
+  padding: 10px 18px;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ---- 8. Number inputs: compact with less visual noise ---- */
+label[for="strategy-direct-limit"] input,
+label[for="strategy-group-limit"] input,
+label[for="strategy-refine-iterations"] input {
+  text-align: center;
+}
+
+/* ---- 9. Label typography: uppercase micro-labels ---- */
+.strategy-control-grid > label > span:first-child,
+.strategy-control-grid > label > span[id] {
+  font-size: 10px !important;
+  letter-spacing: 0.07em !important;
+  text-transform: uppercase !important;
+  color: var(--muted) !important;
+  font-family: var(--sans) !important;
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* ---- 10. Responsive: stack on small screens ---- */
+@media (max-width: 900px) {
+  .strategy-control-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  label[for="strategy-seed-input"],
+  .strategy-archetype-filter,
+  label.strategy-mana-filter,
+  .strategy-actions {
+    grid-column: 1 / -1 !important;
+  }
+  label[for="strategy-format"],
+  label[for="strategy-allow-illegal"],
+  label[for="strategy-only-collection"],
+  label[for="strategy-force-recompute"] {
+    grid-column: auto;
+  }
+}
+
+/* ======================================================================
+   SYNERGY FINDER — row 3 flat bar + typography fixes
+   ====================================================================== */
+
+/* ---- Row 3: flat flex bar across full width ---- */
+.strategy-control-grid {
+  grid-template-columns: minmax(180px, 2fr) minmax(140px, 1fr) 80px 80px 80px !important;
+}
+
+/* Override: row 3 becomes a full-width flex bar (no individual grid cells) */
+label[for="strategy-allow-illegal"],
+label[for="strategy-only-collection"],
+label[for="strategy-force-recompute"],
+label.strategy-mana-filter,
+.strategy-actions {
+  grid-column: unset !important;
+  grid-row: unset !important;
+}
+
+/* Wrap all row-3 items in a flex container — achieved via grid subgrid trick:
+   place everything in row 3 and make it span full width as a flex row */
+label[for="strategy-allow-illegal"] { grid-column: 1; grid-row: 3; }
+label[for="strategy-only-collection"] { grid-column: 2; grid-row: 3; }
+label[for="strategy-force-recompute"] { grid-column: 3; grid-row: 3; }
+label.strategy-mana-filter { grid-column: 4; grid-row: 3; align-self: center; }
+.strategy-actions { grid-column: 5; grid-row: 3; display: flex; justify-content: flex-end; align-self: center; }
+
+/* Checkbox toggle: inline pill, no text wrapping */
+.strategy-toggle-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 11px !important;
+  color: var(--muted) !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Mana filter: icons in a single horizontal row, no wrap */
+.strategy-mana-filter-row {
+  flex-wrap: nowrap !important;
+  gap: 4px !important;
+}
+label.strategy-mana-filter {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+/* ---- Workspace head: editorial subtitle ---- */
+#workspace-subtitle {
+  font-family: var(--serif) !important;
+  font-size: 16px !important;
+  font-style: italic !important;
+  color: var(--muted) !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.01em !important;
+  margin: 4px 0 0 !important;
+  line-height: 1.4 !important;
+}
+
+/* ---- Panel title: editorial ---- */
+.strategy-panel > .panel-head h3 {
+  font-family: var(--serif) !important;
+  font-size: 22px !important;
+  font-weight: 600 !important;
+  color: var(--text-strong) !important;
+  letter-spacing: -0.01em !important;
+}
+
+/* ---- seed input placeholder italic ---- */
+#strategy-seed-input::placeholder {
+  font-style: italic;
+  color: var(--muted);
+}
+
+/* ---- Results section headings ---- */
+.strategy-result-head h4 {
+  font-family: var(--serif) !important;
+  font-size: 20px !important;
+  color: var(--text-strong) !important;
+  letter-spacing: -0.01em !important;
+}
+
+/* ---- Hint text ---- */
+.strategy-archetype-hint {
+  font-size: 11px !important;
+  font-style: italic !important;
+  color: var(--muted) !important;
+}
+
+/* ---- Status text ---- */
+#strategy-status {
+  font-family: var(--serif) !important;
+  font-style: italic !important;
+  font-size: 14px !important;
+  color: var(--muted) !important;
+}
+
+/* ---- Number inputs: center-aligned compact ---- */
+#strategy-direct-limit,
+#strategy-group-limit,
+#strategy-refine-iterations {
+  text-align: center;
+  padding: 8px 6px !important;
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════╗
+   ║  DESIGN SYSTEM v3 — Premium MTG deckbuilding interface              ║
+   ║  Components: page, action-card, field, btn, lab-layout, wizard, etc ║
+   ╚══════════════════════════════════════════════════════════════════════╝ */
+
+/* ─── Page container ─── */
+/* NB: .page is always combined with .tab-view, so visibility is controlled
+   by .tab-view / .tab-view.is-active rules above. We only set display when
+   the tab is active so we never override the hidden state. */
+.tab-view.page.is-active { display: block; }
+.tab-view.page--lab.is-active,
+.tab-view.page--gen.is-active { display: block; }
+
+/* ─── Page grid (action card + library) ─── */
+.page-grid {
+  display: grid;
+  gap: 24px;
+}
+.page-grid--library {
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+}
+@media (max-width: 900px) {
+  .page-grid--library { grid-template-columns: 1fr; }
+}
+
+/* ─── Action card (premium import / primary action) ─── */
+.action-card {
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  position: relative;
+  overflow: hidden;
+}
+.action-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  opacity: 0.5;
+}
+.action-card-head { display: flex; flex-direction: column; gap: 4px; }
+.action-card-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.01em;
+}
+.action-card-sub {
+  margin: 0;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--muted);
+}
+.action-card-form { display: flex; flex-direction: column; gap: 16px; }
+.action-card-cta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.action-card-cta .btn { flex: 1 1 auto; }
+
+/* ─── Field (label + input) ─── */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.field-label {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.field input,
+.field select {
+  width: 100%;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  transition: border-color 120ms, box-shadow 120ms;
+}
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-glow);
+}
+
+/* ─── Buttons ─── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms, color 120ms, transform 80ms;
+  white-space: nowrap;
+}
+.btn-primary {
+  background: linear-gradient(180deg, var(--gold), var(--gold-soft));
+  color: #1a1208;
+  border-color: var(--gold);
+}
+.btn-primary:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.btn-ghost:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.btn-block { width: 100%; }
+.btn-cta {
+  padding: 14px 18px;
+  font-size: 13px;
+}
+.btn-icon { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+
+/* ─── Section head ─── */
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.section-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.01em;
+}
+.section-meta {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+}
+
+/* ─── Library section (folders / decks list) ─── */
+.library-section {
+  min-width: 0;
+}
+.card-grid {
+  display: grid !important;
+  gap: 14px !important;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════╗
+   ║  SYNERGY LAB — 3-column layout                                      ║
+   ╚══════════════════════════════════════════════════════════════════════╝ */
+
+.lab-layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr) 320px;
+  gap: 24px;
+  align-items: start;
+}
+.lab-main {
+  grid-column: 2;
+}
+.lab-preview {
+  grid-column: 3;
+}
+@media (max-width: 1180px) {
+  .lab-layout { grid-template-columns: 260px minmax(0, 1fr); }
+  .lab-main,
+  .lab-preview { grid-column: auto; }
+  .lab-preview { grid-column: 1 / -1; position: static !important; }
+}
+@media (max-width: 820px) {
+  .lab-layout { grid-template-columns: 1fr; }
+  .lab-main,
+  .lab-preview { grid-column: auto; }
+  .lab-sidebar { position: static !important; }
+}
+
+/* ─── Sidebar (filters) ─── */
+.lab-sidebar {
+  position: sticky;
+  top: 16px;
+  align-self: start;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.lab-sidebar-inner {
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ─── Filter group (collapsible) ─── */
+.filter-group {
+  border-bottom: 1px solid var(--border);
+  padding: 4px 0;
+}
+.filter-group:last-of-type { border-bottom: none; }
+.filter-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+  padding: 10px 4px;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  transition: color 120ms;
+}
+.filter-summary::-webkit-details-marker { display: none; }
+.filter-summary::after {
+  content: "+";
+  font-family: var(--mono);
+  font-size: 16px;
+  color: var(--gold);
+  transition: transform 200ms;
+}
+.filter-group[open] .filter-summary { color: var(--text-strong); }
+.filter-group[open] .filter-summary::after { content: "−"; }
+.filter-group:hover .filter-summary { color: var(--text); }
+
+.filter-body {
+  padding: 4px 4px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.filter-body--row {
+  flex-direction: row;
+  gap: 8px;
+}
+.filter-body--row .field { flex: 1; }
+.filter-help { font-size: 11px; font-style: italic; margin: 0; }
+
+/* ─── Checkbox row ─── */
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+  padding: 4px 0;
+}
+.checkbox-row input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--gold);
+}
+
+/* ─── Lab main column ─── */
+.lab-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.lab-main-head {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.lab-main-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 36px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.015em;
+}
+.lab-main-sub {
+  margin: 4px 0 0;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+/* ─── Status banner ─── */
+.status-banner {
+  background: transparent;
+  border: none;
+  border-left: 2px solid var(--gold-soft);
+  padding: 10px 14px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--muted);
+  border-radius: 0;
+}
+
+/* ─── Lab results section ─── */
+.lab-results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ─── Lab preview (sticky right) ─── */
+.lab-preview {
+  position: sticky;
+  top: 16px;
+  align-self: start;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════╗
+   ║  DECK GENERATOR — wizard layout                                     ║
+   ╚══════════════════════════════════════════════════════════════════════╝ */
+
+.generator-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1080px) {
+  .generator-layout { grid-template-columns: 1fr; }
+}
+
+.generator-wizard {
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wizard-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  counter-reset: wizard;
+}
+.wizard-step {
+  display: block;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.wizard-step:last-child { border-bottom: none; }
+.wizard-step-num {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--gold-soft);
+  padding-top: 2px;
+}
+.wizard-step-content { min-width: 0; }
+.wizard-step-title {
+  margin: 0 0 8px;
+  font-family: var(--serif);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gold);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+.wizard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+.wizard-grid .field:first-child { grid-column: 1 / -1; }
+.wizard-cta {
+  padding-top: 8px;
+  display: flex;
+  justify-content: stretch;
+}
+.wizard-cta .btn { width: 100%; }
+
+.generator-output {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════╗
+   ║  WORKSPACE HEAD — refined                                           ║
+   ╚══════════════════════════════════════════════════════════════════════╝ */
+
+.workspace-head {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 24px;
+  margin-bottom: 28px;
+}
+#workspace-title {
+  font-family: var(--serif) !important;
+  font-size: 42px !important;
+  font-weight: 600 !important;
+  color: var(--text-strong) !important;
+  letter-spacing: -0.015em !important;
+  margin: 0 !important;
+  line-height: 1.1 !important;
+}
+#workspace-subtitle {
+  font-family: var(--serif) !important;
+  font-style: italic !important;
+  font-size: 16px !important;
+  color: var(--muted) !important;
+  margin: 6px 0 0 !important;
+  font-weight: 400 !important;
+}
+
+/* In Synergy Lab and Generator, workspace-head is redundant with lab-main-head */
+.tab-view.is-active.page--lab ~ #workspace-lower,
+.tab-view.is-active.page--gen ~ #workspace-lower { display: none; }
+
+/* ╔══════════════════════════════════════════════════════════════════════╗
+   ║  LEGACY OVERRIDES — neutralise old container styles                 ║
+   ║  inside the new layouts                                             ║
+   ╚══════════════════════════════════════════════════════════════════════╝ */
+
+/* Strip the old strategy-panel chrome inside the lab */
+.lab-layout .panel,
+.lab-layout .strategy-panel,
+.lab-layout .strategy-controls,
+.lab-layout .strategy-control-grid,
+.lab-layout .strategy-results-grid {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  display: block !important;
+  grid-template-columns: none !important;
+}
+.lab-layout .panel::before { display: none !important; }
+
+/* Strategy result blocks become flat sections inside lab-main */
+.lab-main .strategy-result-block,
+.lab-main .strategy-result-preview {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+/* Hide the old strategy-panel head if the user re-renders it */
+.lab-layout > .panel > .panel-head { display: none !important; }
+
+/* Strip generator panel chrome */
+.generator-output .panel.deck-gen-panel,
+.generator-output .deck-gen-controls {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+/* In sidebar, archetype block becomes flat */
+.lab-sidebar .strategy-archetype-filter {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  display: flex !important;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Mana toggles in sidebar — icon-only ring on selected */
+.lab-sidebar .strategy-mana-filter-row,
+.wizard-step .deck-gen-mana-row {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+}
+
+/* Hide the old workspace-head in lab + gen since lab-main-head replaces it visually */
+.page--lab > .lab-layout,
+.page--gen > .generator-layout {
+  margin-top: -8px;
+}
+
+/* Compact archetype chips */
+.lab-sidebar .strategy-archetype-chips {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 4px !important;
+}
+.lab-sidebar .strategy-archetype-chip {
+  font-size: 10px !important;
+  padding: 2px 7px !important;
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════╗
+   ║  LEFT RAIL — sidebar navigation (replaces topbar nav)              ║
+   ╚══════════════════════════════════════════════════════════════════════╝ */
+
+.app-shell--with-rail {
+  display: grid !important;
+  grid-template-columns: 224px minmax(0, 1fr) !important;
+  grid-template-rows: 100vh !important;
+  min-height: 100vh;
+  gap: 0 !important;
+  padding: 0 !important;
+  max-width: none !important;
+  margin: 0 !important;
+}
+
+/* Hide any legacy topbar that might still render */
+.app-shell--with-rail > .topbar { display: none !important; }
+
+.app-rail {
+  grid-column: 1;
+  grid-row: 1;
+  background: linear-gradient(180deg, #0d0a07 0%, #060503 100%);
+  border-right: 1px solid var(--border);
+  padding: 20px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+/* Brand */
+.rail-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  color: inherit;
+  padding: 12px 6px 14px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+.rail-brand-mark {
+  width: 64px; height: 64px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rail-brand-mark img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.rail-brand-text { display: flex; flex-direction: column; line-height: 1.1; min-width: 0; align-items: center; }
+.rail-brand-title {
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+}
+.rail-brand-eyebrow {
+  font-family: var(--sans);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold-soft);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Nav */
+.rail-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+.rail-tab {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  transition: background 120ms, color 120ms;
+  position: relative;
+}
+.rail-tab:hover {
+  background: rgba(201, 169, 97, 0.06);
+  color: var(--text);
+}
+.rail-tab.is-active {
+  background: rgba(201, 169, 97, 0.10);
+  color: var(--text-strong);
+}
+.rail-tab.is-active::before {
+  content: "";
+  position: absolute;
+  left: -14px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--gold);
+  border-radius: 0 2px 2px 0;
+}
+.rail-tab-icon {
+  width: 18px; height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+.rail-tab-label { white-space: nowrap; }
+
+/* Foot (lang switch) */
+.rail-foot {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: center;
+}
+
+/* Workspace fills the remaining column */
+.app-shell--with-rail .workspace {
+  grid-column: 2;
+  grid-row: 1;
+  padding: 28px 32px 40px !important;
+  max-width: none !important;
+  margin: 0 !important;
+  overflow-y: auto;
+  height: 100vh;
+
+  /* ── Warm relief: deep ink → warm amber ── */
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(201, 169, 97, 0.09), transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(140, 85, 30, 0.07), transparent 50%),
+    linear-gradient(160deg, #1a1208 0%, #120e08 50%, #0e0a05 100%);
+}
+
+/* Lab + generator layouts use full width inside workspace */
+.app-shell--with-rail .lab-layout {
+  grid-template-columns: 280px minmax(0, 1fr) 320px;
+}
+
+/* Responsive — collapse rail to icon-only on narrow viewports */
+@media (max-width: 960px) {
+  .app-shell--with-rail {
+    grid-template-columns: 64px minmax(0, 1fr) !important;
+  }
+  .app-rail { padding: 16px 8px; }
+  .rail-brand-text,
+  .rail-tab-label { display: none; }
+  .rail-brand { justify-content: center; padding: 4px 0 12px; }
+  .rail-tab { justify-content: center; padding: 12px 0; }
+  .rail-tab.is-active::before { left: -8px; }
+  .rail-foot .lang-switch { flex-direction: column; gap: 4px; }
+}
+@media (max-width: 600px) {
+  .app-shell--with-rail {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto 1fr !important;
+  }
+  .app-rail {
+    position: static;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    padding: 8px 12px;
+    gap: 12px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .rail-brand { border: none; padding: 0; flex-shrink: 0; }
+  .rail-brand-text { display: none; }
+  .rail-nav { flex-direction: row; gap: 4px; flex: 1; overflow-x: auto; }
+  .rail-tab { padding: 8px 10px; }
+  .rail-tab.is-active::before { display: none; }
+  .rail-foot { border: none; padding: 0; }
+  .app-shell--with-rail .workspace {
+    height: auto;
+    padding: 20px 16px 32px !important;
+  }
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════╗
+   ║  DECK CARD — redesign pour .card-grid (minmax 180px)                ║
+   ╚══════════════════════════════════════════════════════════════════════╝ */
+
+/* Recentre la grille sur des cartes larges plutôt que des icônes minuscules */
+.deck-icon-grid.card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)) !important;
+  gap: 10px !important;
+}
+
+/* Item = carte horizontale */
+.deck-icon-item {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 12px 14px !important;
+  background: var(--panel-strong) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  cursor: pointer !important;
+  transition: border-color 140ms, background 140ms, transform 100ms !important;
+  justify-items: unset !important;
+  grid-template-columns: unset !important;
+  text-align: left !important;
+}
+.deck-icon-item:hover {
+  border-color: var(--border-strong) !important;
+  background: var(--panel-elev) !important;
+  transform: translateY(-1px) !important;
+}
+.deck-icon-item.is-active {
+  border-color: var(--gold) !important;
+  background: rgba(201, 169, 97, 0.07) !important;
+  box-shadow: 0 0 0 1px rgba(201, 169, 97, 0.18) !important;
+}
+
+/* Badge initiales */
+.deck-icon-open {
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--border-strong) !important;
+  background: var(--panel-elev) !important;
+  display: grid !important;
+  place-items: center !important;
+  flex-shrink: 0 !important;
+  cursor: inherit !important;
+  transition: background 140ms !important;
+}
+.deck-icon-item:hover .deck-icon-open {
+  background: var(--bg-deep) !important;
+}
+.deck-icon-item.is-active .deck-icon-open {
+  border-color: var(--gold) !important;
+  background: rgba(201, 169, 97, 0.14) !important;
+}
+.deck-icon-glyph {
+  font-family: var(--mono) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em !important;
+  color: var(--gold) !important;
+}
+
+/* Texte dans la carte */
+.deck-icon-name {
+  max-width: none !important;
+  text-align: left !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  font-family: var(--sans) !important;
+  color: var(--text-strong) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  line-height: 1.3 !important;
+}
+.deck-icon-meta {
+  font-size: 10px !important;
+  color: var(--muted) !important;
+  font-family: var(--mono) !important;
+  margin-top: 1px !important;
+}
+
+/* Colonne texte */
+.deck-icon-item > :not(.deck-icon-open):not(.deck-icon-delete) {
+  min-width: 0;
+}
+
+/* Bouton delete — coin haut-droit */
+.deck-icon-delete {
+  position: absolute !important;
+  top: 6px !important;
+  right: 6px !important;
+  width: 16px !important;
+  height: 16px !important;
+  border-radius: 50% !important;
+  border: 1px solid rgba(194, 84, 80, 0.4) !important;
+  background: var(--panel-strong) !important;
+  color: var(--danger) !important;
+  padding: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  opacity: 0 !important;
+  transition: opacity 140ms !important;
+  z-index: 2 !important;
+}
+.deck-icon-item:hover .deck-icon-delete {
+  opacity: 1 !important;
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════╗
+   ║  DECK ICON GRID v2 — icône seule, nom micro en dessous              ║
+   ╚══════════════════════════════════════════════════════════════════════╝ */
+
+/* Grille de petites icônes */
+.deck-icon-grid.card-grid {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 12px !important;
+  grid-template-columns: none !important;
+  align-content: start !important;
+}
+
+/* Tuile — colonne centrée */
+.deck-icon-item {
+  position: relative !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 0 !important;
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  width: 72px !important;
+  cursor: pointer !important;
+  text-align: center !important;
+  transition: none !important;
+  justify-items: unset !important;
+  grid-template-columns: unset !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+.deck-icon-item:hover { transform: translateY(-2px) !important; }
+
+/* Badge icône */
+.deck-icon-open {
+  width: 56px !important;
+  height: 56px !important;
+  min-width: 56px !important;
+  border-radius: 14px !important;
+  border: 1.5px solid var(--border) !important;
+  background: var(--panel-strong) !important;
+  display: grid !important;
+  place-items: center !important;
+  flex-shrink: 0 !important;
+  cursor: pointer !important;
+  transition: border-color 140ms, background 140ms, box-shadow 140ms !important;
+}
+.deck-icon-item:hover .deck-icon-open {
+  border-color: var(--border-strong) !important;
+  background: var(--panel-elev) !important;
+}
+.deck-icon-item.is-active .deck-icon-open {
+  border-color: var(--gold) !important;
+  background: rgba(201, 169, 97, 0.12) !important;
+  box-shadow: 0 0 0 3px rgba(201, 169, 97, 0.18) !important;
+}
+
+.deck-icon-glyph {
+  font-family: var(--mono) !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em !important;
+  color: var(--gold) !important;
+}
+.deck-icon-item.is-active .deck-icon-glyph {
+  color: var(--text-strong) !important;
+}
+
+/* Nom — micro label tronqué */
+.deck-icon-name {
+  max-width: 72px !important;
+  width: 72px !important;
+  text-align: center !important;
+  font-family: var(--sans) !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  color: var(--muted) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  line-height: 1.2 !important;
+  margin: 0 !important;
+}
+.deck-icon-item.is-active .deck-icon-name { color: var(--text) !important; }
+.deck-icon-item:hover .deck-icon-name { color: var(--text) !important; }
+
+/* Meta — cachée */
+.deck-icon-meta { display: none !important; }
+
+/* Delete — badge rouge en haut à droite, visible au hover uniquement */
+.deck-icon-delete {
+  position: absolute !important;
+  top: -4px !important;
+  right: 0 !important;
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 50% !important;
+  border: 1px solid rgba(194, 84, 80, 0.5) !important;
+  background: #0d0a07 !important;
+  color: var(--danger) !important;
+  padding: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  opacity: 0 !important;
+  transition: opacity 120ms !important;
+  z-index: 2 !important;
+}
+.deck-icon-item:hover .deck-icon-delete { opacity: 1 !important; }
+
+/* ======================================================================
+   WORKSPACE RELIEF THEME — subtle warm depth over the dark base
+   Adds a warm amber glow to panels/cards to distinguish from the rail
+   ====================================================================== */
+
+/* Panels / cards get a very subtle warm tint vs flat dark rail */
+.workspace .lab-sidebar-inner {
+  background: rgba(30, 22, 12, 0.90) !important;
+  border-color: rgba(201, 169, 97, 0.16) !important;
+}
+.workspace .generator-wizard {
+  background: rgba(30, 22, 12, 0.90) !important;
+  border-color: rgba(201, 169, 97, 0.16) !important;
+}
+.workspace .strategy-card {
+  background: rgba(26, 20, 10, 0.88) !important;
+}
+.workspace .strategy-group {
+  background: rgba(22, 17, 8, 0.75) !important;
+}
+
+/* Rail border */
+.app-rail {
+  border-right-color: rgba(201, 169, 97, 0.22) !important;
 }

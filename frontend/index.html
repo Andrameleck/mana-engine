@@ -7,50 +7,60 @@
   <link rel="stylesheet" href="/ui/static/styles.css">
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark" aria-hidden="true">
-          <img src="/ui/static/logo.jpg" alt="">
-        </div>
-        <p class="eyebrow">MTG</p>
-      </div>
+  <div class="app-shell app-shell--with-rail">
+    <aside class="app-rail" aria-label="Navigation principale">
+      <a class="rail-brand" href="#" aria-label="mtgcodex">
+        <span class="rail-brand-mark" aria-hidden="true">
+          <img src="/ui/static/logo.webp" alt="">
+        </span>
+        <span class="rail-brand-text">
+          <span class="rail-brand-title">MTGCODEX</span>
+          <span class="rail-brand-eyebrow">Magic: The Gathering</span>
+        </span>
+      </a>
 
-      <nav class="side-nav" aria-label="Navigation principale">
-        <button type="button" class="side-tab is-active" data-tab="collections" data-label="Collections" aria-label="Collections" title="Collections">
-          <svg viewBox="0 0 24 24" class="side-tab-icon" aria-hidden="true">
+      <nav class="rail-nav" aria-label="Sections">
+        <button type="button" class="rail-tab side-tab is-active" data-tab="collections" data-label="Collections" aria-label="Collections">
+          <svg viewBox="0 0 24 24" class="rail-tab-icon side-tab-icon" aria-hidden="true">
             <rect x="4" y="4" width="7" height="7" rx="1.5"></rect>
             <rect x="13" y="4" width="7" height="7" rx="1.5"></rect>
             <rect x="4" y="13" width="7" height="7" rx="1.5"></rect>
             <rect x="13" y="13" width="7" height="7" rx="1.5"></rect>
           </svg>
-          <span class="visually-hidden">Collections</span>
+          <span class="rail-tab-label side-tab-label">Collections</span>
         </button>
-        <button type="button" class="side-tab" data-tab="decks" data-label="Decks" aria-label="Decks" title="Decks">
-          <svg viewBox="0 0 24 24" class="side-tab-icon" aria-hidden="true">
+        <button type="button" class="rail-tab side-tab" data-tab="decks" data-label="Decks" aria-label="Decks">
+          <svg viewBox="0 0 24 24" class="rail-tab-icon side-tab-icon" aria-hidden="true">
             <path d="M6 4h9a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"></path>
             <path d="M9 2h9a2 2 0 0 1 2 2v12"></path>
           </svg>
-          <span class="visually-hidden">Decks</span>
+          <span class="rail-tab-label side-tab-label">Decks</span>
         </button>
-        <button type="button" class="side-tab" data-tab="strategy" data-label="Strategy" aria-label="Strategy" title="Strategy">
-          <svg viewBox="0 0 24 24" class="side-tab-icon" aria-hidden="true">
+        <button type="button" class="rail-tab side-tab" data-tab="strategy" data-label="Synergy Lab" aria-label="Synergy Lab">
+          <svg viewBox="0 0 24 24" class="rail-tab-icon side-tab-icon" aria-hidden="true">
             <path d="M12 3v18"></path>
             <path d="M4 8l8 4 8-4"></path>
             <path d="M4 16l8 4 8-4"></path>
           </svg>
-          <span class="visually-hidden">Strategy</span>
+          <span class="rail-tab-label side-tab-label">Synergy Lab</span>
         </button>
-        <button type="button" class="side-tab" data-tab="generator" data-label="Générateur" aria-label="Générateur de deck" title="Générateur de deck">
-          <svg viewBox="0 0 24 24" class="side-tab-icon" aria-hidden="true">
+        <button type="button" class="rail-tab side-tab" data-tab="generator" data-label="Générateur" aria-label="Générateur de deck">
+          <svg viewBox="0 0 24 24" class="rail-tab-icon side-tab-icon" aria-hidden="true">
             <path d="M4 4h6v6H4z"></path>
             <path d="M14 4h6v6h-6z"></path>
-            <path d="M4 14h6v6H4z"></path>
+            <path d="M4 14h6v6h-6z"></path>
             <path d="M14 14h6v6h-6z"></path>
           </svg>
-          <span class="visually-hidden">Générateur de deck</span>
+          <span class="rail-tab-label side-tab-label">Générateur</span>
         </button>
       </nav>
+
+      <div class="rail-foot">
+        <div class="lang-switch" role="group" aria-label="Langue d'affichage">
+          <button type="button" id="lang-en" class="lang-btn is-active">EN</button>
+          <button type="button" id="lang-fr" class="lang-btn">FR</button>
+        </div>
+      </div>
     </aside>
 
     <main class="workspace">
@@ -59,297 +69,345 @@
           <h2 id="workspace-title">Collections</h2>
           <p id="workspace-subtitle" class="muted">Creer et gerer plusieurs collections.</p>
         </div>
-        <div class="lang-switch" role="group" aria-label="Langue d'affichage">
-          <button type="button" id="lang-en" class="lang-btn is-active">EN</button>
-          <button type="button" id="lang-fr" class="lang-btn">FR</button>
-        </div>
       </header>
 
-      <section id="tab-collections" class="tab-view is-active" aria-labelledby="workspace-title">
-        <div class="collection-admin">
-          <section class="panel panel-compact">
-            <div class="panel-head">
-              <h3>Nouveau dossier collection</h3>
-            </div>
-            <form id="collection-load-form" class="collection-load-inline">
-              <label for="collection-name">
-                Nom du dossier
+      <section id="tab-collections" class="tab-view is-active page" aria-labelledby="workspace-title">
+        <div class="page-grid page-grid--library">
+          <article class="action-card">
+            <header class="action-card-head">
+              <h3 class="action-card-title">Import collection</h3>
+              <p class="action-card-sub">CSV from Manabox, Archidekt, Moxfield…</p>
+            </header>
+            <form id="collection-load-form" class="action-card-form">
+              <label class="field" for="collection-name">
+                <span class="field-label">Folder name</span>
                 <input id="collection-name" type="text" placeholder="Modern Staples">
               </label>
-              <div class="actions collection-actions-inline">
-                <input id="collection-source-file" type="file" class="hidden-file-input">
-                <button type="button" id="collection-pick-file" class="btn-icon-only" aria-label="Choisir CSV" title="Choisir CSV">
+              <input id="collection-source-file" type="file" class="hidden-file-input">
+              <div class="action-card-cta">
+                <button type="button" id="collection-pick-file" class="btn btn-ghost" aria-label="Choisir CSV" title="Choisir CSV">
                   <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
                     <path d="M12 4v11"></path>
                     <path d="M8.5 8.5L12 5l3.5 3.5"></path>
                     <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"></path>
                   </svg>
-                  <span class="visually-hidden">Choisir CSV</span>
+                  <span>Choose CSV</span>
                 </button>
-                <button type="submit" class="btn-icon-only" aria-label="Creer le dossier" title="Creer le dossier">
+                <button type="submit" class="btn btn-primary" aria-label="Creer le dossier" title="Creer le dossier">
                   <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
                     <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h4l1.6 2H18.5A1.5 1.5 0 0 1 20 9.5v8A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z"></path>
                     <path d="M12 10.5v5"></path>
                     <path d="M9.5 13h5"></path>
                   </svg>
-                  <span class="visually-hidden">Creer le dossier</span>
+                  <span>Create folder</span>
                 </button>
               </div>
             </form>
-          </section>
+          </article>
 
-          <section class="panel panel-compact">
-            <div class="panel-head">
-              <h3>Dossiers collections</h3>
-            </div>
-            <div id="collections-list" class="entity-list folder-grid"></div>
+          <section class="library-section">
+            <header class="section-head">
+              <h3 class="section-title">Folders</h3>
+              <span class="section-meta muted">All collections</span>
+            </header>
+            <div id="collections-list" class="entity-list collections-table-wrap"></div>
           </section>
         </div>
       </section>
 
-      <section id="tab-decks" class="tab-view" aria-labelledby="workspace-title">
-        <div class="collection-admin">
-          <section class="panel panel-compact">
-            <div class="panel-head">
-              <h3>Import deck</h3>
-            </div>
-            <form id="deck-load-form" class="collection-load-inline">
-              <label for="deck-name">
-                Nom du deck
+      <section id="tab-decks" class="tab-view page" aria-labelledby="workspace-title">
+        <div class="page-grid page-grid--library">
+          <article class="action-card">
+            <header class="action-card-head">
+              <h3 class="action-card-title">Import deck</h3>
+              <p class="action-card-sub">Paste or upload a .txt / .dec file.</p>
+            </header>
+            <form id="deck-load-form" class="action-card-form">
+              <label class="field" for="deck-name">
+                <span class="field-label">Deck name</span>
                 <input id="deck-name" type="text" placeholder="UW Control">
               </label>
-              <div class="actions collection-actions-inline">
-                <input id="deck-source-file" type="file" class="hidden-file-input">
-                <button type="button" id="deck-pick-file" class="btn-icon-only" aria-label="Choisir un fichier deck" title="Choisir un fichier deck">
+              <input id="deck-source-file" type="file" class="hidden-file-input">
+              <div class="action-card-cta">
+                <button type="button" id="deck-pick-file" class="btn btn-ghost" aria-label="Choisir un fichier deck" title="Choisir un fichier deck">
                   <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
                     <path d="M12 4v11"></path>
                     <path d="M8.5 8.5L12 5l3.5 3.5"></path>
                     <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"></path>
                   </svg>
-                  <span class="visually-hidden">Choisir un fichier deck</span>
+                  <span>Choose file</span>
                 </button>
-                <button type="submit" class="btn-icon-only" aria-label="Ajouter le deck" title="Ajouter le deck">
+                <button type="submit" class="btn btn-primary" aria-label="Ajouter le deck" title="Ajouter le deck">
                   <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
                     <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h4l1.6 2H18.5A1.5 1.5 0 0 1 20 9.5v8A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z"></path>
                     <path d="M12 10.5v5"></path>
                     <path d="M9.5 13h5"></path>
                   </svg>
-                  <span class="visually-hidden">Ajouter le deck</span>
+                  <span>Add deck</span>
                 </button>
               </div>
             </form>
-          </section>
+          </article>
 
-          <section class="panel panel-compact deck-list-panel">
-            <div class="panel-head">
-              <h3>Decks list</h3>
-            </div>
-            <div id="decks-list" class="entity-list deck-icon-grid"></div>
+          <section class="library-section">
+            <header class="section-head">
+              <h3 class="section-title">Decks</h3>
+              <span class="section-meta muted">Imported decks</span>
+            </header>
+            <div id="decks-list" class="entity-list"></div>
           </section>
         </div>
       </section>
 
-      <section id="tab-strategy" class="tab-view" aria-labelledby="workspace-title">
-        <section class="panel strategy-panel">
-          <div class="panel-head">
-            <h3>Synergy Finder</h3>
-          </div>
+      <section id="tab-strategy" class="tab-view page page--lab" aria-labelledby="workspace-title">
+        <div class="lab-layout">
+          <aside class="lab-sidebar" aria-label="Filters">
+            <div class="lab-sidebar-inner">
+              <details class="filter-group" open>
+                <summary class="filter-summary">Seed card</summary>
+                <div class="filter-body">
+                  <label class="field" for="strategy-seed-input">
+                    <span class="field-label" id="strategy-seed-label">Carte seed</span>
+                    <input id="strategy-seed-input" type="search" list="strategy-seed-list" placeholder="Entomb…">
+                    <datalist id="strategy-seed-list"></datalist>
+                  </label>
+                  <p id="strategy-source-meta" class="filter-help muted" style="display:none"></p>
+                </div>
+              </details>
 
-          <div class="strategy-controls">
-            <p id="strategy-source-meta" class="muted" style="display:none"></p>
-            <div class="strategy-control-grid">
-              <label for="strategy-seed-input">
-                <span id="strategy-seed-label">Carte seed</span>
-                <input id="strategy-seed-input" type="search" list="strategy-seed-list" placeholder="Entomb">
-                <datalist id="strategy-seed-list"></datalist>
-              </label>
-              <label for="strategy-direct-limit">
-                <span id="strategy-direct-limit-label">Top synergies directes</span>
-                <input id="strategy-direct-limit" type="number" min="4" max="24" value="12">
-              </label>
-              <label for="strategy-format">
-                <span id="strategy-format-label">Format</span>
-                <select id="strategy-format">
-                  <option value="none" selected>Aucun (pas de filtre)</option>
-                  <option value="commander">Commander</option>
-                  <option value="modern">Modern</option>
-                  <option value="legacy">Legacy</option>
-                  <option value="vintage">Vintage</option>
-                  <option value="pioneer">Pioneer</option>
-                  <option value="standard">Standard</option>
-                  <option value="pauper">Pauper</option>
-                  <option value="brawl">Brawl</option>
-                  <option value="historic">Historic</option>
-                </select>
-              </label>
-              <label for="strategy-allow-illegal" class="strategy-toggle">
-                <span class="strategy-toggle-row">
-                  <input id="strategy-allow-illegal" type="checkbox">
-                  <span id="strategy-allow-illegal-hint">Autoriser les cartes hors format</span>
-                </span>
-              </label>
-              <label for="strategy-group-limit">
-                <span id="strategy-group-limit-label">Top groupes</span>
-                <input id="strategy-group-limit" type="number" min="3" max="12" value="6">
-              </label>
-              <label for="strategy-refine-iterations">
-                <span id="strategy-refine-iterations-label">Itérations raffinement</span>
-                <input id="strategy-refine-iterations" type="number" min="0" max="4" value="2">
-              </label>
-              <label for="strategy-only-collection" class="strategy-toggle">
-                <span class="strategy-toggle-row">
-                  <input id="strategy-only-collection" type="checkbox">
-                  <span id="strategy-only-collection-hint">Limiter le calcul aux cartes de la collection chargee</span>
-                </span>
-              </label>
-              <label for="strategy-force-recompute" class="strategy-toggle">
-                <span class="strategy-toggle-row">
-                  <input id="strategy-force-recompute" type="checkbox">
-                  <span id="strategy-force-recompute-hint">Forcer le recalcul (ignorer le cache)</span>
-                </span>
-              </label>
-              <div class="strategy-archetype-filter" id="strategy-archetype-block">
-                <div class="strategy-archetype-head">
-                  <span class="strategy-archetype-title">Archétypes ciblés</span>
-                  <div class="strategy-archetype-actions">
-                    <button type="button" id="strategy-archetype-all" class="ghost">Tout</button>
-                    <button type="button" id="strategy-archetype-none" class="ghost">Aucun</button>
-                    <label class="strategy-archetype-strict-toggle">
-                      <input id="strategy-archetype-strict" type="checkbox">
-                      <span>Strict</span>
-                    </label>
+              <details class="filter-group" open>
+                <summary class="filter-summary">Format</summary>
+                <div class="filter-body">
+                  <label class="field" for="strategy-format">
+                    <span class="field-label" id="strategy-format-label">Format</span>
+                    <select id="strategy-format">
+                      <option value="none" selected>Aucun (pas de filtre)</option>
+                      <option value="commander">Commander</option>
+                      <option value="modern">Modern</option>
+                      <option value="legacy">Legacy</option>
+                      <option value="vintage">Vintage</option>
+                      <option value="pioneer">Pioneer</option>
+                      <option value="standard">Standard</option>
+                      <option value="pauper">Pauper</option>
+                      <option value="brawl">Brawl</option>
+                      <option value="historic">Historic</option>
+                    </select>
+                  </label>
+                  <label class="checkbox-row" for="strategy-allow-illegal">
+                    <input id="strategy-allow-illegal" type="checkbox">
+                    <span id="strategy-allow-illegal-hint">Hors format</span>
+                  </label>
+                </div>
+              </details>
+
+              <details class="filter-group" open>
+                <summary class="filter-summary">Colors</summary>
+                <div class="filter-body">
+                  <label class="strategy-mana-filter">
+                    <span class="strategy-mana-filter-row">
+                      <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="W"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/W.svg" alt="W" loading="lazy"></label>
+                      <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="U"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/U.svg" alt="U" loading="lazy"></label>
+                      <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="B"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/B.svg" alt="B" loading="lazy"></label>
+                      <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="R"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/R.svg" alt="R" loading="lazy"></label>
+                      <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="G"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/G.svg" alt="G" loading="lazy"></label>
+                      <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="C"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/C.svg" alt="C" loading="lazy"></label>
+                    </span>
+                  </label>
+                </div>
+              </details>
+
+              <details class="filter-group">
+                <summary class="filter-summary">Archetypes</summary>
+                <div class="filter-body">
+                  <div class="strategy-archetype-filter" id="strategy-archetype-block">
+                    <div class="strategy-archetype-head">
+                      <span class="strategy-archetype-title">Archétypes ciblés</span>
+                      <div class="strategy-archetype-actions">
+                        <button type="button" id="strategy-archetype-all" class="ghost">Tout</button>
+                        <button type="button" id="strategy-archetype-none" class="ghost">Aucun</button>
+                        <label class="strategy-archetype-strict-toggle">
+                          <input id="strategy-archetype-strict" type="checkbox">
+                          <span>Strict</span>
+                        </label>
+                      </div>
+                    </div>
+                    <div id="strategy-archetype-chips" class="strategy-archetype-chips"></div>
+                    <p class="muted strategy-archetype-hint">Aucune sélection = pas de filtre. Mode strict = ignore les groupes hors archétype.</p>
                   </div>
                 </div>
-                <div id="strategy-archetype-chips" class="strategy-archetype-chips"></div>
-                <p class="muted strategy-archetype-hint">Aucune sélection = pas de filtre. Mode strict = ignore les groupes hors archétype.</p>
-              </div>
-              <label class="strategy-mana-filter">
-                <span class="strategy-mana-filter-row">
-                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="W"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/W.svg" alt="W" loading="lazy"></label>
-                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="U"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/U.svg" alt="U" loading="lazy"></label>
-                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="B"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/B.svg" alt="B" loading="lazy"></label>
-                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="R"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/R.svg" alt="R" loading="lazy"></label>
-                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="G"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/G.svg" alt="G" loading="lazy"></label>
-                  <label class="strategy-mana-toggle"><input type="checkbox" data-strategy-mana="C"><img class="strategy-mana-icon" src="https://svgs.scryfall.io/card-symbols/C.svg" alt="C" loading="lazy"></label>
-                </span>
-              </label>
-              <div class="actions strategy-actions">
-                <button type="button" id="strategy-run-btn">Calculer</button>
-              </div>
+              </details>
+
+              <details class="filter-group">
+                <summary class="filter-summary">Depth</summary>
+                <div class="filter-body filter-body--row">
+                  <label class="field" for="strategy-direct-limit">
+                    <span class="field-label" id="strategy-direct-limit-label">Direct</span>
+                    <input id="strategy-direct-limit" type="number" min="4" max="24" value="12">
+                  </label>
+                  <label class="field" for="strategy-group-limit">
+                    <span class="field-label" id="strategy-group-limit-label">Groups</span>
+                    <input id="strategy-group-limit" type="number" min="3" max="12" value="6">
+                  </label>
+                  <label class="field" for="strategy-refine-iterations">
+                    <span class="field-label" id="strategy-refine-iterations-label">Refine</span>
+                    <input id="strategy-refine-iterations" type="number" min="0" max="4" value="2">
+                  </label>
+                </div>
+              </details>
+
+              <details class="filter-group">
+                <summary class="filter-summary">Advanced</summary>
+                <div class="filter-body">
+                  <label class="checkbox-row" for="strategy-only-collection">
+                    <input id="strategy-only-collection" type="checkbox">
+                    <span id="strategy-only-collection-hint">Limiter le calcul aux cartes de la collection chargée</span>
+                  </label>
+                  <label class="checkbox-row" for="strategy-force-recompute">
+                    <input id="strategy-force-recompute" type="checkbox">
+                    <span id="strategy-force-recompute-hint">Forcer le recalcul (ignorer le cache)</span>
+                  </label>
+                </div>
+              </details>
+
+              <button type="button" id="strategy-run-btn" class="btn btn-primary btn-block btn-cta">Compute synergies</button>
             </div>
-          </div>
+          </aside>
 
-          <div id="strategy-status" class="muted">En attente de calcul.</div>
+          <main class="lab-main">
+            <div id="strategy-status" class="status-banner muted">En attente de calcul.</div>
 
-          <div class="strategy-results-grid">
-            <section class="strategy-result-block">
-              <div class="strategy-result-head">
-                <h4>Synergies directes</h4>
-              </div>
+            <section class="lab-results">
+              <header class="section-head">
+                <h3 class="section-title">Direct synergies</h3>
+                <span class="section-meta muted">Cards that pair directly with the seed</span>
+              </header>
               <div id="strategy-direct-list" class="strategy-card-grid"></div>
             </section>
 
-            <section class="strategy-result-block">
-              <div class="strategy-result-head">
-                <h4>Groupes de cartes</h4>
-              </div>
+            <section class="lab-results">
+              <header class="section-head">
+                <h3 class="section-title">Card groups</h3>
+                <span class="section-meta muted">Mechanical packages and combo clusters</span>
+              </header>
               <div id="strategy-group-list" class="strategy-group-list"></div>
             </section>
+          </main>
 
-            <aside id="strategy-card-preview" class="strategy-result-preview" aria-live="polite">
-              <div class="strategy-result-head">
-                <h4 id="strategy-card-preview-title">Carte</h4>
-              </div>
-              <div class="strategy-card-preview-body">
-                <img id="strategy-card-preview-image" alt="Card preview" loading="lazy">
-                <p id="strategy-card-preview-text" class="muted">Survole ou selectionne une carte de synergie pour afficher ses details.</p>
-                <dl id="strategy-card-preview-meta" class="card-preview-meta"></dl>
-              </div>
-            </aside>
-          </div>
-        </section>
+          <aside id="strategy-card-preview" class="lab-preview strategy-result-preview" aria-live="polite">
+            <div class="strategy-result-head">
+              <h4 id="strategy-card-preview-title">Card preview</h4>
+            </div>
+            <div class="strategy-card-preview-body">
+              <img id="strategy-card-preview-image" alt="Card preview" loading="lazy">
+              <p id="strategy-card-preview-text" class="muted">Survole ou sélectionne une carte de synergie pour afficher ses détails.</p>
+              <dl id="strategy-card-preview-meta" class="card-preview-meta"></dl>
+            </div>
+          </aside>
+        </div>
       </section>
 
-      <section id="tab-generator" class="tab-view" aria-labelledby="workspace-title">
-        <section class="panel deck-gen-panel">
-          <div class="panel-head">
-            <h3>Générateur de deck</h3>
-          </div>
+      <section id="tab-generator" class="tab-view page page--gen" aria-labelledby="workspace-title">
+        <div class="generator-layout">
+          <section class="generator-wizard">
+            <header class="section-head">
+              <h3 class="section-title">Build a deck</h3>
+              <span class="section-meta muted">Pick your shell, then generate variants</span>
+            </header>
 
-          <div class="deck-gen-controls">
-            <div class="deck-gen-control-grid">
-              <label for="deck-gen-format">
-                <span>Format</span>
-                <select id="deck-gen-format">
-                  <option value="random">🎲 Aléatoire</option>
-                  <option value="commander">Commander</option>
-                  <option value="brawl">Brawl</option>
-                  <option value="modern">Modern</option>
-                  <option value="legacy">Legacy</option>
-                  <option value="vintage">Vintage</option>
-                  <option value="pioneer">Pioneer</option>
-                  <option value="standard">Standard</option>
-                  <option value="pauper">Pauper</option>
-                  <option value="historic">Historic</option>
-                </select>
-              </label>
-
-              <label for="deck-gen-commander">
-                <span>Commandant (optionnel)</span>
-                <input id="deck-gen-commander" type="search" list="deck-gen-commander-list" placeholder="Auto-sélection">
-                <datalist id="deck-gen-commander-list"></datalist>
-              </label>
-
-              <label for="deck-gen-variants">
-                <span>Variantes</span>
-                <input id="deck-gen-variants" type="number" min="1" max="5" value="3">
-              </label>
-
-              <label class="deck-gen-mana-filter">
-                <span>Identité de couleur</span>
-                <span class="deck-gen-mana-row">
-                  <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="W"><img src="https://svgs.scryfall.io/card-symbols/W.svg" alt="W" loading="lazy"></label>
-                  <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="U"><img src="https://svgs.scryfall.io/card-symbols/U.svg" alt="U" loading="lazy"></label>
-                  <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="B"><img src="https://svgs.scryfall.io/card-symbols/B.svg" alt="B" loading="lazy"></label>
-                  <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="R"><img src="https://svgs.scryfall.io/card-symbols/R.svg" alt="R" loading="lazy"></label>
-                  <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="G"><img src="https://svgs.scryfall.io/card-symbols/G.svg" alt="G" loading="lazy"></label>
-                  <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="C"><img src="https://svgs.scryfall.io/card-symbols/C.svg" alt="C" loading="lazy"></label>
-                </span>
-              </label>
-            </div>
-
-            <div class="deck-gen-archetype-block">
-              <div class="deck-gen-archetype-head">
-                <span class="deck-gen-archetype-title">Archétypes ciblés</span>
-                <div class="deck-gen-archetype-actions">
-                  <button type="button" id="deck-gen-archetype-none" class="ghost">Aucun</button>
+            <ol class="wizard-steps">
+              <li class="wizard-step">
+                <div class="wizard-step-content">
+                  <h4 class="wizard-step-title">Format &amp; commander</h4>
+                  <div class="wizard-grid">
+                    <label class="field" for="deck-gen-format">
+                      <span class="field-label">Format</span>
+                      <select id="deck-gen-format">
+                        <option value="random">🎲 Aléatoire</option>
+                        <option value="commander">Commander</option>
+                        <option value="brawl">Brawl</option>
+                        <option value="modern">Modern</option>
+                        <option value="legacy">Legacy</option>
+                        <option value="vintage">Vintage</option>
+                        <option value="pioneer">Pioneer</option>
+                        <option value="standard">Standard</option>
+                        <option value="pauper">Pauper</option>
+                        <option value="historic">Historic</option>
+                      </select>
+                    </label>
+                    <label class="field" for="deck-gen-commander">
+                      <span class="field-label">Commander</span>
+                      <input id="deck-gen-commander" type="search" list="deck-gen-commander-list" placeholder="Auto-select">
+                      <datalist id="deck-gen-commander-list"></datalist>
+                    </label>
+                    <label class="field" for="deck-gen-variants">
+                      <span class="field-label">Variants</span>
+                      <input id="deck-gen-variants" type="number" min="1" max="5" value="3">
+                    </label>
+                  </div>
                 </div>
-              </div>
-              <div id="deck-gen-archetype-chips" class="deck-gen-archetype-chips"></div>
-              <p class="muted">Sélectionne un ou plusieurs archétypes pour orienter le deck.</p>
-            </div>
+              </li>
 
-            <div class="deck-gen-collection-block">
-              <label class="deck-gen-collection-toggle-row">
-                <input type="checkbox" id="deck-gen-use-collection">
-                <span>Utiliser uniquement ma collection</span>
-              </label>
-              <div id="deck-gen-collection-picker" class="deck-gen-collection-picker is-hidden">
-                <select id="deck-gen-collection-select">
-                  <option value="">Chargement…</option>
-                </select>
-                <span id="deck-gen-collection-status" class="muted"></span>
-              </div>
-            </div>
+              <li class="wizard-step">
+                <div class="wizard-step-content">
+                  <h4 class="wizard-step-title">Color identity</h4>
+                  <label class="deck-gen-mana-filter">
+                    <span class="deck-gen-mana-row">
+                      <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="W"><img src="https://svgs.scryfall.io/card-symbols/W.svg" alt="W" loading="lazy"></label>
+                      <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="U"><img src="https://svgs.scryfall.io/card-symbols/U.svg" alt="U" loading="lazy"></label>
+                      <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="B"><img src="https://svgs.scryfall.io/card-symbols/B.svg" alt="B" loading="lazy"></label>
+                      <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="R"><img src="https://svgs.scryfall.io/card-symbols/R.svg" alt="R" loading="lazy"></label>
+                      <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="G"><img src="https://svgs.scryfall.io/card-symbols/G.svg" alt="G" loading="lazy"></label>
+                      <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="C"><img src="https://svgs.scryfall.io/card-symbols/C.svg" alt="C" loading="lazy"></label>
+                    </span>
+                  </label>
+                </div>
+              </li>
 
-            <div class="actions deck-gen-actions">
-              <button type="button" id="deck-gen-run-btn" class="primary">Générer</button>
-            </div>
-          </div>
+              <li class="wizard-step">
+                <div class="wizard-step-content">
+                  <h4 class="wizard-step-title">Archetypes</h4>
+                  <div class="deck-gen-archetype-block">
+                    <div class="deck-gen-archetype-head">
+                      <span class="deck-gen-archetype-title">Archétypes ciblés</span>
+                      <div class="deck-gen-archetype-actions">
+                        <button type="button" id="deck-gen-archetype-none" class="ghost ghost--xs">Aucun</button>
+                      </div>
+                    </div>
+                    <div id="deck-gen-archetype-chips" class="deck-gen-archetype-chips"></div>
+                    <p class="muted">Pick one or more archetypes to steer the deck.</p>
+                  </div>
+                </div>
+              </li>
 
-          <div id="deck-gen-status" class="muted">Choisis tes options puis clique sur Générer.</div>
-          <div id="deck-gen-results" class="deck-gen-results"></div>
-        </section>
+              <li class="wizard-step">
+                <div class="wizard-step-content">
+                  <h4 class="wizard-step-title">Card pool</h4>
+                  <div class="deck-gen-collection-block">
+                    <label class="checkbox-row deck-gen-collection-toggle-row">
+                      <input type="checkbox" id="deck-gen-use-collection">
+                      <span>Use only my collection</span>
+                    </label>
+                    <div id="deck-gen-collection-picker" class="deck-gen-collection-picker is-hidden">
+                      <select id="deck-gen-collection-select">
+                        <option value="">Loading…</option>
+                      </select>
+                      <span id="deck-gen-collection-status" class="muted"></span>
+                    </div>
+                  </div>
+                </div>
+              </li>
+            </ol>
+
+            <div class="wizard-cta">
+              <button type="button" id="deck-gen-run-btn" class="btn btn-primary btn-cta primary">Generate decks</button>
+            </div>
+          </section>
+
+          <section class="generator-output">
+            <div id="deck-gen-status" class="status-banner muted">Pick your options then click Generate.</div>
+            <div id="deck-gen-results" class="deck-gen-results"></div>
+          </section>
+        </div>
       </section>
 
       <div id="workspace-lower" class="workspace-lower">

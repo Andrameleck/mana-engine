@@ -1,3 +1,9 @@
+import {
+  addCardToStoredCollection,
+  removeCardFromStoredCollection,
+  getStoredCollection
+} from "./api.js";
+
 const COMPACT_COLUMN_ORDER = [
   "quantity",
   "name",
@@ -60,8 +66,14 @@ const UI_STATE = {
   viewMode: "table",
   searchQuery: "",
   sortKey: CARD_VIEW_SORT_KEYS.NAME_ASC,
+  selectedColors: [],
+  previewDockEnabled: true,
+  editMode: false,
   activeViewKey: "",
-  viewStateByKey: new Map()
+  viewStateByKey: new Map(),
+  currentCollectionId: "",
+  currentCollectionMeta: null,
+  currentPayload: null
 };
 
 const PREVIEW_STATE = {
@@ -71,6 +83,11 @@ const PREVIEW_STATE = {
   hideTimer: null,
   requestToken: 0,
   cache: new Map()
+};
+
+const UI_HANDLERS = {
+  reloadStoredCollection: null,
+  setDeckPane: null
 };
 
 const UI_I18N = {
@@ -122,6 +139,9 @@ function uiText(key) {
 let releaseScrollbarSync = null;
 const TILE_MANA_CACHE = new Map();
 const TILE_PRICE_CACHE = new Map();
+const DECK_ROW_METADATA_CACHE = new Map();
+const DECK_ROW_HYDRATION_TASKS = new Map();
+let DECK_ROW_HYDRATION_TOKEN = 0;
 
 initPreviewEvents();
 
@@ -129,7 +149,15 @@ function renderCollection(payload) {
   const title = document.getElementById("table-title");
   const wrap = document.getElementById("table-wrap");
   const summary = document.getElementById("load-summary");
+  const tablePanel = title?.closest(".table-panel");
+  const isCollectionsContext = String(payload?.ui_context || "").toLowerCase() === "collections";
+  const isDecksContext = String(payload?.ui_context || "").toLowerCase() === "decks";
+  UI_STATE.currentPayload = payload || null;
+  UI_STATE.currentCollectionId = String(payload?.collection?.id || "");
+  UI_STATE.currentCollectionMeta = payload?.collection || null;
 
+  tablePanel?.classList.toggle("is-collection-view", isCollectionsContext);
+  tablePanel?.classList.toggle("is-deck-view", isDecksContext);
   wrap.innerHTML = "";
   wrap.classList.remove("is-card-view");
   wrap.classList.remove("is-card-view-deck");
@@ -151,8 +179,10 @@ function renderCollection(payload) {
   }
 
   const source = `${payload.source_type || "source"}: ${payload.path || ""}`;
-  title.textContent = `${payload.table || "Collection"} (${payload.row_count} lignes)`;
-  summary.textContent = source;
+  title.textContent = isDecksContext
+    ? `${payload.table || "Deck"}`
+    : `${payload.table || "Collection"} (${payload.row_count} lignes)`;
+  summary.textContent = isDecksContext ? "" : source;
   wrap.dataset.table = String(payload.source_type || "").toLowerCase();
   UI_STATE.viewMode = String(payload.view_mode || "table").toLowerCase() === "cards"
     ? "cards"
@@ -167,6 +197,9 @@ function renderCollection(payload) {
   UI_STATE.rows = Array.isArray(payload.rows) ? payload.rows.map(normalizeRowObject) : [];
   UI_STATE.rawColumns = payloadColumns.length > 0 ? payloadColumns : deriveColumnsFromRows(UI_STATE.rows);
   UI_STATE.columns = selectVisibleColumns(UI_STATE.rawColumns);
+  if (isDecksContext) {
+    hydrateDeckRowsInBackground();
+  }
 
   const payloadPageSize = Number(payload.page_size);
   if (Number.isFinite(payloadPageSize) && payloadPageSize > 0) {
@@ -207,9 +240,15 @@ function hydrateViewStateForPayload(payload) {
   if (!UI_STATE.viewStateByKey.has(key)) {
     UI_STATE.searchQuery = "";
     UI_STATE.sortKey = CARD_VIEW_SORT_KEYS.NAME_ASC;
+    UI_STATE.selectedColors = [];
+    UI_STATE.previewDockEnabled = true;
+    UI_STATE.editMode = false;
     UI_STATE.viewStateByKey.set(key, {
       searchQuery: UI_STATE.searchQuery,
-      sortKey: UI_STATE.sortKey
+      sortKey: UI_STATE.sortKey,
+      selectedColors: UI_STATE.selectedColors.slice(),
+      previewDockEnabled: UI_STATE.previewDockEnabled,
+      editMode: UI_STATE.editMode
     });
     return;
   }
@@ -217,6 +256,13 @@ function hydrateViewStateForPayload(payload) {
   const saved = UI_STATE.viewStateByKey.get(key) || {};
   UI_STATE.searchQuery = String(saved.searchQuery || "");
   UI_STATE.sortKey = String(saved.sortKey || CARD_VIEW_SORT_KEYS.NAME_ASC);
+  UI_STATE.selectedColors = Array.isArray(saved.selectedColors)
+    ? saved.selectedColors
+      .map((value) => String(value || "").trim().toUpperCase())
+      .filter((value) => "WUBRGC".includes(value))
+    : [];
+  UI_STATE.previewDockEnabled = saved.previewDockEnabled !== false;
+  UI_STATE.editMode = saved.editMode === true;
 }
 
 function persistCurrentViewState() {
@@ -227,12 +273,37 @@ function persistCurrentViewState() {
 
   UI_STATE.viewStateByKey.set(key, {
     searchQuery: UI_STATE.searchQuery,
-    sortKey: UI_STATE.sortKey
+    sortKey: UI_STATE.sortKey,
+    selectedColors: UI_STATE.selectedColors.slice(),
+    previewDockEnabled: UI_STATE.previewDockEnabled,
+    editMode: UI_STATE.editMode
   });
 }
 
 function isDeckCardsContext() {
   return UI_STATE.viewMode === "cards" && String(UI_STATE.activeViewKey || "").startsWith("decks::");
+}
+
+function isStoredCollectionsContext() {
+  return UI_STATE.viewMode === "cards" && String(UI_STATE.activeViewKey || "").startsWith("collections::");
+}
+
+function isStoredDecksContext() {
+  return UI_STATE.viewMode === "cards" && String(UI_STATE.activeViewKey || "").startsWith("decks::");
+}
+
+function shouldShowPreviewDock(deckContext) {
+  if (isStoredCollectionsContext()) {
+    return true;
+  }
+  if (deckContext) {
+    return false;
+  }
+  return UI_STATE.previewDockEnabled !== false;
+}
+
+function isDeckInlinePreviewContext() {
+  return isStoredDecksContext();
 }
 
 function renderTablePage(pageNumber) {
@@ -328,7 +399,7 @@ function renderCardsPage(pageNumber) {
   const filteredRows = applyCardFiltersAndSorting(cardRows);
   const totalRows = filteredRows.length;
   const deckContext = isDeckCardsContext();
-  setPreviewDockMode(!deckContext);
+  setPreviewDockMode(shouldShowPreviewDock(deckContext));
   const filteredLiteralCount = deckContext ? sumCardQuantities(filteredRows) : totalRows;
   const totalLiteralCount = deckContext ? sumCardQuantities(cardRows) : cardRows.length;
   let startIndex = 0;
@@ -412,12 +483,25 @@ function isCardLikeRow(rowData) {
 
 function renderCardsToolbar(filteredCount, totalCount) {
   const toolbar = document.createElement("div");
+  const isCollectionsContext = isStoredCollectionsContext();
+  const utilityButtonLabel = isCollectionsContext
+    ? (UI_STATE.editMode ? "Done" : "Edit")
+    : "";
+  const utilityButtonClass = (
+    isCollectionsContext
+      ? UI_STATE.editMode
+      : false
+  )
+    ? "collection-action-btn is-active"
+    : "collection-action-btn is-muted";
+  const utilityButtonHtml = isCollectionsContext
+    ? `<button type="button" class="${utilityButtonClass}" data-action="toggle-edit">${utilityButtonLabel}</button>`
+    : "";
   toolbar.classList.add("collection-browser-toolbar");
   toolbar.innerHTML = `
     <div class="collection-toolbar-head">
       <div class="collection-toolbar-actions">
-        <button type="button" class="collection-action-btn" data-action="quick-import">Actions</button>
-        <button type="button" class="collection-action-btn is-muted" data-action="toggle-preview">Edit</button>
+        ${utilityButtonHtml}
         <button type="button" class="collection-action-btn is-muted" data-action="focus-search">Share</button>
       </div>
       <p class="collection-toolbar-count">${filteredCount} / ${totalCount} cartes</p>
@@ -430,13 +514,16 @@ function renderCardsToolbar(filteredCount, totalCount) {
         <option value="${CARD_VIEW_SORT_KEYS.SET_ASC}">Set A-Z</option>
       </select>
     </div>
+    <div class="collection-color-filters" aria-label="Color filters">
+      ${renderColorFilterButtons()}
+    </div>
   `;
 
   const searchInput = toolbar.querySelector("#collection-grid-search");
   const sortSelect = toolbar.querySelector("#collection-grid-sort");
-  const quickImportButton = toolbar.querySelector('button[data-action="quick-import"]');
-  const previewButton = toolbar.querySelector('button[data-action="toggle-preview"]');
+  const editButton = toolbar.querySelector('button[data-action="toggle-edit"]');
   const shareButton = toolbar.querySelector('button[data-action="focus-search"]');
+  const colorButtons = Array.from(toolbar.querySelectorAll(".collection-color-filter"));
 
   if (searchInput) {
     searchInput.value = UI_STATE.searchQuery;
@@ -456,29 +543,76 @@ function renderCardsToolbar(filteredCount, totalCount) {
     });
   }
 
-  if (quickImportButton) {
-    quickImportButton.addEventListener("click", () => {
-      const form = document.getElementById("collection-load-form");
-      form?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }
-
-  if (previewButton) {
-    previewButton.addEventListener("click", () => {
+  if (editButton) {
+    editButton.addEventListener("click", () => {
+      UI_STATE.editMode = !UI_STATE.editMode;
+      UI_STATE.previewDockEnabled = true;
+      persistCurrentViewState();
+      setPreviewDockMode(shouldShowPreviewDock(isDeckCardsContext()));
       if (PREVIEW_STATE.activeRow && PREVIEW_STATE.activeElement) {
         showCardPreview(PREVIEW_STATE.activeRow, PREVIEW_STATE.activeElement, true);
+      } else if (shouldShowPreviewDock(isDeckCardsContext())) {
+        resetCardPreviewPlaceholder();
       }
+      renderCardsPage(UI_STATE.currentPage);
     });
   }
 
   if (shareButton) {
-    shareButton.addEventListener("click", () => {
+    shareButton.addEventListener("click", async () => {
+      const snapshot = buildCardShareText();
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(snapshot);
+          shareButton.textContent = "Copied";
+          window.setTimeout(() => {
+            shareButton.textContent = "Share";
+          }, 1200);
+          return;
+        }
+      } catch (_) {}
       searchInput?.focus();
       searchInput?.select();
     });
   }
 
+  colorButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const color = String(button.dataset.color || "").toUpperCase();
+      if (!"WUBRGC".includes(color)) {
+        return;
+      }
+      const next = new Set(UI_STATE.selectedColors);
+      if (next.has(color)) {
+        next.delete(color);
+      } else {
+        next.add(color);
+      }
+      UI_STATE.selectedColors = Array.from(next);
+      persistCurrentViewState();
+      renderCardsPage(1);
+    });
+  });
+
   return toolbar;
+}
+
+function renderColorFilterButtons() {
+  return ["W", "U", "B", "R", "G", "C"].map((color) => {
+    const isActive = UI_STATE.selectedColors.includes(color);
+    const activeClass = isActive ? " is-active" : "";
+    return `
+      <button
+        type="button"
+        class="collection-color-filter${activeClass}"
+        data-color="${color}"
+        aria-pressed="${isActive ? "true" : "false"}"
+        title="${color === "C" ? "Colorless" : color}"
+      >
+        <img src="https://svgs.scryfall.io/card-symbols/${color}.svg" alt="${color}" loading="lazy">
+      </button>
+    `;
+  }).join("");
 }
 
 function createCollectionCardTile(rowData) {
@@ -511,6 +645,9 @@ function createCollectionCardTile(rowData) {
   qtyBadge.classList.add("collection-card-qty");
   qtyBadge.textContent = `x${quantity}`;
   imageFrame.appendChild(qtyBadge);
+  if (UI_STATE.editMode && isStoredCollectionsContext()) {
+    imageFrame.appendChild(createCollectionCardEditControls(rowData));
+  }
   tile.appendChild(imageFrame);
 
   const meta = document.createElement("div");
@@ -524,6 +661,112 @@ function createCollectionCardTile(rowData) {
   tile.appendChild(meta);
 
   return tile;
+}
+
+function createCollectionCardEditControls(rowData) {
+  const controls = document.createElement("div");
+  controls.classList.add("collection-card-edit-controls");
+  controls.innerHTML = `
+    <button type="button" class="collection-card-edit-btn" data-edit-action="decrement" aria-label="Remove one card">-</button>
+    <button type="button" class="collection-card-edit-btn" data-edit-action="increment" aria-label="Add one card">+</button>
+  `;
+
+  controls.querySelectorAll("button").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const action = String(button.dataset.editAction || "");
+      await mutateStoredCollectionRow(rowData, action, controls);
+    });
+  });
+
+  controls.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+  });
+
+  return controls;
+}
+
+async function mutateStoredCollectionRow(rowData, action, controlsNode) {
+  const collectionId = String(UI_STATE.currentCollectionId || "").trim();
+  if (!collectionId) {
+    return;
+  }
+
+  const payload = buildStoredCollectionMutationPayload(rowData);
+  if (!payload.name) {
+    return;
+  }
+
+  setCollectionEditControlsBusy(controlsNode, true);
+  const request = action === "decrement"
+    ? removeCardFromStoredCollection(collectionId, payload)
+    : addCardToStoredCollection(collectionId, payload);
+
+  try {
+    const out = await request;
+    if (!out || out.ok !== true) {
+      throw new Error(out?.error || "Collection update failed");
+    }
+    await reloadCurrentStoredCollection();
+  } catch (error) {
+    window.alert(error?.message || String(error));
+  } finally {
+    setCollectionEditControlsBusy(controlsNode, false);
+  }
+}
+
+function setCollectionEditControlsBusy(controlsNode, busy) {
+  if (!controlsNode) {
+    return;
+  }
+  controlsNode.classList.toggle("is-busy", busy === true);
+  controlsNode.querySelectorAll("button").forEach((button) => {
+    button.disabled = busy === true;
+  });
+}
+
+function buildStoredCollectionMutationPayload(rowData) {
+  return {
+    name: formatCellValue(readCellValue(rowData, "name")).trim(),
+    quantity: "1",
+    set_code: formatCellValue(readFirstCellValue(rowData, ["set_code", "set"])).trim(),
+    collector_number: formatCellValue(readCellValue(rowData, "collector_number")).trim(),
+    mana_cost: formatCellValue(readCellValue(rowData, "mana_cost")).trim(),
+    oracle_text: formatCellValue(readFirstCellValue(rowData, ["oracle_text", "printed_text", "card_text"])).trim(),
+    keywords: formatCellValue(readCellValue(rowData, "keywords")).trim(),
+    language: formatCellValue(readFirstCellValue(rowData, ["language", "lang"])).trim() || "en",
+    finish: formatCellValue(readCellValue(rowData, "finish")).trim(),
+    card_condition: formatCellValue(readCellValue(rowData, "card_condition")).trim(),
+    scryfall_id: formatCellValue(readFirstCellValue(rowData, ["scryfall_id", "scry_fall_id"])).trim(),
+    notes: formatCellValue(readCellValue(rowData, "notes")).trim()
+  };
+}
+
+async function reloadCurrentStoredCollection() {
+  const collectionId = String(UI_STATE.currentCollectionId || "").trim();
+  if (!collectionId) {
+    return;
+  }
+
+  if (typeof UI_HANDLERS.reloadStoredCollection === "function") {
+    await UI_HANDLERS.reloadStoredCollection(collectionId);
+    return;
+  }
+
+  const payload = await getStoredCollection(collectionId);
+  if (payload && payload.ok === true) {
+    renderCollection(payload);
+  }
+}
+
+function configureCollectionUiHandlers(handlers = {}) {
+  UI_HANDLERS.reloadStoredCollection = typeof handlers.reloadStoredCollection === "function"
+    ? handlers.reloadStoredCollection
+    : null;
+  UI_HANDLERS.setDeckPane = typeof handlers.setDeckPane === "function"
+    ? handlers.setDeckPane
+    : null;
 }
 
 function appendCardTileMarketPrice(metaNode, rowData, quantity) {
@@ -695,6 +938,28 @@ function isPreviewDockMode() {
   return Boolean(workspaceLower?.classList.contains("has-preview-panel"));
 }
 
+function getActivePreviewNodes() {
+  if (isDeckInlinePreviewContext()) {
+    return {
+      panel: document.getElementById("deck-card-preview"),
+      title: document.getElementById("deck-card-preview-title"),
+      text: document.getElementById("deck-card-preview-text"),
+      image: document.getElementById("deck-card-preview-image"),
+      meta: document.getElementById("deck-card-preview-meta"),
+      inline: true
+    };
+  }
+
+  return {
+    panel: document.getElementById("card-preview"),
+    title: document.getElementById("card-preview-title"),
+    text: document.getElementById("card-preview-text"),
+    image: document.getElementById("card-preview-image"),
+    meta: document.getElementById("card-preview-meta"),
+    inline: false
+  };
+}
+
 function setPreviewDockMode(enabled) {
   const workspaceLower = document.getElementById("workspace-lower");
   const panel = document.getElementById("card-preview");
@@ -716,19 +981,21 @@ function setPreviewDockMode(enabled) {
 }
 
 function resetCardPreviewPlaceholder() {
-  const title = document.getElementById("card-preview-title");
-  const text = document.getElementById("card-preview-text");
-  const image = document.getElementById("card-preview-image");
+  const { panel, title, text, image, inline } = getActivePreviewNodes();
   if (title) {
     title.textContent = uiText("card");
   }
   if (text) {
     text.textContent = uiText("preview_hint");
+    text.classList.remove("is-hidden");
   }
   if (image) {
     image.removeAttribute("src");
     image.style.display = "none";
     image.alt = uiText("card_preview_alt");
+  }
+  if (panel && inline) {
+    panel.classList.remove("hidden");
   }
   renderPreviewMeta([]);
 }
@@ -771,17 +1038,18 @@ function showCardPreview(rowData, rowElement, forceLock) {
     markActiveRow(rowElement);
   }
 
-  const panel = document.getElementById("card-preview");
-  const title = document.getElementById("card-preview-title");
-  const text = document.getElementById("card-preview-text");
-  const image = document.getElementById("card-preview-image");
+  const { panel, title, text, image, inline } = getActivePreviewNodes();
   if (!panel || !title || !text || !image) {
     return;
   }
 
+  if (inline) {
+    activateDeckPreviewPane();
+  }
   panel.classList.remove("hidden");
   title.textContent = formatMainCardTitle(rowData);
   text.textContent = formatPrimaryText(rowData);
+  text.classList.remove("is-hidden");
   image.removeAttribute("src");
   image.style.display = "block";
   image.alt = `Apercu ${title.textContent}`;
@@ -806,9 +1074,7 @@ function showCardPreview(rowData, rowElement, forceLock) {
 }
 
 function applyScryfallCardToPreview(card, rowData) {
-  const title = document.getElementById("card-preview-title");
-  const text = document.getElementById("card-preview-text");
-  const image = document.getElementById("card-preview-image");
+  const { title, text, image } = getActivePreviewNodes();
   if (!title || !text || !image) {
     return;
   }
@@ -820,6 +1086,10 @@ function applyScryfallCardToPreview(card, rowData) {
   const imageUrl = cardImageUrl(card);
   if (imageUrl) {
     image.src = imageUrl;
+    text.textContent = "";
+    text.classList.add("is-hidden");
+  } else {
+    text.classList.remove("is-hidden");
   }
   image.alt = `Apercu ${cardName}`;
 
@@ -845,9 +1115,12 @@ function clearCardPreview(force) {
   PREVIEW_STATE.requestToken += 1;
   PREVIEW_STATE.activeElement?.classList.remove("row-active");
   PREVIEW_STATE.activeElement = null;
-  const panel = document.getElementById("card-preview");
+  const { panel, inline } = getActivePreviewNodes();
   if (panel) {
-    if (isPreviewDockMode()) {
+    if (inline) {
+      panel.classList.remove("hidden");
+      resetCardPreviewPlaceholder();
+    } else if (isPreviewDockMode()) {
       panel.classList.remove("hidden");
       resetCardPreviewPlaceholder();
     } else {
@@ -900,6 +1173,14 @@ function initPreviewEvents() {
     if (!PREVIEW_STATE.locked) {
       schedulePreviewHide();
     }
+  });
+
+  document.addEventListener("click", (event) => {
+    const trigger = event.target.closest("#deck-card-preview-close");
+    if (!trigger) {
+      return;
+    }
+    clearCardPreview(true);
   });
 }
 
@@ -1041,6 +1322,7 @@ function formatCellValue(value) {
 function applyCardFiltersAndSorting(rows) {
   const sourceRows = Array.isArray(rows) ? rows : [];
   const query = String(UI_STATE.searchQuery || "").trim().toLowerCase();
+  const selectedColors = Array.isArray(UI_STATE.selectedColors) ? UI_STATE.selectedColors : [];
 
   let filteredRows = sourceRows;
   if (query) {
@@ -1060,6 +1342,10 @@ function applyCardFiltersAndSorting(rows) {
         .join(" ");
       return lookup.includes(query);
     });
+  }
+
+  if (selectedColors.length > 0) {
+    filteredRows = filteredRows.filter((rowData) => rowMatchesSelectedColors(rowData, selectedColors));
   }
 
   const sortedRows = [...filteredRows];
@@ -1091,6 +1377,110 @@ function applyCardFiltersAndSorting(rows) {
     formatMainCardTitle(left).localeCompare(formatMainCardTitle(right), "fr", { sensitivity: "base" })
   ));
   return sortedRows;
+}
+
+function rowMatchesSelectedColors(rowData, selectedColors) {
+  const expected = Array.isArray(selectedColors) ? selectedColors : [];
+  if (expected.length === 0) {
+    return true;
+  }
+
+  const rowColors = extractRowColorCodes(rowData);
+  return expected.every((color) => {
+    if (color === "C") {
+      return rowColors.length === 0 || rowColors.includes("C");
+    }
+    return rowColors.includes(color);
+  });
+}
+
+function extractRowColorCodes(rowData) {
+  const source = [
+    formatCellValue(readFirstCellValue(rowData, ["color_identity", "colors"])),
+    formatCellValue(readCellValue(rowData, "color")),
+    readRowManaCost(rowData)
+  ]
+    .join(" ")
+    .toUpperCase();
+  const symbols = Array.from(new Set((source.match(/[WUBRG]/g) || [])));
+  if (symbols.length > 0) {
+    return symbols;
+  }
+  if (/\{C\}|\bC\b/.test(source)) {
+    return ["C"];
+  }
+  return [];
+}
+
+function buildCardFilterShareText() {
+  const parts = [];
+  const query = String(UI_STATE.searchQuery || "").trim();
+  if (query) {
+    parts.push(`search=${query}`);
+  }
+  if (UI_STATE.sortKey) {
+    parts.push(`sort=${UI_STATE.sortKey}`);
+  }
+  if (Array.isArray(UI_STATE.selectedColors) && UI_STATE.selectedColors.length > 0) {
+    parts.push(`colors=${UI_STATE.selectedColors.join("")}`);
+  }
+  return parts.length > 0 ? parts.join(" | ") : "all cards";
+}
+
+function buildCardShareText() {
+  if (UI_STATE.viewMode !== "cards") {
+    return buildCardFilterShareText();
+  }
+
+  const sourceRows = isDeckCardsContext()
+    ? annotateDeckRowsWithZone(UI_STATE.rows)
+    : UI_STATE.rows;
+  const cardRows = sourceRows.filter(isCardLikeRow);
+  const filteredRows = applyCardFiltersAndSorting(cardRows);
+
+  if (filteredRows.length === 0) {
+    return buildCardFilterShareText();
+  }
+
+  if (isDeckCardsContext()) {
+    return buildDeckShareText(filteredRows);
+  }
+
+  return buildCollectionShareText(filteredRows);
+}
+
+function buildDeckShareText(rows) {
+  const grouped = splitDeckRowsByZone(rows);
+  const blocks = [];
+
+  if (grouped.main.length > 0) {
+    blocks.push("Main Deck");
+    blocks.push(...grouped.main.map(formatSharedCardLine));
+  }
+
+  if (grouped.side.length > 0) {
+    if (blocks.length > 0) {
+      blocks.push("");
+    }
+    blocks.push("Sideboard");
+    blocks.push(...grouped.side.map(formatSharedCardLine));
+  }
+
+  return blocks.join("\n");
+}
+
+function buildCollectionShareText(rows) {
+  return rows.map(formatSharedCardLine).join("\n");
+}
+
+function formatSharedCardLine(rowData) {
+  const quantity = readCardQuantity(rowData);
+  const name = formatMainCardTitle(rowData);
+  const setCode = formatCellValue(readFirstCellValue(rowData, ["set_code", "set"])).trim().toUpperCase();
+  if (setCode) {
+    return `${quantity} ${name} [${setCode}]`;
+  }
+  return `${quantity} ${name}`;
 }
 
 function readCardQuantity(rowData) {
@@ -1530,6 +1920,133 @@ function inferDeckEntryFromRow(rowData) {
   };
 }
 
+function hydrateDeckRowsInBackground() {
+  if (!isStoredDecksContext() || !Array.isArray(UI_STATE.rows) || UI_STATE.rows.length === 0) {
+    return;
+  }
+
+  const token = ++DECK_ROW_HYDRATION_TOKEN;
+  const activeViewKey = UI_STATE.activeViewKey;
+  const tasks = UI_STATE.rows.map((rowData, index) => hydrateSingleDeckRow(rowData, index));
+
+  Promise.all(tasks)
+    .then((updatedRows) => {
+      if (token !== DECK_ROW_HYDRATION_TOKEN || activeViewKey !== UI_STATE.activeViewKey) {
+        return;
+      }
+
+      const nextRows = updatedRows.map((rowData, index) => rowData || UI_STATE.rows[index]);
+      const changed = nextRows.some((rowData, index) => rowData !== UI_STATE.rows[index]);
+      if (!changed) {
+        return;
+      }
+
+      UI_STATE.rows = nextRows;
+      UI_STATE.rawColumns = deriveColumnsFromRows(UI_STATE.rows);
+      UI_STATE.columns = selectVisibleColumns(UI_STATE.rawColumns);
+      renderCardsPage(UI_STATE.currentPage);
+    })
+    .catch(() => {});
+}
+
+function hydrateSingleDeckRow(rowData, index) {
+  if (!rowData || typeof rowData !== "object") {
+    return Promise.resolve(rowData);
+  }
+
+  const inferred = inferDeckEntryFromRow(rowData);
+  const cardName = formatCellValue(readCellValue(rowData, "name")).trim() || inferred.name;
+  if (!cardName || !deckRowNeedsMetadata(rowData)) {
+    return Promise.resolve(rowData);
+  }
+
+  const cacheKey = cardName.toLowerCase();
+  if (DECK_ROW_METADATA_CACHE.has(cacheKey)) {
+    return Promise.resolve(applyDeckRowMetadata(rowData, DECK_ROW_METADATA_CACHE.get(cacheKey)));
+  }
+
+  if (DECK_ROW_HYDRATION_TASKS.has(cacheKey)) {
+    return DECK_ROW_HYDRATION_TASKS.get(cacheKey).then((metadata) => applyDeckRowMetadata(rowData, metadata));
+  }
+
+  const task = fetchDeckRowMetadata(cardName)
+    .then((metadata) => {
+      DECK_ROW_METADATA_CACHE.set(cacheKey, metadata);
+      DECK_ROW_HYDRATION_TASKS.delete(cacheKey);
+      return metadata;
+    })
+    .catch(() => {
+      DECK_ROW_HYDRATION_TASKS.delete(cacheKey);
+      return null;
+    });
+
+  DECK_ROW_HYDRATION_TASKS.set(cacheKey, task);
+  return task.then((metadata) => applyDeckRowMetadata(rowData, metadata));
+}
+
+function deckRowNeedsMetadata(rowData) {
+  return !formatCellValue(readFirstCellValue(rowData, ["scryfall_id", "scry_fall_id"])).trim()
+    || !formatCellValue(readFirstCellValue(rowData, ["color_identity", "colors"])).trim()
+    || !readRowManaCost(rowData)
+    || !formatCellValue(readFirstCellValue(rowData, ["set_code", "set"])).trim();
+}
+
+function applyDeckRowMetadata(rowData, metadata) {
+  if (!metadata || typeof metadata !== "object") {
+    return rowData;
+  }
+
+  const nextRow = { ...rowData };
+  let changed = false;
+  const assignIfMissing = (keys, value) => {
+    const normalized = String(value || "").trim();
+    if (!normalized) {
+      return;
+    }
+    const hasValue = keys.some((key) => formatCellValue(readCellValue(nextRow, key)).trim());
+    if (hasValue) {
+      return;
+    }
+    nextRow[keys[0]] = normalized;
+    changed = true;
+  };
+
+  assignIfMissing(["scryfall_id"], metadata.scryfall_id);
+  assignIfMissing(["mana_cost"], metadata.mana_cost);
+  assignIfMissing(["color_identity"], metadata.color_identity);
+  assignIfMissing(["colors"], metadata.colors);
+  assignIfMissing(["oracle_text"], metadata.oracle_text);
+  assignIfMissing(["set_code"], metadata.set_code);
+  assignIfMissing(["collector_number"], metadata.collector_number);
+  assignIfMissing(["rarity"], metadata.rarity);
+  return changed ? nextRow : rowData;
+}
+
+async function fetchDeckRowMetadata(cardName) {
+  const card = await fetchCardByName(cardName, "en");
+  if (!card || card.object !== "card") {
+    return null;
+  }
+
+  const colorIdentity = Array.isArray(card.color_identity)
+    ? card.color_identity.join("")
+    : String(card.color_identity || "").trim();
+  const colors = Array.isArray(card.colors)
+    ? card.colors.join("")
+    : String(card.colors || "").trim();
+
+  return {
+    scryfall_id: String(card.id || "").trim(),
+    mana_cost: String(card.mana_cost || "").trim(),
+    color_identity: colorIdentity,
+    colors,
+    oracle_text: cardTextForDisplay(card),
+    set_code: String(card.set || "").trim().toUpperCase(),
+    collector_number: String(card.collector_number || "").trim(),
+    rarity: String(card.rarity || "").trim()
+  };
+}
+
 function annotateDeckRowsWithZone(rows) {
   const source = Array.isArray(rows) ? rows : [];
   const annotated = [];
@@ -1671,7 +2188,7 @@ function renderPreviewMetaFromRow(rowData) {
 }
 
 function renderPreviewMeta(entries) {
-  const container = document.getElementById("card-preview-meta");
+  const { meta: container } = getActivePreviewNodes();
   if (!container) {
     return;
   }
@@ -1687,6 +2204,15 @@ function renderPreviewMeta(entries) {
     container.appendChild(dt);
     container.appendChild(dd);
   });
+}
+
+function activateDeckPreviewPane() {
+  if (!isDeckInlinePreviewContext()) {
+    return;
+  }
+  if (typeof UI_HANDLERS.setDeckPane === "function") {
+    UI_HANDLERS.setDeckPane("preview");
+  }
 }
 
 async function loadCardForLanguage(rowData, language) {
@@ -1917,11 +2443,13 @@ window.getCollectionLanguage = getCollectionLanguage;
 window.setCollectionLanguage = setCollectionLanguage;
 window.bindRowPreviewEvents = bindRowPreviewEvents;
 window.renderManaCostCell = renderManaCostCell;
+window.configureCollectionUiHandlers = configureCollectionUiHandlers;
 
 export {
   renderCollection,
   getCollectionLanguage,
   setCollectionLanguage,
   bindRowPreviewEvents,
-  renderManaCostCell
+  renderManaCostCell,
+  configureCollectionUiHandlers
 };
