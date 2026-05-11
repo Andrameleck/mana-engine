@@ -2106,6 +2106,13 @@ import {
     textNode.innerHTML = strategyOracleTextToHtml(oracle || t("strategy_preview_oracle_fallback"));
 
     const previewImageUrl = scryfallCdnImageUrl(scryfallId, "normal");
+    // Hide the preview image when the Scryfall CDN fails to deliver it
+    // (404 on a freshly-printed card, network glitch, ad-blocker, ...).
+    imageNode.onerror = function () {
+      imageNode.onerror = null;
+      imageNode.removeAttribute("src");
+      imageNode.classList.add("is-hidden");
+    };
     if (previewImageUrl) {
       imageNode.src = previewImageUrl;
       imageNode.alt = `Apercu ${cardName}`;
@@ -2626,6 +2633,7 @@ import {
               alt="${escapeHtml(cardName)}"
               loading="lazy"
               decoding="async"
+              onerror="this.onerror=null;this.style.visibility='hidden';"
             >
             <p class="spellbook-card-mini-name">${escapeHtml(cardName)}</p>
           </article>
@@ -3300,7 +3308,20 @@ import {
       const res = await fetch("/archetypes", { headers: { Accept: "application/json" } });
       if (res.ok) {
         const data = await res.json();
-        const list = Array.isArray(data?.archetypes) ? data.archetypes : [];
+        // Accept several response shapes so a backend version mismatch
+        // doesn't silently drop the chips.
+        let list = [];
+        if (Array.isArray(data)) {
+          list = data;
+        } else if (Array.isArray(data?.archetypes)) {
+          list = data.archetypes;
+        } else if (data?.archetypes && typeof data.archetypes === "object") {
+          list = Object.entries(data.archetypes).map(([key, val]) => ({
+            key,
+            label: val?.label || key,
+            description: val?.description || ""
+          }));
+        }
         state.strategy.archetypeCatalog = list
           .map((entry) => ({
             key: String(entry?.key || "").trim(),

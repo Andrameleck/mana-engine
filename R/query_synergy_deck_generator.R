@@ -677,9 +677,27 @@
   collection_copy_cap = NULL,
   registry,
   pool_keys = character(0),
-  variant_seed = 1L
+  variant_seed = 1L,
+  progress_callback = NULL,
+  progress_min = 0,
+  progress_max = 100
 ) {
+  .emit <- function(pct, stage) {
+    p <- progress_min + pct / 100 * (progress_max - progress_min)
+    query_synergy_emit_progress(progress_callback, p, stage)
+  }
+  # Wrap scoring callback so its 0-100 maps to [progress_min+5%, progress_min+80%] of our slice.
+  scoring_cb <- if (is.function(progress_callback)) {
+    function(progress) {
+      inner_pct <- suppressWarnings(as.numeric(progress$percent %||% 0))
+      mapped <- progress_min + (5 + inner_pct * 0.75) / 100 * (progress_max - progress_min)
+      progress$percent <- as.integer(round(mapped))
+      progress_callback(progress)
+    }
+  } else NULL
+
   # 1. Resolve seed card.
+  .emit(2, "Resolving seed card")
   seed_card <- NULL
   if (nzchar(user_commander)) {
     seed_card <- query_synergy_find_card_by_id_or_name(catalog, user_commander)
@@ -712,7 +730,7 @@
     archetype_filter_strict = FALSE
   )
   scoring <- tryCatch(
-    query_synergy_find_in_catalog(anchor_payload, catalog),
+    query_synergy_find_in_catalog(anchor_payload, catalog, progress_callback = scoring_cb),
     error = function(e) list(ok = FALSE, error = conditionMessage(e))
   )
   if (!isTRUE(scoring$ok)) {
@@ -812,6 +830,7 @@
   )
 
   # 7. Build deck (one deck, no exclusion diversification).
+  .emit(83, "Building mainboard")
   deck <- .deck_build_mainboard(
     seed = seed_card,
     scored_candidates = scored_candidates,
@@ -822,6 +841,7 @@
   )
 
   # 8. Combo detection.
+  .emit(90, "Detecting combos")
   card_names_for_combo <- vapply(deck$cards, function(c) c$name %||% "", character(1))
   if (isTRUE(format_spec$requires_commander)) {
     card_names_for_combo <- c(card_names_for_combo,
@@ -830,6 +850,7 @@
   combos <- .deck_detect_combos(card_names_for_combo)
 
   # 9. Score assembly.
+  .emit(95, "Scoring assembly")
   score_info <- .deck_score_assembly(deck, format_spec, archetype_filter)
   if (length(combos) > 0L) {
     score_info$score_modifiers$spellbook_combos <- list(
@@ -907,10 +928,33 @@
 # Main entry point -------------------------------------------------------
 
 query_synergy_deck_generate <- function(req = NULL) {
-  payload <- query_synergy_parse_payload(req)
+  # Top-level guard: any uncaught error is turned into a structured JSON
+  # error response so the HTTP layer never returns a generic 500.
+  tryCatch(
+    .query_synergy_deck_generate_impl(req = req),
+    error = function(e) {
+      msg <- tryCatch(conditionMessage(e), error = function(e2) "unknown error")
+      query_api_error(
+        sprintf("deck generation failed: %s", msg),
+        decks = list()
+      )
+    }
+  )
+}
+
+.query_synergy_deck_generate_impl <- function(req = NULL, data_override = NULL, progress_callback = NULL) {
+  .emit <- function(pct, stage) {
+    query_synergy_emit_progress(progress_callback, pct, stage)
+  }
+  payload <- if (!is.null(data_override)) {
+    list(ok = TRUE, data = data_override)
+  } else {
+    query_synergy_parse_payload(req)
+  }
   if (!isTRUE(payload$ok)) {
     return(query_api_error(payload$error, decks = list()))
   }
+  .emit(1, "Parsing request")
   data <- payload$data
 
   format_name <- tolower(query_api_scalar(data$format, default = "commander"))
@@ -929,11 +973,13 @@ query_synergy_deck_generate <- function(req = NULL) {
   collection_id <- query_api_scalar(data$collection_id, default = "")
   client_id <- query_api_scalar(data$client_id, default = "")
 
+  .emit(3, "Loading card catalog")
   catalog_out <- query_synergy_get_catalog(force_refresh = isTRUE(data$force_refresh))
   if (!isTRUE(catalog_out$ok)) {
     return(query_api_error(catalog_out$error, decks = list()))
   }
   catalog <- catalog_out$cards
+  .emit(10, "Catalog ready")
   registry <- query_synergy_event_registry_default()
 
   # Collection filter: when a collection_id is supplied, restrict the catalog
@@ -1017,7 +1063,10 @@ query_synergy_deck_generate <- function(req = NULL) {
           collection_copy_cap = collection_copy_cap,
           registry           = registry,
           pool_keys          = pool_keys,
-          variant_seed       = i * 17L
+          variant_seed       = i * 17L,
+          progress_callback  = progress_callback,
+          progress_min       = 10 + (i - 1) * 85 / variant_count,
+          progress_max       = 10 + i * 85 / variant_count
         ),
         error = function(e) list(ok = FALSE, error = conditionMessage(e))
       )
@@ -1068,6 +1117,7 @@ query_synergy_deck_generate <- function(req = NULL) {
   }
 
   # Resolve commander/seed.
+  .emit(11, "Resolving seed card")
   seed_card <- NULL
   if (nzchar(user_commander)) {
     seed_card <- query_synergy_find_card_by_id_or_name(catalog, user_commander)
@@ -1097,6 +1147,15 @@ query_synergy_deck_generate <- function(req = NULL) {
   }
 
   # Score the catalog vs the seed using the existing pair scorer.
+  .emit(14, "Scoring catalog")
+  fixed_scoring_cb <- if (is.function(progress_callback)) {
+    function(progress) {
+      inner_pct <- suppressWarnings(as.numeric(progress$percent %||% 0))
+      mapped <- 14 + inner_pct * 0.60
+      progress$percent <- as.integer(round(mapped))
+      progress_callback(progress)
+    }
+  } else NULL
   anchor_payload <- list(
     card_name = query_api_scalar(seed_card$id, default = query_api_scalar(seed_card$name, default = "")),
     format = format_name,
@@ -1109,7 +1168,7 @@ query_synergy_deck_generate <- function(req = NULL) {
     archetype_filter_strict = FALSE
   )
   scoring <- tryCatch(
-    query_synergy_find_in_catalog(anchor_payload, catalog),
+    query_synergy_find_in_catalog(anchor_payload, catalog, progress_callback = fixed_scoring_cb),
     error = function(e) list(ok = FALSE, error = conditionMessage(e))
   )
   if (!isTRUE(scoring$ok)) {
@@ -1232,6 +1291,10 @@ query_synergy_deck_generate <- function(req = NULL) {
   decks <- list()
   excluded_ids <- character(0)
   for (i in seq_len(variant_count)) {
+    pct_build_start <- as.integer(round(76 + (i - 1) * 20 / variant_count))
+    pct_combo       <- as.integer(round(76 + (i - 0.6) * 20 / variant_count))
+    pct_score       <- as.integer(round(76 + (i - 0.3) * 20 / variant_count))
+    .emit(pct_build_start, sprintf("Building variant %d/%d", i, variant_count))
     deck <- .deck_build_mainboard(
       seed = seed_card,
       scored_candidates = scored_candidates,
@@ -1245,8 +1308,10 @@ query_synergy_deck_generate <- function(req = NULL) {
     if (format_spec$requires_commander) {
       card_names_for_combo <- c(card_names_for_combo, query_api_scalar(seed_card$name, default = ""))
     }
+    .emit(pct_combo, sprintf("Detecting combos for variant %d", i))
     combos <- .deck_detect_combos(card_names_for_combo)
 
+    .emit(pct_score, sprintf("Scoring variant %d", i))
     score_info <- .deck_score_assembly(deck, format_spec, archetype_filter)
     if (length(combos) > 0L) {
       score_info$score_modifiers$spellbook_combos <- list(
@@ -1350,4 +1415,106 @@ query_synergy_deck_generate <- function(req = NULL) {
     pool_size = length(pool_keys),
     candidate_count = length(scored_candidates)
   )
+}
+
+# Exposed for background job runner: parse already-decoded payload list,
+# run the generator with a progress_callback.
+query_synergy_deck_generate_from_payload <- function(payload = list(),
+                                                     progress_callback = NULL) {
+  tryCatch(
+    .query_synergy_deck_generate_impl(
+      req           = NULL,
+      data_override = payload,
+      progress_callback = progress_callback
+    ),
+    error = function(e) {
+      query_api_error(
+        sprintf("deck generation failed: %s", conditionMessage(e)),
+        decks = list()
+      )
+    }
+  )
+}
+
+# Async job entry point ---------------------------------------------------
+#
+# Parses the request payload, writes it to disk, spawns a background Rscript
+# process that runs run_deck_gen_job.R, and immediately returns a job_id so
+# the frontend can poll GET /synergy/jobs/<job_id> for progress.
+
+query_synergy_deck_generate_job <- function(req = NULL) {
+  payload_out <- query_synergy_parse_payload(req)
+  if (!isTRUE(payload_out$ok)) {
+    return(query_api_error(payload_out$error))
+  }
+  data <- payload_out$data
+
+  runner_path <- .deck_gen_job_runner_path()
+  if (!nzchar(runner_path) || !file.exists(runner_path)) {
+    return(query_api_error("deck generation job runner script unavailable"))
+  }
+
+  rscript_path <- file.path(R.home("bin"), if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript")
+  if (!file.exists(rscript_path)) {
+    return(query_api_error("Rscript executable unavailable"))
+  }
+
+  job_id <- query_synergy_new_job_id()
+  paths <- query_synergy_job_paths(job_id)
+  repo_root <- query_synergy_detect_repo_root(runner_path, fallback_dir = getwd())
+
+  query_synergy_write_job_json(paths$payload_file, data)
+  query_synergy_write_job_json(
+    paths$status_file,
+    query_synergy_build_job_status(job_id = job_id, status = "queued", percent = 0L, stage = "Queued")
+  )
+
+  args <- c(
+    normalizePath(runner_path, winslash = "/", mustWork = TRUE),
+    "--job-id",  job_id,
+    "--payload", normalizePath(paths$payload_file, winslash = "/", mustWork = TRUE),
+    "--status",  normalizePath(paths$status_file,  winslash = "/", mustWork = TRUE),
+    "--result",  normalizePath(paths$result_file,  winslash = "/", mustWork = FALSE),
+    "--repo",    repo_root
+  )
+
+  spawn_ok <- tryCatch({
+    system2(
+      command  = normalizePath(rscript_path, winslash = "/", mustWork = TRUE),
+      args     = args,
+      wait     = FALSE,
+      stdout   = FALSE,
+      stderr   = FALSE
+    )
+    TRUE
+  }, error = function(e) FALSE)
+
+  if (!isTRUE(spawn_ok)) {
+    return(query_api_error("unable to start deck generation background job"))
+  }
+
+  status_payload <- query_synergy_read_job_json(paths$status_file)
+  if (!is.list(status_payload)) {
+    status_payload <- query_synergy_build_job_status(job_id, status = "queued", percent = 0L, stage = "Queued")
+  }
+  status_payload
+}
+
+.deck_gen_job_runner_path <- function() {
+  candidates <- c(
+    file.path(getwd(), "inst", "jobs", "run_deck_gen_job.R"),
+    file.path(getwd(), "..", "inst", "jobs", "run_deck_gen_job.R")
+  )
+  existing <- candidates[file.exists(candidates)]
+  if (length(existing) > 0L) {
+    return(normalizePath(existing[[1]], winslash = "/", mustWork = TRUE))
+  }
+  installed <- tryCatch(
+    system.file("jobs", "run_deck_gen_job.R", package = "mtgcodex.api"),
+    error = function(e) ""
+  )
+  if (nzchar(installed) && file.exists(installed)) {
+    return(normalizePath(installed, winslash = "/", mustWork = TRUE))
+  }
+  ""
 }

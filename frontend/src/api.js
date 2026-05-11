@@ -339,6 +339,15 @@ async function startSynergyJob(payload = {}) {
   });
 }
 
+async function startDeckGenJob(payload = {}) {
+  return apiRequest("/synergy/deck/jobs/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+    fallback: { status: "error" }
+  });
+}
+
 async function fetchSynergyJobStatus(jobId = "") {
   const safeId = encodeURIComponent(toTrimmedText(jobId));
   return apiRequest(`${API_ENDPOINTS.synergyJobs}/${safeId}`, {
@@ -385,6 +394,7 @@ window.fetchSynergyFind = fetchSynergyFind;
 window.fetchSynergyDeckRecommend = fetchSynergyDeckRecommend;
 window.fetchSynergyDeckGenerate = fetchSynergyDeckGenerate;
 window.startSynergyJob = startSynergyJob;
+window.startDeckGenJob = startDeckGenJob;
 window.fetchSynergyJobStatus = fetchSynergyJobStatus;
 window.fetchMtgjsonCards = fetchMtgjsonCards;
 
@@ -407,6 +417,7 @@ export {
   fetchSynergyDeckRecommend,
   fetchSynergyDeckGenerate,
   startSynergyJob,
+  startDeckGenJob,
   fetchSynergyJobStatus,
   fetchMtgjsonCards
 };

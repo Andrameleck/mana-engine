@@ -11,6 +11,9 @@
 ^inst/\.vscode/
 ^inst/collection/library_scryfall\.sqlite$
 ^inst/collection/library_scryfall\.sqlite-.*
+^inst/collection/mtg\.db$
+^inst/collection/mtg\.csv$
+^inst/collection/csv_export/
 ^Dockerfile$
 ^docker-compose\.yml$
 ^\.dockerignore$

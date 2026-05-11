@@ -3,7 +3,10 @@ services:
     build:
       context: .
     ports:
-      - "${MTGCODEX_API_PORT:-8010}:8010"
+      - "8011-8012:8010"
+    deploy:
+      # Two replicas matched to the nginx upstream (127.0.0.1:8011 and :8012).
+      replicas: 2
     environment:
       MTGCODEX_API_HOST: "0.0.0.0"
       MTGCODEX_API_PORT: "8010"

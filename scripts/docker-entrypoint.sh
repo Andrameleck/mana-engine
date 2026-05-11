@@ -25,23 +25,32 @@ needs_enrichment() {
   '
 }
 
+mkdir -p "$cache_dir"
+lock_file="$cache_dir/.init.lock"
+
 case "$bootstrap" in
   0|false|FALSE|off|OFF|no|NO)
     echo "[docker] Scryfall bootstrap disabled"
     ;;
   force|FORCE|1|true|TRUE|on|ON|yes|YES)
-    echo "[docker] Rebuilding Scryfall SQLite at $db_path"
-    Rscript scripts/download-scryfall-library.R
-    Rscript scripts/enrich-scryfall-library.R
-    ;;
-  auto|AUTO|"")
-    if needs_enrichment; then
-      echo "[docker] Building Scryfall SQLite at $db_path"
+    (
+      flock 9
+      echo "[docker] Rebuilding Scryfall SQLite at $db_path"
       Rscript scripts/download-scryfall-library.R
       Rscript scripts/enrich-scryfall-library.R
-    else
-      echo "[docker] Scryfall SQLite already exists and is enriched: $db_path"
-    fi
+    ) 9>"$lock_file"
+    ;;
+  auto|AUTO|"")
+    (
+      flock 9
+      if needs_enrichment; then
+        echo "[docker] Building Scryfall SQLite at $db_path"
+        Rscript scripts/download-scryfall-library.R
+        Rscript scripts/enrich-scryfall-library.R
+      else
+        echo "[docker] Scryfall SQLite already exists and is enriched: $db_path"
+      fi
+    ) 9>"$lock_file"
     ;;
   *)
     echo "[docker] Invalid MTGCODEX_SCRYFALL_BOOTSTRAP value: $bootstrap" >&2

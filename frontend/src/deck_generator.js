@@ -5,7 +5,7 @@
 // based on `data-tab="generator"` clicks, so we only need to populate the
 // section and respond to the "Générer" button.
 
-import { fetchSynergyDeckGenerate, listStoredCollections } from "./api.js";
+import { fetchSynergyDeckGenerate, startDeckGenJob, fetchSynergyJobStatus, listStoredCollections } from "./api.js";
 import { getCollectionLanguage } from "./ui.js";
 
 // Minimal translation helper for this module
@@ -88,7 +88,23 @@ async function ensureArchetypeCatalog() {
     const res = await fetch("/archetypes", { headers: { Accept: "application/json" } });
     if (res.ok) {
       const data = await res.json();
-      const list = Array.isArray(data?.archetypes) ? data.archetypes : [];
+      // Accept several response shapes so a backend version mismatch
+      // doesn't silently drop the chips:
+      //   { ok: true, archetypes: [...] }   (current)
+      //   [ ... ]                            (bare list)
+      //   { archetypes: { key1: {...}, ...}} (named map)
+      let list = [];
+      if (Array.isArray(data)) {
+        list = data;
+      } else if (Array.isArray(data?.archetypes)) {
+        list = data.archetypes;
+      } else if (data?.archetypes && typeof data.archetypes === "object") {
+        list = Object.entries(data.archetypes).map(([key, val]) => ({
+          key,
+          label: val?.label || key,
+          description: val?.description || ""
+        }));
+      }
       state.archetypeCatalog = list
         .map((entry) => ({
           key: String(entry?.key || "").trim(),
@@ -479,9 +495,12 @@ function renderDeckCard(deck, ctx) {
     : "";
 
   const cmdImg = scryfallImageUrl(commander.scryfall_id);
+  // Hide the <img> if the Scryfall CDN returns 404 / network fails so we
+  // don't leave a broken-image placeholder in the deck preview.
+  const cmdImgOnError = "this.onerror=null;this.style.display='none';this.parentNode&&this.parentNode.classList.add('deck-gen-commander--no-image');";
   const cmdHtml = requiresCommander
     ? `<div class="deck-gen-commander">
-        ${cmdImg ? `<img src="${cmdImg}" alt="${escapeHtml(commander.name || "")}" loading="lazy">` : ""}
+        ${cmdImg ? `<img src="${cmdImg}" alt="${escapeHtml(commander.name || "")}" loading="lazy" onerror="${cmdImgOnError}">` : ""}
         <div class="deck-gen-commander-info">
           <h4>${escapeHtml(commander.name || "")}</h4>
           <p class="muted">${escapeHtml(commander.type_line || "")}</p>
@@ -577,6 +596,16 @@ function renderResults(payload) {
   container.innerHTML = meta + coreBlock + `<div class="deck-gen-deck-grid">${decks}</div>`;
 }
 
+function setProgress(visible, percent, label) {
+  const bar   = $("deck-gen-progress");
+  const fill  = $("deck-gen-progress-fill");
+  const lbl   = $("deck-gen-progress-label");
+  if (!bar) return;
+  bar.style.display = visible ? "" : "none";
+  if (fill) fill.style.width = `${Math.max(0, Math.min(100, percent || 0))}%`;
+  if (lbl)  lbl.textContent = label || `${Math.round(percent || 0)}%`;
+}
+
 async function runGenerate() {
   if (state.busy) return;
   const format = $("deck-gen-format")?.value || "commander";
@@ -602,18 +631,68 @@ async function runGenerate() {
   if (collectionId) payload.collection_id = collectionId;
 
   state.lastPayload = payload;
-  setBusy(true, "Génération en cours…");
+  setBusy(true, "Démarrage de la génération…");
+  setProgress(true, 0, "0% — Démarrage…");
+
   try {
-    const result = await fetchSynergyDeckGenerate(payload);
-    state.lastResult = result;
-    renderResults(result);
-    if (result?.ok) {
-      setBusy(false, `${result.deck_count || 0} variante(s) générée(s).`);
-    } else {
-      setBusy(false, "Échec de génération.");
+    // Start async background job.
+    const jobResp = await startDeckGenJob(payload);
+    const jobId = jobResp?.job_id;
+    if (!jobId) {
+      // Fallback: synchronous endpoint.
+      setBusy(true, "Génération en cours…");
+      const result = await fetchSynergyDeckGenerate(payload);
+      state.lastResult = result;
+      renderResults(result);
+      setProgress(false, 100, "");
+      setBusy(false, result?.ok ? `${result.deck_count || 0} variante(s) générée(s).` : "Échec de génération.");
+      return;
     }
+
+    // Poll for progress.
+    const POLL_INTERVAL = 2500;
+    const MAX_WAIT_MS   = 20 * 60 * 1000; // 20 minutes
+    const started       = Date.now();
+    let lastPercent     = 0;
+
+    while (Date.now() - started < MAX_WAIT_MS) {
+      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+      let status;
+      try {
+        status = await fetchSynergyJobStatus(jobId);
+      } catch (_e) {
+        continue;
+      }
+
+      const pct   = status?.progress?.percent ?? lastPercent;
+      const stage = status?.progress?.stage   || "";
+      lastPercent = pct;
+      setProgress(true, pct, `${Math.round(pct)}%${stage ? " — " + stage : ""}`);
+
+      if (status?.status === "completed") {
+        const result = status?.result;
+        state.lastResult = result;
+        renderResults(result);
+        setProgress(false, 100, "");
+        setBusy(false, result?.ok ? `${result.deck_count || 0} variante(s) générée(s).` : "Échec de génération.");
+        return;
+      }
+      if (status?.status === "error") {
+        const errMsg = status?.error || "Erreur inconnue";
+        renderResults({ ok: false, error: errMsg });
+        setProgress(false, 0, "");
+        setBusy(false, "Erreur lors de la génération.");
+        return;
+      }
+    }
+
+    // Timeout.
+    renderResults({ ok: false, error: "La génération a dépassé le temps limite." });
+    setProgress(false, 0, "");
+    setBusy(false, "Délai dépassé.");
   } catch (err) {
     renderResults({ ok: false, error: String(err?.message || err) });
+    setProgress(false, 0, "");
     setBusy(false, "Erreur réseau.");
   }
 }

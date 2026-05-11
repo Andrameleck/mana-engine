@@ -54,24 +54,9 @@ query_collection_load <- function(type, path, table = "") {
 }
 
 query_collection_default_db_path <- function() {
-  installed_path <- system.file("collection", "mtg.db", package = "mtgcodex.api")
-  if (nzchar(installed_path) && file.exists(installed_path)) {
-    return(installed_path)
-  }
-
-  project_dir <- Sys.getenv("MTGCODEX_API_PROJECT_DIR", unset = "")
-  candidates <- c(
-    if (nzchar(project_dir)) {
-      file.path(project_dir, "inst", "collection", "mtg.db")
-    },
-    file.path(getwd(), "inst", "collection", "mtg.db"),
-    file.path(getwd(), "..", "inst", "collection", "mtg.db")
-  )
-  existing <- candidates[file.exists(candidates)]
-  if (length(existing) > 0L) {
-    return(existing[[1]])
-  }
-
+  # No default path: each user must supply an explicit path.
+  # Falling back to the installed inst/collection/mtg.db would expose
+  # the developer's personal collection to all users.
   ""
 }
 
@@ -254,9 +239,31 @@ query_collection_resolve_table_name <- function(tables, table_name) {
 }
 
 query_collection_load_csv <- function(csv_path) {
+  raw_lines <- tryCatch(
+    readLines(csv_path, warn = FALSE, encoding = "UTF-8"),
+    error = function(e) list(.error = e$message)
+  )
+  if (is.list(raw_lines) && !is.null(raw_lines$.error)) {
+    return(list(ok = FALSE, error = raw_lines$.error))
+  }
+
+  cleaned <- query_collection_prepare_text_lines(raw_lines, drop_section_headers = FALSE)
+  if (length(cleaned) == 0L) {
+    rows <- data.frame()
+    return(list(
+      ok = TRUE,
+      table = basename(csv_path),
+      columns = character(0),
+      rows = list(),
+      row_count = 0L
+    ))
+  }
+
+  con <- textConnection(cleaned)
+  on.exit(close(con), add = TRUE)
   rows <- tryCatch(
     utils::read.csv(
-      file = csv_path,
+      file = con,
       stringsAsFactors = FALSE,
       check.names = FALSE
     ),
@@ -278,6 +285,52 @@ query_collection_load_csv <- function(csv_path) {
   )
 }
 
+# Common cleanup applied to lines read from text/CSV uploads:
+#   - strip a leading UTF-8 BOM from the first line
+#   - normalise CRLF line endings
+#   - trim leading/trailing whitespace from every line
+#   - drop empty lines
+#   - drop comment lines starting with `#` or `//`
+#   - optionally drop deck-list section headers (Deck, Sideboard, Commander, ...)
+query_collection_prepare_text_lines <- function(lines,
+                                                drop_section_headers = TRUE) {
+  if (is.null(lines) || length(lines) == 0L) {
+    return(character(0))
+  }
+
+  lines <- as.character(lines)
+  lines[is.na(lines)] <- ""
+
+  # Strip UTF-8 BOM from first line.
+  lines[[1]] <- sub("^\ufeff", "", lines[[1]])
+
+  # Normalise CRLF and trim each line.
+  lines <- gsub("\r$", "", lines)
+  lines <- trimws(lines)
+
+  # Drop blank lines.
+  lines <- lines[nzchar(lines)]
+
+  # Drop comment lines.
+  if (length(lines) > 0L) {
+    lines <- lines[!grepl("^(#|//)", lines)]
+  }
+
+  if (drop_section_headers && length(lines) > 0L) {
+    section_pattern <- paste0(
+      "^(",
+      "deck|sideboard|side board|commander|commanders|command zone|",
+      "maybeboard|maybe board|companion|about|name|mainboard|main board|",
+      "lands|creatures|spells|artifacts|enchantments|planeswalkers|",
+      "instants|sorceries|tokens|battles",
+      ")\\s*:?\\s*$"
+    )
+    lines <- lines[!grepl(section_pattern, lines, ignore.case = TRUE, perl = TRUE)]
+  }
+
+  lines
+}
+
 query_collection_load_text <- function(text_path) {
   lines <- tryCatch(
     readLines(text_path, warn = FALSE, encoding = "UTF-8"),
@@ -290,10 +343,15 @@ query_collection_load_text <- function(text_path) {
     return(list(ok = FALSE, error = lines$.error))
   }
 
-  clean_lines <- gsub("\r$", "", lines)
-  non_empty <- clean_lines[nzchar(trimws(clean_lines))]
+  # First pass: BOM / CRLF / trim / drop blank+comment lines, but keep
+  # potential CSV header rows intact (do not yet drop section headers,
+  # since a CSV header row could legitimately contain words like "name").
+  pre_clean <- query_collection_prepare_text_lines(
+    lines,
+    drop_section_headers = FALSE
+  )
 
-  if (length(non_empty) == 0L) {
+  if (length(pre_clean) == 0L) {
     rows <- data.frame(line = character(0), stringsAsFactors = FALSE)
     return(list(
       ok = TRUE,
@@ -304,10 +362,10 @@ query_collection_load_text <- function(text_path) {
     ))
   }
 
-  separator <- query_collection_guess_separator(non_empty[[1]])
+  separator <- query_collection_guess_separator(pre_clean[[1]])
   if (!is.na(separator)) {
     table_payload <- query_collection_read_delimited_text(
-      text_lines = non_empty,
+      text_lines = pre_clean,
       separator = separator
     )
 
@@ -317,8 +375,15 @@ query_collection_load_text <- function(text_path) {
     }
   }
 
+  # Free-text decklist: also drop deck-list section headers
+  # (Deck / Sideboard / Commander / ...).
+  card_lines <- query_collection_prepare_text_lines(
+    pre_clean,
+    drop_section_headers = TRUE
+  )
+
   rows <- data.frame(
-    line = non_empty,
+    line = card_lines,
     stringsAsFactors = FALSE
   )
 

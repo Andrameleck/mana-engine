@@ -20,7 +20,7 @@ query_call <- local({
         full.names = TRUE
       )
       for (query_file in query_files) {
-        source(query_file)
+        source(query_file, local = .GlobalEnv)
       }
     }
   }
@@ -475,6 +475,24 @@ function(req, res) {
   }
   query_call(
     "query_synergy_deck_generate",
+    req = req
+  )
+}
+
+#* Start an async background deck generation job with progress reporting
+#* @serializer unboxedJSON
+#* @post /synergy/deck/jobs/start
+function(req, res) {
+  client_id <- query_req_client_id(req)
+  if (nzchar(client_id)) {
+    body <- tryCatch(jsonlite::fromJSON(req$postBody, simplifyVector = FALSE), error = function(e) list())
+    if (!nzchar(body$client_id %||% "")) {
+      body$client_id <- client_id
+      req$postBody <- jsonlite::toJSON(body, auto_unbox = TRUE)
+    }
+  }
+  query_call(
+    "query_synergy_deck_generate_job",
     req = req
   )
 }

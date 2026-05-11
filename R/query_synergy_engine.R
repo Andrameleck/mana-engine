@@ -487,7 +487,11 @@ query_synergy_list_mechanics <- function() {
 # List the registered strategic archetypes (Aggro, Aristocrats, etc.) used
 # to filter and annotate group results.
 query_synergy_list_archetypes <- function() {
-  archetypes <- query_synergy_archetypes_list()
+  archetypes <- tryCatch(
+    query_synergy_archetypes_list(),
+    error = function(e) list()
+  )
+  if (is.null(archetypes)) archetypes <- list()
   list(
     ok = TRUE,
     count = length(archetypes),

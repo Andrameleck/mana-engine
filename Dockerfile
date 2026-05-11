@@ -14,6 +14,8 @@ RUN apt-get update \
     libcurl4-openssl-dev \
     libssl-dev \
     libxml2-dev \
+    libsodium-dev \
+    zlib1g-dev \
     make \
     g++ \
   && rm -rf /var/lib/apt/lists/*
