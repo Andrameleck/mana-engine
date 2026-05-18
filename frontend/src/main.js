@@ -603,6 +603,10 @@ import {
   function applyLanguageButtonState(language) {
     if (nodes.langEnButton) nodes.langEnButton.classList.toggle("is-active", language === "en");
     if (nodes.langFrButton) nodes.langFrButton.classList.toggle("is-active", language === "fr");
+    const langPill = document.getElementById("lang-pill");
+    if (langPill) langPill.classList.toggle("is-right", language === "fr");
+    const landingLangPill = document.getElementById("landing-lang-pill");
+    if (landingLangPill) landingLangPill.classList.toggle("is-right", language === "fr");
     const landingEn = document.getElementById("landing-lang-en");
     const landingFr = document.getElementById("landing-lang-fr");
     if (landingEn) landingEn.classList.toggle("is-active", language === "en");
@@ -7790,7 +7794,31 @@ import {
       .replaceAll("'", "&#39;");
   }
 
+  // ─── Theme (clair / sombre) ─────────────────────────────────────────────
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("mana_theme", theme);
+    ["theme-toggle", "landing-theme-toggle"].forEach((id) => {
+      const pill = document.getElementById(id);
+      if (pill) pill.classList.toggle("is-right", theme === "dark");
+    });
+  }
+
+  function initThemeToggle() {
+    const saved = localStorage.getItem("mana_theme") || "dark";
+    applyTheme(saved);
+    ["theme-toggle", "landing-theme-toggle"].forEach((id) => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      btn.addEventListener("click", () => {
+        const current = document.documentElement.dataset.theme || "dark";
+        applyTheme(current === "dark" ? "light" : "dark");
+      });
+    });
+  }
+
   async function init() {
+    initThemeToggle();
     const initialLanguage = getCollectionLanguage();
     applyLanguageButtonState(initialLanguage);
     applyStaticUiTranslations();

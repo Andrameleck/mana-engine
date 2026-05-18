@@ -17,9 +17,36 @@
         <img src="/ui/static/logo_mana-engine.png" alt="" class="landing-brand-logo" aria-hidden="true">
         <span class="landing-brand-name">Mana-Engine</span>
       </a>
-      <div class="lang-switch" role="group" aria-label="Language">
-        <button type="button" id="landing-lang-en" class="lang-btn">EN</button>
-        <button type="button" id="landing-lang-fr" class="lang-btn">FR</button>
+      <div class="landing-topbar-controls">
+        <!-- Toggle thème -->
+        <button type="button" class="toggle-pill" id="landing-theme-toggle"
+                title="Mode clair / sombre" aria-label="Basculer le thème">
+          <span class="toggle-pill-thumb"></span>
+          <span class="toggle-pill-side toggle-pill-side--left" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4"></circle>
+              <line x1="12" y1="2" x2="12" y2="4"></line>
+              <line x1="12" y1="20" x2="12" y2="22"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="2" y1="12" x2="4" y2="12"></line>
+              <line x1="20" y1="12" x2="22" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+          </span>
+          <span class="toggle-pill-side toggle-pill-side--right" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"></path>
+            </svg>
+          </span>
+        </button>
+        <!-- Toggle langue -->
+        <div class="toggle-pill" id="landing-lang-pill" role="group" aria-label="Langue d'affichage">
+          <span class="toggle-pill-thumb"></span>
+          <button type="button" class="toggle-pill-side toggle-pill-side--left" id="landing-lang-en" aria-label="English">EN</button>
+          <button type="button" class="toggle-pill-side toggle-pill-side--right" id="landing-lang-fr" aria-label="Français">FR</button>
+        </div>
       </div>
     </nav>
     <main class="landing-hero">
@@ -175,9 +202,34 @@
       </nav>
 
       <div class="rail-foot">
-        <div class="lang-switch" role="group" aria-label="Langue d'affichage">
-          <button type="button" id="lang-en" class="lang-btn is-active">EN</button>
-          <button type="button" id="lang-fr" class="lang-btn">FR</button>
+        <!-- Toggle thème : gauche = clair (☀), droite = sombre (🌙) -->
+        <button type="button" class="toggle-pill" id="theme-toggle"
+                title="Mode clair / sombre" aria-label="Basculer le thème">
+          <span class="toggle-pill-thumb"></span>
+          <span class="toggle-pill-side toggle-pill-side--left" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4"></circle>
+              <line x1="12" y1="2" x2="12" y2="4"></line>
+              <line x1="12" y1="20" x2="12" y2="22"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="2" y1="12" x2="4" y2="12"></line>
+              <line x1="20" y1="12" x2="22" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+          </span>
+          <span class="toggle-pill-side toggle-pill-side--right" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"></path>
+            </svg>
+          </span>
+        </button>
+        <!-- Toggle langue -->
+        <div class="toggle-pill" id="lang-pill" role="group" aria-label="Langue d'affichage">
+          <span class="toggle-pill-thumb"></span>
+          <button type="button" class="toggle-pill-side toggle-pill-side--left" id="lang-en" aria-label="English">EN</button>
+          <button type="button" class="toggle-pill-side toggle-pill-side--right" id="lang-fr" aria-label="Français">FR</button>
         </div>
       </div>
     </aside>
