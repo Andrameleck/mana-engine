@@ -1,12 +1,14 @@
 #!/usr/bin/env sh
 set -eu
 
-cd "${MTGCODEX_API_PROJECT_DIR:-/app}"
+project_dir="${MANA_ENGINE_API_PROJECT_DIR:-${MTGCODEX_API_PROJECT_DIR:-/app}}"
+cd "$project_dir"
 
-cache_dir="${MTGCODEX_SYNERGY_CACHE_DIR:-/data/cache/mtgcodex.api}"
+cache_dir="${MANA_ENGINE_SYNERGY_CACHE_DIR:-${MTGCODEX_SYNERGY_CACHE_DIR:-/data/cache/mana-engine}}"
 db_path="${SCRYFALL_DB_PATH:-$cache_dir/all_cards.sqlite}"
-bootstrap="${MTGCODEX_SCRYFALL_BOOTSTRAP:-auto}"
+bootstrap="${MANA_ENGINE_SCRYFALL_BOOTSTRAP:-${MTGCODEX_SCRYFALL_BOOTSTRAP:-auto}}"
 
+export MANA_ENGINE_SYNERGY_CACHE_DIR="$cache_dir"
 export MTGCODEX_SYNERGY_CACHE_DIR="$cache_dir"
 export SCRYFALL_DB_PATH="$db_path"
 
@@ -53,7 +55,7 @@ case "$bootstrap" in
     ) 9>"$lock_file"
     ;;
   *)
-    echo "[docker] Invalid MTGCODEX_SCRYFALL_BOOTSTRAP value: $bootstrap" >&2
+    echo "[docker] Invalid MANA_ENGINE_SCRYFALL_BOOTSTRAP value: $bootstrap" >&2
     exit 2
     ;;
 esac

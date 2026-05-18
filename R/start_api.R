@@ -1,4 +1,4 @@
-#' Start the mtgcodex.api Plumber Server
+#' Start the Mana-Engine Plumber Server
 #'
 #' Starts the Plumber HTTP API server. The API exposes endpoints for
 #' collection management, synergy scoring, deck generation, and a
@@ -39,7 +39,7 @@ start_api <- function(
     stop("Package 'plumber' is required. Please install it first.")
   }
 
-  .start_api_log("info", "Initializing mtgcodex.api API on %s:%s", host, port)
+  .start_api_log("info", "Initializing Mana-Engine API on %s:%s", host, port)
 
   api_file <- file.path(getwd(), "inst", "plumber", "plumber.R")
   if (!file.exists(api_file)) {

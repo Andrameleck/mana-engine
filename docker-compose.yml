@@ -1,25 +1,24 @@
+name: mana-engine
+
 services:
   api:
     build:
       context: .
     ports:
-      - "8011-8012:8010"
-    deploy:
-      # Two replicas matched to the nginx upstream (127.0.0.1:8011 and :8012).
-      replicas: 2
+      - "${MANA_ENGINE_API_PORT:-${MTGCODEX_API_PORT:-8010}}:8010"
     environment:
-      MTGCODEX_API_HOST: "0.0.0.0"
-      MTGCODEX_API_PORT: "8010"
-      MTGCODEX_API_PROJECT_DIR: "/app"
+      MANA_ENGINE_API_HOST: "0.0.0.0"
+      MANA_ENGINE_API_PORT: "8010"
+      MANA_ENGINE_API_PROJECT_DIR: "/app"
       XDG_CACHE_HOME: "/data/cache"
-      MTGCODEX_SYNERGY_CACHE_DIR: "/data/cache/mtgcodex.api"
+      MANA_ENGINE_SYNERGY_CACHE_DIR: "/data/cache/mana-engine"
       SCRYFALL_BULK_TYPE: "${SCRYFALL_BULK_TYPE:-oracle_cards}"
-      SCRYFALL_DB_PATH: "/data/cache/mtgcodex.api/all_cards.sqlite"
+      SCRYFALL_DB_PATH: "/data/cache/mana-engine/all_cards.sqlite"
       ENRICH_CHUNK: "${ENRICH_CHUNK:-2000}"
-      MTGCODEX_SCRYFALL_BOOTSTRAP: "${MTGCODEX_SCRYFALL_BOOTSTRAP:-auto}"
+      MANA_ENGINE_SCRYFALL_BOOTSTRAP: "${MANA_ENGINE_SCRYFALL_BOOTSTRAP:-${MTGCODEX_SCRYFALL_BOOTSTRAP:-auto}}"
     volumes:
-      - mtgcodex-cache:/data/cache
+      - mana-engine-cache:/data/cache
     restart: unless-stopped
 
 volumes:
-  mtgcodex-cache:
+  mana-engine-cache:

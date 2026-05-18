@@ -156,7 +156,7 @@ query_synergy_jobs_dir <- function(base_dir = "") {
     root <- query_synergy_jobs_env$jobs_dir
   }
   if (!nzchar(root)) {
-    root <- file.path(tempdir(), "mtgcodex_synergy_jobs")
+    root <- file.path(tempdir(), "mana_engine_synergy_jobs")
   }
   if (!dir.exists(root)) {
     dir.create(root, recursive = TRUE, showWarnings = FALSE)
@@ -1229,7 +1229,10 @@ query_synergy_get_catalog <- function(force_refresh = FALSE, cache_hours = 24L, 
   paths <- query_synergy_cache_paths(cache_dir)
 
   # Allow an explicit SQLite path via env var (takes priority over all_cards.sqlite).
-  env_sqlite <- trimws(Sys.getenv("MTGCODEX_SQLITE_PATH", unset = ""))
+  env_sqlite <- trimws(Sys.getenv(
+    "MANA_ENGINE_SQLITE_PATH",
+    unset = Sys.getenv("MTGCODEX_SQLITE_PATH", unset = "")
+  ))
   # Prefer the locally enriched SQLite catalog (all_cards.sqlite) when present.
   # Skipped on `force_refresh = TRUE` so callers can still trigger a Scryfall
   # bulk download.

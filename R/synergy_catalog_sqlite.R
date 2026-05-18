@@ -16,7 +16,7 @@
 #' `synergy_source_signature`) the Scryfall path attaches.
 #'
 #' @param db_path Path to the SQLite file. Defaults to the per-user cache
-#'   location (`tools::R_user_dir("mtgcodex.api","cache")/all_cards.sqlite`).
+#'   location (`tools::R_user_dir("mana-engine","cache")/all_cards.sqlite`).
 #' @param table Table name to query. Defaults to `"cards_api"`.
 #' @param where Optional SQL `WHERE` clause (without the keyword) to restrict
 #'   the rows pulled (for example `"lang = 'en'"`).

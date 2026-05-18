@@ -1,6 +1,6 @@
 Package: mtgcodex.api
 Type: Package
-Title: Magic: The Gathering Synergy Engine and Deckbuilding API
+Title: Mana-Engine Magic: The Gathering Synergy Engine and Deckbuilding API
 Version: 0.0.0.9000
 Authors@R: person("Florian", "Ricquier", email = "florian.ricquier@mtgcodex.dev", role = c("aut", "cre"))
 Author: Florian Ricquier [aut, cre]

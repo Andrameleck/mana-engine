@@ -15,7 +15,7 @@ query_synergy_catalog_from_sqlite(
 }
 \arguments{
 \item{db_path}{Path to the SQLite file. Defaults to the per-user cache
-location (\code{tools::R_user_dir("mtgcodex.api","cache")/all_cards.sqlite}).}
+location (\code{tools::R_user_dir("mana-engine","cache")/all_cards.sqlite}).}
 
 \item{table}{Table name to query. Defaults to \code{"cards_api"}.}
 

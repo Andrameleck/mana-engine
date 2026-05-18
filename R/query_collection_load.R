@@ -54,9 +54,27 @@ query_collection_load <- function(type, path, table = "") {
 }
 
 query_collection_default_db_path <- function() {
-  # No default path: each user must supply an explicit path.
-  # Falling back to the installed inst/collection/mtg.db would expose
-  # the developer's personal collection to all users.
+  installed_path <- system.file("collection", "mtg.db", package = "mtgcodex.api")
+  if (nzchar(installed_path) && file.exists(installed_path)) {
+    return(installed_path)
+  }
+
+  project_dir <- Sys.getenv(
+    "MANA_ENGINE_API_PROJECT_DIR",
+    unset = Sys.getenv("MTGCODEX_API_PROJECT_DIR", unset = "")
+  )
+  candidates <- c(
+    if (nzchar(project_dir)) {
+      file.path(project_dir, "inst", "collection", "mtg.db")
+    },
+    file.path(getwd(), "inst", "collection", "mtg.db"),
+    file.path(getwd(), "..", "inst", "collection", "mtg.db")
+  )
+  existing <- candidates[file.exists(candidates)]
+  if (length(existing) > 0L) {
+    return(existing[[1]])
+  }
+
   ""
 }
 

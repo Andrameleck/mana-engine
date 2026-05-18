@@ -411,13 +411,16 @@ query_synergy_get_precomputed_catalog <- function(catalog,
 query_synergy_cache_paths <- function(cache_dir = "") {
   base_dir <- trimws(as.character(cache_dir))
   if (!nzchar(base_dir)) {
-    base_dir <- trimws(Sys.getenv("MTGCODEX_SYNERGY_CACHE_DIR", unset = ""))
+    base_dir <- trimws(Sys.getenv(
+      "MANA_ENGINE_SYNERGY_CACHE_DIR",
+      unset = Sys.getenv("MTGCODEX_SYNERGY_CACHE_DIR", unset = "")
+    ))
   }
   if (!nzchar(base_dir)) {
-    base_dir <- tryCatch(tools::R_user_dir("mtgcodex.api", which = "cache"), error = function(e) "")
+    base_dir <- tryCatch(tools::R_user_dir("mana-engine", which = "cache"), error = function(e) "")
   }
   if (!nzchar(base_dir)) {
-    base_dir <- file.path(path.expand("~"), ".mtgcodex.api", "cache")
+    base_dir <- file.path(path.expand("~"), ".mana-engine", "cache")
   }
 
   if (!dir.exists(base_dir)) {

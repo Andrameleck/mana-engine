@@ -1,12 +1,12 @@
 FROM rocker/r-ver:4.4.2
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV MTGCODEX_API_PROJECT_DIR=/app
-ENV MTGCODEX_API_HOST=0.0.0.0
-ENV MTGCODEX_API_PORT=8010
+ENV MANA_ENGINE_API_PROJECT_DIR=/app
+ENV MANA_ENGINE_API_HOST=0.0.0.0
+ENV MANA_ENGINE_API_PORT=8010
 ENV XDG_CACHE_HOME=/data/cache
-ENV MTGCODEX_SYNERGY_CACHE_DIR=/data/cache/mtgcodex.api
-ENV SCRYFALL_DB_PATH=/data/cache/mtgcodex.api/all_cards.sqlite
+ENV MANA_ENGINE_SYNERGY_CACHE_DIR=/data/cache/mana-engine
+ENV SCRYFALL_DB_PATH=/data/cache/mana-engine/all_cards.sqlite
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \

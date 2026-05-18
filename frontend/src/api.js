@@ -53,11 +53,17 @@ function appendQuery(endpoint, query = {}) {
 }
 
 function getClientId() {
-  const storageKey = "mtgcodex_client_id_v1";
+  const storageKey = "mana_engine_client_id_v1";
+  const legacyStorageKey = "mtgcodex_client_id_v1";
   try {
     const saved = window.localStorage.getItem(storageKey);
     if (saved && String(saved).trim()) {
       return String(saved).trim();
+    }
+    const legacySaved = window.localStorage.getItem(legacyStorageKey);
+    if (legacySaved && String(legacySaved).trim()) {
+      window.localStorage.setItem(storageKey, String(legacySaved).trim());
+      return String(legacySaved).trim();
     }
   } catch (_) {
     // ignore localStorage access errors

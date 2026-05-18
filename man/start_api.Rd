@@ -2,7 +2,7 @@
 % Please edit documentation in R/start_api.R
 \name{start_api}
 \alias{start_api}
-\title{Start the mtgcodex.api Plumber Server}
+\title{Start the Mana-Engine Plumber Server}
 \usage{
 start_api(
   host = "0.0.0.0",

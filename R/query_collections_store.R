@@ -488,9 +488,9 @@ query_collections_mutate_card <- function(collection_id = "",
 
 query_collections_store_path <- function() {
   base_dir <- tryCatch(
-    tools::R_user_dir("mtgcodex.api", which = "data"),
+    tools::R_user_dir("mana-engine", which = "data"),
     error = function(e) {
-      file.path(tempdir(), "mtgcodex.api-data")
+      file.path(tempdir(), "mana-engine-data")
     }
   )
   dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)

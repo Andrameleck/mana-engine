@@ -413,7 +413,8 @@ import {
     }
   };
 
-  const DECK_STORAGE_KEY = "mtgcodex_ui_decks_v1";
+  const DECK_STORAGE_KEY = "mana_engine_ui_decks_v1";
+  const LEGACY_DECK_STORAGE_KEY = "mtgcodex_ui_decks_v1";
   const MAX_STORED_DECKS = 24;
   const DECK_STATS_STATE = {
     requestToken: 0,
@@ -1123,7 +1124,8 @@ import {
 
   function loadDeckStateFromStorage() {
     try {
-      const raw = window.localStorage.getItem(DECK_STORAGE_KEY);
+      const raw = window.localStorage.getItem(DECK_STORAGE_KEY)
+        || window.localStorage.getItem(LEGACY_DECK_STORAGE_KEY);
       if (!raw) {
         return;
       }

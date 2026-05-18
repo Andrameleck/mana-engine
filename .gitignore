@@ -38,7 +38,7 @@ rsconnect/
 /.vscode
 
 # Public/docs folder generated durign build_site() test
-public/
+/public/
 .documents/
 inst/.documents/paper
 

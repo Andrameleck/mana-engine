@@ -1,12 +1,20 @@
 args <- commandArgs(trailingOnly = TRUE)
 
-host <- Sys.getenv("MTGCODEX_API_HOST", unset = "0.0.0.0")
-port_raw <- Sys.getenv("MTGCODEX_API_PORT", unset = "8010")
-swagger_raw <- Sys.getenv("MTGCODEX_API_SWAGGER", unset = "true")
-worker_raw <- Sys.getenv("MTGCODEX_API_WORKER", unset = "")
-worker_base_port_raw <- Sys.getenv("MTGCODEX_API_WORKER_BASE_PORT", unset = "8011")
+env_value <- function(primary, legacy, default = "") {
+  value <- Sys.getenv(primary, unset = "")
+  if (nzchar(value)) {
+    return(value)
+  }
+  Sys.getenv(legacy, unset = default)
+}
+
+host <- env_value("MANA_ENGINE_API_HOST", "MTGCODEX_API_HOST", "0.0.0.0")
+port_raw <- env_value("MANA_ENGINE_API_PORT", "MTGCODEX_API_PORT", "8010")
+swagger_raw <- env_value("MANA_ENGINE_API_SWAGGER", "MTGCODEX_API_SWAGGER", "true")
+worker_raw <- env_value("MANA_ENGINE_API_WORKER", "MTGCODEX_API_WORKER", "")
+worker_base_port_raw <- env_value("MANA_ENGINE_API_WORKER_BASE_PORT", "MTGCODEX_API_WORKER_BASE_PORT", "8011")
 project_dir <- normalizePath(
-  Sys.getenv("MTGCODEX_API_PROJECT_DIR", unset = getwd()),
+  env_value("MANA_ENGINE_API_PROJECT_DIR", "MTGCODEX_API_PROJECT_DIR", getwd()),
   winslash = "/",
   mustWork = FALSE
 )
@@ -17,18 +25,18 @@ if (!dir.exists(project_dir)) {
 
 port <- suppressWarnings(as.integer(port_raw))
 if (is.na(port) || port < 1L || port > 65535L) {
-  stop(sprintf("Invalid MTGCODEX_API_PORT value: %s", port_raw))
+  stop(sprintf("Invalid MANA_ENGINE_API_PORT value: %s", port_raw))
 }
 
 worker_id <- suppressWarnings(as.integer(worker_raw))
 worker_base_port <- suppressWarnings(as.integer(worker_base_port_raw))
 if (!is.na(worker_id)) {
   if (worker_id < 1L) {
-    stop(sprintf("Invalid MTGCODEX_API_WORKER value: %s", worker_raw))
+    stop(sprintf("Invalid MANA_ENGINE_API_WORKER value: %s", worker_raw))
   }
   if (is.na(worker_base_port) || worker_base_port < 1L || worker_base_port > 65535L) {
     stop(sprintf(
-      "Invalid MTGCODEX_API_WORKER_BASE_PORT value: %s",
+      "Invalid MANA_ENGINE_API_WORKER_BASE_PORT value: %s",
       worker_base_port_raw
     ))
   }

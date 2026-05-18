@@ -2424,7 +2424,7 @@ function setCollectionLanguage(language) {
     return;
   }
   UI_STATE.language = language;
-  window.localStorage.setItem("mtgcodex_ui_lang", language);
+  window.localStorage.setItem("mana_engine_ui_lang", language);
 
   if (PREVIEW_STATE.activeRow) {
     const activeRow = PREVIEW_STATE.activeRow;
@@ -2434,7 +2434,8 @@ function setCollectionLanguage(language) {
 }
 
 function loadSavedLanguage() {
-  const saved = window.localStorage.getItem("mtgcodex_ui_lang");
+  const saved = window.localStorage.getItem("mana_engine_ui_lang")
+    || window.localStorage.getItem("mtgcodex_ui_lang");
   return saved === "fr" ? "fr" : "en";
 }
 

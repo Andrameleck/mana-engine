@@ -34,7 +34,10 @@ query_synergy_cooccurrence_db_path <- function(source_key) {
     return(installed_path)
   }
 
-  project_dir <- Sys.getenv("MTGCODEX_API_PROJECT_DIR", unset = "")
+  project_dir <- Sys.getenv(
+    "MANA_ENGINE_API_PROJECT_DIR",
+    unset = Sys.getenv("MTGCODEX_API_PROJECT_DIR", unset = "")
+  )
   candidates <- c(
     if (nzchar(project_dir)) file.path(project_dir, "inst", rel),
     file.path(getwd(), "inst", rel),

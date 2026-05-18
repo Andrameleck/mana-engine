@@ -1,5 +1,8 @@
 query_ui_root_dir <- function() {
-  project_dir <- Sys.getenv("MTGCODEX_API_PROJECT_DIR", unset = "")
+  project_dir <- Sys.getenv(
+    "MANA_ENGINE_API_PROJECT_DIR",
+    unset = Sys.getenv("MTGCODEX_API_PROJECT_DIR", unset = "")
+  )
   if (nzchar(project_dir)) {
     return(file.path(project_dir, "inst", "www"))
   }

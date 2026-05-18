@@ -1,5 +1,5 @@
 [Unit]
-Description=MTG Codex API worker %i
+Description=Mana-Engine API worker %i
 After=network-online.target
 Wants=network-online.target
 
@@ -8,8 +8,8 @@ Type=simple
 User=debian
 Group=debian
 WorkingDirectory=/home/debian/git/mtgcodex.api
-EnvironmentFile=/etc/mtgcodex/mtgcodex-api.env
-Environment=MTGCODEX_API_WORKER=%i
+EnvironmentFile=/etc/mana-engine/mana-engine-api.env
+Environment=MANA_ENGINE_API_WORKER=%i
 ExecStart=/usr/bin/Rscript /home/debian/git/mtgcodex.api/scripts/run-api.R
 Restart=on-failure
 RestartSec=5

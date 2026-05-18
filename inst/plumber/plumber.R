@@ -50,6 +50,11 @@ query_req_client_id <- function(req) {
     return(from_query)
   }
 
+  from_header <- trimws(as.character(req$HTTP_X_MANA_ENGINE_CLIENT_ID %||% ""))
+  if (nzchar(from_header)) {
+    return(from_header)
+  }
+
   from_header <- trimws(as.character(req$HTTP_X_MTGCODEX_CLIENT_ID %||% ""))
   if (nzchar(from_header)) {
     return(from_header)
@@ -65,7 +70,7 @@ query_req_client_id <- function(req) {
   left
 }
 
-#* @apiTitle mtgcodex.api API
+#* @apiTitle Mana-Engine API
 #* @apiDescription API routes delegate to query_* functions in R/
 NULL
 
