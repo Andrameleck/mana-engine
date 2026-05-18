@@ -523,6 +523,32 @@ function(job_id = "") {
   )
 }
 
+#* Search cards from the local Scryfall oracle library
+#* @param q Free-text search (name or oracle text).
+#* @param colors Comma-separated required color codes, e.g. "W,U".
+#* @param cmc_min Minimum CMC (integer).
+#* @param cmc_max Maximum CMC (integer).
+#* @param type_line Partial match on type line (e.g. "Creature").
+#* @param keywords Partial match on keywords (e.g. "Flying").
+#* @param limit Max results (default 60, max 200).
+#* @param offset Pagination offset (default 0).
+#* @serializer unboxedJSON
+#* @get /cards/search
+function(q = "", colors = "", cmc_min = "", cmc_max = "",
+         type_line = "", keywords = "", limit = "60", offset = "0") {
+  query_call(
+    "query_card_search",
+    q         = q,
+    colors    = colors,
+    cmc_min   = cmc_min,
+    cmc_max   = cmc_max,
+    type_line = type_line,
+    keywords  = keywords,
+    limit     = limit,
+    offset    = offset
+  )
+}
+
 #* Fetch one card from the Scryfall oracle catalog
 #* @param card_id Card UUID or card name.
 #* @param include_normalized Include normalized payload (true/false).

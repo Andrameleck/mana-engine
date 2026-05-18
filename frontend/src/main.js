@@ -151,7 +151,10 @@ import {
       credits_brand_tagline: "Mechanics-first synergy engine for deckbuilders.",
       credits_author: "Florian Ricquier",
       credits_license: "GNU AGPL v3",
-      credits_wip_notice: "<strong>Work in progress.</strong> Synergy scoring is still under active development and far from perfect — results can be inconsistent, incomplete, or wrong. The mechanical ontology, scoring weights, and role-inference logic are all subject to significant change. Use results as a starting point, not a ground truth."
+      credits_wip_notice: "<strong>Work in progress.</strong> Synergy scoring is still under active development and far from perfect — results can be inconsistent, incomplete, or wrong. The mechanical ontology, scoring weights, and role-inference logic are all subject to significant change. Use results as a starting point, not a ground truth.",
+      // ── Card Finder ──
+      tabs_card_finder: "Card Finder",
+      subtitle_card_finder: "Search & filter any card by color, CMC, mechanics and tags."
     },
     fr: {
       tabs_collections: "Collections",
@@ -282,7 +285,10 @@ import {
       credits_brand_tagline: "Moteur de synergies m\u00e9caniques pour les constructeurs de decks.",
       credits_author: "Florian Ricquier",
       credits_license: "GNU AGPL v3",
-      credits_wip_notice: "<strong>Travail en cours.</strong> Le calcul de synergies est encore en d\u00e9veloppement actif et loin d'\u00eatre parfait\u00a0\u2014 les r\u00e9sultats peuvent \u00eatre incoh\u00e9rents, incomplets ou erron\u00e9s. L'ontologie m\u00e9canique, les poids de scoring et la logique d'inf\u00e9rence des r\u00f4les sont tous susceptibles d'\u00e9voluer significativement. Utilisez les r\u00e9sultats comme point de d\u00e9part, pas comme v\u00e9rit\u00e9 absolue."
+      credits_wip_notice: "<strong>Travail en cours.</strong> Le calcul de synergies est encore en d\u00e9veloppement actif et loin d'\u00eatre parfait\u00a0\u2014 les r\u00e9sultats peuvent \u00eatre incoh\u00e9rents, incomplets ou erron\u00e9s. L'ontologie m\u00e9canique, les poids de scoring et la logique d'inf\u00e9rence des r\u00f4les sont tous susceptibles d'\u00e9voluer significativement. Utilisez les r\u00e9sultats comme point de d\u00e9part, pas comme v\u00e9rit\u00e9 absolue.",
+      // ── Card Finder ──
+      tabs_card_finder: "Chercheur de Cartes",
+      subtitle_card_finder: "Recherchez et filtrez n'importe quelle carte par couleur, CMC, m\u00e9caniques et tags."
     }
   };
 
@@ -316,6 +322,10 @@ import {
       credits: {
         title: t("tabs_credits"),
         subtitle: t("subtitle_credits")
+      },
+      card_finder: {
+        title: t("tabs_card_finder"),
+        subtitle: t("subtitle_card_finder")
       },
       spellbook: {
         title: t("tabs_spellbook"),
@@ -428,6 +438,26 @@ import {
     activeElement: null,
     requestToken: 0,
     cache: new Map()
+  };
+
+  // ── Hash routing ─────────────────────────────────────────────────────────
+  const HASH_TO_TAB = {
+    "/":            "home",
+    "/collections": "collections",
+    "/decks":       "decks",
+    "/synergy-lab": "strategy",
+    "/decks-lab":   "generator",
+    "/credits":     "credits",
+    "/card-finder": "card_finder"
+  };
+  const TAB_TO_HASH = {
+    home:        "#/",
+    collections: "#/collections",
+    decks:       "#/decks",
+    strategy:    "#/synergy-lab",
+    generator:   "#/decks-lab",
+    credits:     "#/credits",
+    card_finder: "#/card-finder"
   };
 
   const nodes = {
@@ -571,11 +601,12 @@ import {
   ];
 
   function applyLanguageButtonState(language) {
-    if (!nodes.langEnButton || !nodes.langFrButton) {
-      return;
-    }
-    nodes.langEnButton.classList.toggle("is-active", language === "en");
-    nodes.langFrButton.classList.toggle("is-active", language === "fr");
+    if (nodes.langEnButton) nodes.langEnButton.classList.toggle("is-active", language === "en");
+    if (nodes.langFrButton) nodes.langFrButton.classList.toggle("is-active", language === "fr");
+    const landingEn = document.getElementById("landing-lang-en");
+    const landingFr = document.getElementById("landing-lang-fr");
+    if (landingEn) landingEn.classList.toggle("is-active", language === "en");
+    if (landingFr) landingFr.classList.toggle("is-active", language === "fr");
   }
 
   function applyStaticUiTranslations() {
@@ -587,7 +618,8 @@ import {
       strategy: t("tabs_strategy"),
       generator: t("tabs_generator"),
       credits: t("tabs_credits"),
-      spellbook: t("tabs_spellbook")
+      spellbook: t("tabs_spellbook"),
+      card_finder: t("tabs_card_finder")
     };
     nodes.tabButtons.forEach((button) => {
       const tabId = String(button?.dataset?.tab || "");
@@ -899,6 +931,40 @@ import {
     nodes.workspaceTitle.textContent = meta.title;
     nodes.workspaceSubtitle.textContent = meta.subtitle;
     renderActiveTabTable();
+  }
+
+  // ── Routing helpers ───────────────────────────────────────────────────────
+  function parseRoute() {
+    const h = window.location.hash || "#/";
+    return h.startsWith("#") ? (h.slice(1) || "/") : "/";
+  }
+
+  function navigate(tabId) {
+    const hash = TAB_TO_HASH[tabId] || "#/";
+    if (window.location.hash !== hash) {
+      window.location.hash = hash;
+    } else {
+      handleRoute();
+    }
+  }
+
+  function handleRoute() {
+    const path = parseRoute();
+    const tabId = HASH_TO_TAB[path] || "home";
+    const landing = document.getElementById("view-landing");
+    const app = document.getElementById("view-app");
+    if (tabId === "home") {
+      window.scrollTo(0, 0);
+      landing?.classList.add("is-active");
+      app?.classList.remove("is-active");
+      document.body.classList.add("landing-open");
+    } else {
+      landing?.classList.remove("is-active");
+      app?.classList.add("is-active");
+      document.body.classList.remove("landing-open");
+      selectTab(tabId);
+    }
+    applyStaticUiTranslations();
   }
 
   function payloadForNamedView(payload, name, fallbackSummary, viewMode = "table", uiContext = "") {
@@ -1282,6 +1348,13 @@ import {
     if (state.activeTab === "credits") {
       setWorkspaceLowerHidden(true);
       renderDeckStatsPanel(null);
+      return;
+    }
+
+    if (state.activeTab === "card_finder") {
+      setWorkspaceLowerHidden(true);
+      renderDeckStatsPanel(null);
+      initCardFinderTab();
       return;
     }
 
@@ -7728,8 +7801,13 @@ import {
     }
 
     nodes.tabButtons.forEach((button) => {
-      button.addEventListener("click", () => selectTab(button.dataset.tab || "collections"));
+      button.addEventListener("click", () => navigate(button.dataset.tab || "collections"));
     });
+
+    const landingLangEn = document.getElementById("landing-lang-en");
+    const landingLangFr = document.getElementById("landing-lang-fr");
+    if (landingLangEn) landingLangEn.addEventListener("click", () => onLanguageSelect("en"));
+    if (landingLangFr) landingLangFr.addEventListener("click", () => onLanguageSelect("fr"));
 
     bindCollectionPicker();
     bindDeckPicker();
@@ -7840,7 +7918,8 @@ import {
       await loadStoredCollectionIntoTable(state.selectedCollectionId);
     }
     renderDecksList();
-    selectTab(state.activeTab);
+    window.addEventListener("hashchange", handleRoute);
+    handleRoute();
   }
 
   init().catch((error) => {
@@ -7849,4 +7928,219 @@ import {
       error: String(error)
     });
   });
+
+  // ── Card Finder ───────────────────────────────────────────────────────────
+
+  const CF_STATE = {
+    initialized: false,
+    loading: false,
+    offset: 0,
+    limit: 60,
+    lastQuery: null,
+    total: 0
+  };
+
+  function initCardFinderTab() {
+    if (CF_STATE.initialized) return;
+    CF_STATE.initialized = true;
+
+    const form = document.getElementById("card-finder-form");
+    if (!form) return;
+
+    // Color toggle buttons
+    form.querySelectorAll(".cf-color-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const pressed = btn.getAttribute("aria-pressed") === "true";
+        btn.setAttribute("aria-pressed", pressed ? "false" : "true");
+        btn.classList.toggle("is-active", !pressed);
+      });
+    });
+
+    form.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      CF_STATE.offset = 0;
+      runCardFinderSearch();
+    });
+  }
+
+  function cfSelectedColors() {
+    return Array.from(document.querySelectorAll(".cf-color-btn[aria-pressed='true']"))
+      .map((btn) => btn.dataset.color || "")
+      .filter(Boolean);
+  }
+
+  async function runCardFinderSearch() {
+    const status = document.getElementById("cf-status");
+    const grid = document.getElementById("cf-grid");
+    const pagination = document.getElementById("cf-pagination");
+    if (!status || !grid) return;
+
+    const q        = (document.getElementById("cf-q")?.value || "").trim();
+    const typeVal  = (document.getElementById("cf-type")?.value || "").trim();
+    const kwVal    = (document.getElementById("cf-keywords")?.value || "").trim();
+    const cmcMin   = (document.getElementById("cf-cmc-min")?.value || "").trim();
+    const cmcMax   = (document.getElementById("cf-cmc-max")?.value || "").trim();
+    const colors   = cfSelectedColors().join(",");
+
+    if (!q && !typeVal && !kwVal && !cmcMin && !cmcMax && !colors) {
+      status.textContent = currentUiLanguage() === "fr"
+        ? "Saisis au moins un filtre pour chercher."
+        : "Enter at least one filter to search.";
+      grid.innerHTML = "";
+      if (pagination) pagination.innerHTML = "";
+      return;
+    }
+
+    CF_STATE.loading = true;
+    CF_STATE.lastQuery = { q, typeVal, kwVal, cmcMin, cmcMax, colors };
+    status.textContent = currentUiLanguage() === "fr" ? "Recherche en cours…" : "Searching…";
+    status.classList.remove("muted");
+    grid.innerHTML = "";
+    if (pagination) pagination.innerHTML = "";
+
+    const params = new URLSearchParams();
+    if (q)       params.set("q", q);
+    if (typeVal) params.set("type_line", typeVal);
+    if (kwVal)   params.set("keywords", kwVal);
+    if (cmcMin)  params.set("cmc_min", cmcMin);
+    if (cmcMax)  params.set("cmc_max", cmcMax);
+    if (colors)  params.set("colors", colors);
+    params.set("limit", String(CF_STATE.limit));
+    params.set("offset", String(CF_STATE.offset));
+
+    try {
+      const resp = await fetch(`/cards/search?${params.toString()}`, { headers: { Accept: "application/json" } });
+      const data = resp.ok ? await resp.json().catch(() => null) : null;
+
+      if (!data || data.ok !== true) {
+        status.textContent = data?.error || (currentUiLanguage() === "fr" ? "Erreur de recherche." : "Search error.");
+        status.classList.add("muted");
+        CF_STATE.loading = false;
+        return;
+      }
+
+      CF_STATE.total = data.total || 0;
+      CF_STATE.loading = false;
+
+      const lang = currentUiLanguage();
+      const count = data.count || 0;
+      status.textContent = lang === "fr"
+        ? `${CF_STATE.total.toLocaleString("fr-FR")} résultat(s) — affichage ${CF_STATE.offset + 1}–${CF_STATE.offset + count}`
+        : `${CF_STATE.total.toLocaleString("en-US")} result(s) — showing ${CF_STATE.offset + 1}–${CF_STATE.offset + count}`;
+      status.classList.add("muted");
+
+      renderCfGrid(data.results || []);
+      renderCfPagination(pagination);
+
+    } catch (err) {
+      CF_STATE.loading = false;
+      status.textContent = String(err?.message || err);
+      status.classList.add("muted");
+    }
+  }
+
+  function renderCfGrid(results) {
+    const grid = document.getElementById("cf-grid");
+    if (!grid) return;
+    grid.innerHTML = "";
+
+    if (results.length === 0) {
+      grid.innerHTML = `<p class="muted">${currentUiLanguage() === "fr" ? "Aucune carte trouvée." : "No cards found."}</p>`;
+      return;
+    }
+
+    results.forEach((card) => {
+      const article = document.createElement("article");
+      article.className = "cf-card";
+
+      const scryfallId = card.id || "";
+      const imgUrl = scryfallId
+        ? `https://cards.scryfall.io/art_crop/front/${scryfallId[0]}/${scryfallId[1]}/${scryfallId}.jpg`
+        : "";
+
+      const colorHtml = parseCfJsonArray(card.color_identity)
+        .map((c) => `<img src="https://svgs.scryfall.io/card-symbols/${c}.svg" alt="${escapeHtml(c)}" class="cf-card-sym" loading="lazy">`)
+        .join("");
+
+      const keywordsArr = parseCfJsonArray(card.keywords);
+      const kwHtml = keywordsArr.slice(0, 4)
+        .map((k) => `<span class="cf-kw-chip">${escapeHtml(k)}</span>`)
+        .join("");
+
+      article.innerHTML = `
+        <div class="cf-card-art">
+          ${imgUrl ? `<img src="${imgUrl}" alt="${escapeHtml(card.name || "")}" loading="lazy" decoding="async">` : `<span class="cf-card-art-fallback">${escapeHtml(card.name || "")}</span>`}
+        </div>
+        <div class="cf-card-body">
+          <p class="cf-card-name">${escapeHtml(card.name || "")}</p>
+          <p class="cf-card-type">${escapeHtml(card.type_line || "")}</p>
+          <div class="cf-card-colors">${colorHtml}</div>
+          ${kwHtml ? `<div class="cf-kw-chips">${kwHtml}</div>` : ""}
+          ${card.oracle_text ? `<p class="cf-card-oracle">${escapeHtml(String(card.oracle_text).slice(0, 120))}${String(card.oracle_text).length > 120 ? "…" : ""}</p>` : ""}
+          <p class="cf-card-meta">${escapeHtml(card.mana_cost || "")} &nbsp;·&nbsp; ${card.rarity || ""} &nbsp;·&nbsp; ${card.set_code || ""}</p>
+        </div>
+      `;
+
+      if (imgUrl) {
+        article.querySelector("img")?.addEventListener("error", function () {
+          this.parentElement.innerHTML = `<span class="cf-card-art-fallback">${escapeHtml(card.name || "")}</span>`;
+        }, { once: true });
+      }
+
+      grid.appendChild(article);
+    });
+  }
+
+  function parseCfJsonArray(raw) {
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function renderCfPagination(container) {
+    if (!container) return;
+    container.innerHTML = "";
+    const total = CF_STATE.total;
+    const limit = CF_STATE.limit;
+    if (total <= limit) return;
+
+    const totalPages = Math.ceil(total / limit);
+    const currentPage = Math.floor(CF_STATE.offset / limit) + 1;
+    const lang = currentUiLanguage();
+
+    const prev = document.createElement("button");
+    prev.type = "button";
+    prev.className = "cf-page-btn";
+    prev.textContent = lang === "fr" ? "← Précédent" : "← Prev";
+    prev.disabled = currentPage <= 1;
+    prev.addEventListener("click", () => {
+      CF_STATE.offset = Math.max(0, CF_STATE.offset - limit);
+      runCardFinderSearch();
+    });
+
+    const info = document.createElement("span");
+    info.className = "cf-page-info";
+    info.textContent = lang === "fr"
+      ? `Page ${currentPage} / ${totalPages}`
+      : `Page ${currentPage} / ${totalPages}`;
+
+    const next = document.createElement("button");
+    next.type = "button";
+    next.className = "cf-page-btn";
+    next.textContent = lang === "fr" ? "Suivant →" : "Next →";
+    next.disabled = currentPage >= totalPages;
+    next.addEventListener("click", () => {
+      CF_STATE.offset += limit;
+      runCardFinderSearch();
+    });
+
+    container.appendChild(prev);
+    container.appendChild(info);
+    container.appendChild(next);
+  }
+
 })();

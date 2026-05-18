@@ -11,9 +11,110 @@
   <link rel="stylesheet" crossorigin href="/ui/static/app.css">
 </head>
 <body>
-  <div class="app-shell app-shell--with-rail">
+
+  <!-- ── Landing page ──────────────────────────────────────────────── -->
+  <div id="view-landing" class="landing-view">
+    <nav class="landing-topbar" aria-label="Top navigation">
+      <a class="landing-brand" href="#/" aria-label="Mana-Engine — Accueil">
+        <img src="/ui/static/logo_mana-engine.png" alt="" class="landing-brand-logo" aria-hidden="true">
+        <span class="landing-brand-name">Mana-Engine</span>
+      </a>
+      <div class="lang-switch" role="group" aria-label="Language">
+        <button type="button" id="landing-lang-en" class="lang-btn">EN</button>
+        <button type="button" id="landing-lang-fr" class="lang-btn">FR</button>
+      </div>
+    </nav>
+    <main class="landing-hero">
+      <div class="landing-hero-content">
+        <div class="landing-logo-wrap">
+          <img src="/ui/static/logo_mana-engine.png" alt="Mana-Engine" class="landing-logo-img">
+        </div>
+        <h1 class="landing-title">Mana-Engine</h1>
+        <p class="landing-tagline" data-i18n="credits_brand_tagline">Mechanics-first synergy engine for deckbuilders.</p>
+        <nav class="landing-tiles" aria-label="Modules">
+
+          <a href="#/collections" class="landing-tile">
+            <span class="landing-tile-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="4" y="4" width="7" height="7" rx="1.5"></rect>
+                <rect x="13" y="4" width="7" height="7" rx="1.5"></rect>
+                <rect x="4" y="13" width="7" height="7" rx="1.5"></rect>
+                <rect x="13" y="13" width="7" height="7" rx="1.5"></rect>
+              </svg>
+            </span>
+            <span class="landing-tile-title" data-i18n="tabs_collections">Collections</span>
+            <span class="landing-tile-sub" data-i18n="subtitle_collections">Organise your cards into searchable folders.</span>
+          </a>
+
+          <a href="#/decks" class="landing-tile">
+            <span class="landing-tile-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M6 4h9a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"></path>
+                <path d="M9 2h9a2 2 0 0 1 2 2v12"></path>
+              </svg>
+            </span>
+            <span class="landing-tile-title" data-i18n="tabs_decks">Decks</span>
+            <span class="landing-tile-sub" data-i18n="subtitle_decks">Import, browse and analyse any deck list.</span>
+          </a>
+
+          <a href="#/synergy-lab" class="landing-tile">
+            <span class="landing-tile-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M12 3v18"></path>
+                <path d="M4 8l8 4 8-4"></path>
+                <path d="M4 16l8 4 8-4"></path>
+              </svg>
+            </span>
+            <span class="landing-tile-title" data-i18n="tabs_strategy">Synergy Lab</span>
+            <span class="landing-tile-sub" data-i18n="subtitle_strategy">Find mechanical synergies, combos and packages around any card.</span>
+          </a>
+
+          <a href="#/decks-lab" class="landing-tile">
+            <span class="landing-tile-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M4 4h6v6H4z"></path>
+                <path d="M14 4h6v6h-6z"></path>
+                <path d="M4 14h6v6h-6z"></path>
+                <path d="M14 14h6v6h-6z"></path>
+              </svg>
+            </span>
+            <span class="landing-tile-title" data-i18n="tabs_generator">Decks Lab</span>
+            <span class="landing-tile-sub" data-i18n="subtitle_generator">Build complete decks from format, color identity and archetypes.</span>
+          </a>
+
+          <a href="#/card-finder" class="landing-tile">
+            <span class="landing-tile-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="11" cy="11" r="7"></circle>
+                <path d="M21 21l-4.35-4.35"></path>
+                <path d="M11 8a3 3 0 0 1 3 3"></path>
+              </svg>
+            </span>
+            <span class="landing-tile-title" data-i18n="tabs_card_finder">Card Finder</span>
+            <span class="landing-tile-sub" data-i18n="subtitle_card_finder">Search &amp; filter any card by color, CMC, mechanics and tags.</span>
+          </a>
+
+          <a href="#/credits" class="landing-tile">
+            <span class="landing-tile-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="9"></circle>
+                <line x1="12" y1="8" x2="12" y2="8.5"></line>
+                <line x1="12" y1="11" x2="12" y2="16"></line>
+              </svg>
+            </span>
+            <span class="landing-tile-title" data-i18n="tabs_credits">Credits</span>
+            <span class="landing-tile-sub" data-i18n="subtitle_credits">About this project, data sources, tech stack and references.</span>
+          </a>
+
+        </nav>
+      </div>
+    </main>
+  </div>
+
+  <!-- ── App shell ─────────────────────────────────────────────────── -->
+  <div id="view-app" class="app-shell app-shell--with-rail">
     <aside class="app-rail" aria-label="Navigation principale">
-      <a class="rail-brand" href="#" aria-label="Mana-Engine">
+      <a class="rail-brand" href="#/" aria-label="Mana-Engine">
         <span class="rail-brand-mark" aria-hidden="true">
           <img src="/ui/static/logo_mana-engine.png" alt="">
         </span>
@@ -24,6 +125,14 @@
       </a>
 
       <nav class="rail-nav" aria-label="Sections">
+        <button type="button" class="rail-tab side-tab" data-tab="card_finder" data-label="Card Finder" aria-label="Card Finder">
+          <svg viewBox="0 0 24 24" class="rail-tab-icon side-tab-icon" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"></circle>
+            <line x1="16.5" y1="16.5" x2="21" y2="21"></line>
+            <path d="M11 8a3 3 0 0 1 3 3"></path>
+          </svg>
+          <span class="rail-tab-label side-tab-label">Card Finder</span>
+        </button>
         <button type="button" class="rail-tab side-tab is-active" data-tab="collections" data-label="Collections" aria-label="Collections">
           <svg viewBox="0 0 24 24" class="rail-tab-icon side-tab-icon" aria-hidden="true">
             <rect x="4" y="4" width="7" height="7" rx="1.5"></rect>
@@ -553,6 +662,79 @@
           <p data-i18n-html="credits_wip_notice"></p>
         </aside>
 
+      </section>
+
+      <!-- ── Card Finder ──────────────────────────────────────────────────── -->
+      <section id="tab-card_finder" class="tab-view page page--card-finder" aria-labelledby="workspace-title">
+        <div class="card-finder-layout">
+
+          <!-- Filters sidebar -->
+          <aside class="card-finder-filters">
+            <form id="card-finder-form" class="card-finder-form">
+
+              <div class="cf-field">
+                <label class="cf-label" for="cf-q">Search</label>
+                <input type="search" id="cf-q" class="cf-input" placeholder="Name or text…" autocomplete="off">
+              </div>
+
+              <div class="cf-field">
+                <label class="cf-label" for="cf-type">Type</label>
+                <input type="text" id="cf-type" class="cf-input" placeholder="Creature, Instant…" autocomplete="off">
+              </div>
+
+              <div class="cf-field">
+                <label class="cf-label" for="cf-keywords">Keyword</label>
+                <input type="text" id="cf-keywords" class="cf-input" placeholder="Flying, Lifelink…" autocomplete="off">
+              </div>
+
+              <div class="cf-field">
+                <label class="cf-label">Colors</label>
+                <div class="cf-color-row" id="cf-colors" role="group" aria-label="Color identity filter">
+                  <button type="button" class="cf-color-btn" data-color="W" aria-pressed="false" title="White">
+                    <img src="https://svgs.scryfall.io/card-symbols/W.svg" alt="W" loading="lazy">
+                  </button>
+                  <button type="button" class="cf-color-btn" data-color="U" aria-pressed="false" title="Blue">
+                    <img src="https://svgs.scryfall.io/card-symbols/U.svg" alt="U" loading="lazy">
+                  </button>
+                  <button type="button" class="cf-color-btn" data-color="B" aria-pressed="false" title="Black">
+                    <img src="https://svgs.scryfall.io/card-symbols/B.svg" alt="B" loading="lazy">
+                  </button>
+                  <button type="button" class="cf-color-btn" data-color="R" aria-pressed="false" title="Red">
+                    <img src="https://svgs.scryfall.io/card-symbols/R.svg" alt="R" loading="lazy">
+                  </button>
+                  <button type="button" class="cf-color-btn" data-color="G" aria-pressed="false" title="Green">
+                    <img src="https://svgs.scryfall.io/card-symbols/G.svg" alt="G" loading="lazy">
+                  </button>
+                  <button type="button" class="cf-color-btn" data-color="C" aria-pressed="false" title="Colorless">
+                    <img src="https://svgs.scryfall.io/card-symbols/C.svg" alt="C" loading="lazy">
+                  </button>
+                </div>
+              </div>
+
+              <div class="cf-field cf-field--row">
+                <div class="cf-subfield">
+                  <label class="cf-label" for="cf-cmc-min">CMC min</label>
+                  <input type="number" id="cf-cmc-min" class="cf-input cf-input--num" min="0" max="20" placeholder="0">
+                </div>
+                <div class="cf-subfield">
+                  <label class="cf-label" for="cf-cmc-max">CMC max</label>
+                  <input type="number" id="cf-cmc-max" class="cf-input cf-input--num" min="0" max="20" placeholder="—">
+                </div>
+              </div>
+
+              <button type="submit" id="cf-search-btn" class="cf-search-btn">Search</button>
+
+            </form>
+          </aside>
+
+          <!-- Results area -->
+          <div class="card-finder-results">
+            <div id="cf-status" class="cf-status muted">Enter a search above.</div>
+            <div id="cf-grid" class="cf-grid"></div>
+            <div id="cf-pagination" class="cf-pagination"></div>
+          </div>
+
+        </div>
       </section>
 
       <div id="workspace-lower" class="workspace-lower">

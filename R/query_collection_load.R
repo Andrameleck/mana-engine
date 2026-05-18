@@ -59,10 +59,7 @@ query_collection_default_db_path <- function() {
     return(installed_path)
   }
 
-  project_dir <- Sys.getenv(
-    "MANA_ENGINE_API_PROJECT_DIR",
-    unset = Sys.getenv("MTGCODEX_API_PROJECT_DIR", unset = "")
-  )
+  project_dir <- Sys.getenv("MTGCODEX_API_PROJECT_DIR", unset = "")
   candidates <- c(
     if (nzchar(project_dir)) {
       file.path(project_dir, "inst", "collection", "mtg.db")
