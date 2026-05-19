@@ -1,24 +1,32 @@
 name: mana-engine
 
+x-api-common: &api-common
+  build:
+    context: .
+  environment:
+    MANA_ENGINE_API_HOST: "0.0.0.0"
+    MANA_ENGINE_API_PORT: "8010"
+    MANA_ENGINE_API_PROJECT_DIR: "/app"
+    XDG_CACHE_HOME: "/data/cache"
+    MANA_ENGINE_SYNERGY_CACHE_DIR: "/data/cache/mana-engine"
+    SCRYFALL_BULK_TYPE: "${SCRYFALL_BULK_TYPE:-oracle_cards}"
+    SCRYFALL_DB_PATH: "/data/cache/mana-engine/all_cards.sqlite"
+    ENRICH_CHUNK: "${ENRICH_CHUNK:-2000}"
+    MANA_ENGINE_SCRYFALL_BOOTSTRAP: "${MANA_ENGINE_SCRYFALL_BOOTSTRAP:-${MTGCODEX_SCRYFALL_BOOTSTRAP:-auto}}"
+  volumes:
+    - mana-engine-cache:/data/cache
+  restart: unless-stopped
+
 services:
-  api:
-    build:
-      context: .
+  api-1:
+    <<: *api-common
     ports:
-      - "${MANA_ENGINE_API_PORT:-${MTGCODEX_API_PORT:-8010}}:8010"
-    environment:
-      MANA_ENGINE_API_HOST: "0.0.0.0"
-      MANA_ENGINE_API_PORT: "8010"
-      MANA_ENGINE_API_PROJECT_DIR: "/app"
-      XDG_CACHE_HOME: "/data/cache"
-      MANA_ENGINE_SYNERGY_CACHE_DIR: "/data/cache/mana-engine"
-      SCRYFALL_BULK_TYPE: "${SCRYFALL_BULK_TYPE:-oracle_cards}"
-      SCRYFALL_DB_PATH: "/data/cache/mana-engine/all_cards.sqlite"
-      ENRICH_CHUNK: "${ENRICH_CHUNK:-2000}"
-      MANA_ENGINE_SCRYFALL_BOOTSTRAP: "${MANA_ENGINE_SCRYFALL_BOOTSTRAP:-${MTGCODEX_SCRYFALL_BOOTSTRAP:-auto}}"
-    volumes:
-      - mana-engine-cache:/data/cache
-    restart: unless-stopped
+      - "127.0.0.1:8011:8010"
+
+  api-2:
+    <<: *api-common
+    ports:
+      - "127.0.0.1:8012:8010"
 
 volumes:
   mana-engine-cache:
