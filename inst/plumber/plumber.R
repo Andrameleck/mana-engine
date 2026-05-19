@@ -71,20 +71,44 @@ query_req_client_id <- function(req) {
 }
 
 #* @apiTitle Mana-Engine API
-#* @apiDescription API routes delegate to query_* functions in R/
+#* @apiVersion 0.0.0.9000
+#* @apiDescription A mechanics-first synergy engine for Magic: The Gathering.
+#*
+#* Models cards through normalized mechanical behaviour (produces, rewards,
+#* requires, replaces, prevents, amplifies) to identify synergies, score pairs
+#* bidirectionally, detect packages and combos, and generate decks.
+#* A browser-based UI is available at `/ui/`.
+#*
+#* Source code and issue tracker:
+#* [github.com/Andrameleck/mtgcodex.api](https://github.com/Andrameleck/mtgcodex.api)
+#*
+#* @apiTag System Health checks and server diagnostics
+#* @apiTag Cards Card search, lookup, and mechanical normalization
+#* @apiTag Collections Collection management — import, store, and track owned cards
+#* @apiTag Synergy Synergy scoring, deck analysis, and deck generation
+#* @apiTag Ontology Registered events, mechanics, archetypes, and formats
+#* @apiTag Reference External data sources (Scryfall, MTGJSON, Spellbook, LotusNoir)
+#* @apiTag Strategy Advanced deck strategy analysis (bridge equations)
 NULL
 
-#* Healthcheck
+#* Server health check
+#*
+#* Returns `{"ok": true, "status": "healthy"}` when the API is running correctly.
+#* @tag System
 #* @serializer unboxedJSON
 #* @get /health
 function() {
   query_call("query_health")
 }
 
-#* Load collection from a source file
-#* @param type Source type: db, csv, or text.
-#* @param path Source file path.
-#* @param table Table name when `type=db`.
+#* Load a collection from a source file (legacy)
+#*
+#* Parses a collection file from disk and returns the card records. Prefer
+#* the `/collections` store endpoints for persistent collections.
+#* @param type:[string] Source type: `db`, `csv`, or `text`.
+#* @param path:[string] Absolute path to the source file on the server.
+#* @param table:[string] Table name (only used when `type=db`).
+#* @tag Collections
 #* @serializer unboxedJSON
 #* @get /collection/load
 function(type = "", path = "", table = "") {
@@ -96,12 +120,17 @@ function(type = "", path = "", table = "") {
   )
 }
 
-#* Upload and load a collection file
-#* @param type Source type: db, csv, or text.
-#* @param table Table name when `type=db`.
-#* @param filename Optional file name when sending application/octet-stream.
+#* Upload and parse a collection file (legacy)
+#*
+#* Accepts a multipart form upload or raw `application/octet-stream` body.
+#* Parses the file and returns the card records. Prefer `/collections/import_csv`
+#* for persistent storage.
+#* @param type:[string] Source type: `db`, `csv`, or `text`.
+#* @param table:[string] Table name (only when `type=db`).
+#* @param filename:[string] Optional hint for the file name.
 #* @parser multi
 #* @parser octet
+#* @tag Collections
 #* @serializer unboxedJSON
 #* @post /collection/upload
 function(req, res, type = "", table = "", filename = "") {
@@ -114,12 +143,17 @@ function(req, res, type = "", table = "", filename = "") {
   )
 }
 
-#* Import a public CSV collection into internal DB store
-#* @param name Collection display name.
-#* @param platform Optional source platform name.
-#* @param filename Optional file name when sending application/octet-stream.
+#* Import a CSV collection into the internal store
+#*
+#* Uploads a CSV file (ManaBox, Moxfield export, or generic format) and
+#* stores it as a named collection in the local database. The collection is
+#* then accessible via `/collections`.
+#* @param name:[string] Display name for the collection.
+#* @param platform:[string] Source platform hint: `manabox`, `moxfield`, `generic`, or `auto`.
+#* @param filename:[string] Optional file name hint (for `application/octet-stream` uploads).
 #* @parser multi
 #* @parser octet
+#* @tag Collections
 #* @serializer unboxedJSON
 #* @post /collections/import_csv
 function(req, res, name = "", platform = "auto", filename = "") {
@@ -134,15 +168,23 @@ function(req, res, name = "", platform = "auto", filename = "") {
   )
 }
 
-#* List stored collections
+#* List all stored collections
+#*
+#* Returns a summary list of all collections belonging to the current client,
+#* including name, card count, and creation date.
+#* @tag Collections
 #* @serializer unboxedJSON
 #* @get /collections
 function(req) {
   query_call("query_collections_list", client_id = query_req_client_id(req))
 }
 
-#* Get one stored collection content
-#* @param collection_id Collection identifier.
+#* Get one stored collection
+#*
+#* Returns the full card list of a stored collection. Each card record
+#* includes name, quantity, set code, finish, and condition fields.
+#* @param collection_id:[string] Collection identifier (UUID).
+#* @tag Collections
 #* @serializer unboxedJSON
 #* @get /collections/<collection_id>
 function(req, collection_id = "") {
@@ -153,8 +195,12 @@ function(req, collection_id = "") {
   )
 }
 
-#* Delete one stored collection
-#* @param collection_id Collection identifier.
+#* Delete a stored collection
+#*
+#* Permanently deletes a collection and all its card records from the store.
+#* This operation cannot be undone.
+#* @param collection_id:[string] Collection identifier (UUID).
+#* @tag Collections
 #* @serializer unboxedJSON
 #* @delete /collections/<collection_id>
 function(req, collection_id = "") {
@@ -165,9 +211,12 @@ function(req, collection_id = "") {
   )
 }
 
-#* Add one card quantity to a stored collection
-#* @param collection_id Collection identifier.
-#* @param name Card name.
+#* Add a card to a stored collection
+#*
+#* Increases the quantity of a named card in the collection by `quantity`
+#* (default 1). Creates a new card record if no matching row exists.
+#* @param collection_id:[string] Collection identifier (UUID).
+#* @param name:[string] Exact card name.
 #* @param quantity Quantity delta (default 1).
 #* @param set_code Optional set code selector.
 #* @param collector_number Optional collector number selector.
@@ -178,7 +227,8 @@ function(req, collection_id = "") {
 #* @param finish Optional finish selector.
 #* @param card_condition Optional condition selector.
 #* @param scryfall_id Optional Scryfall UUID.
-#* @param notes Optional notes selector.
+#* @param notes:[string] Optional freeform notes.
+#* @tag Collections
 #* @serializer unboxedJSON
 #* @post /collections/<collection_id>/cards/add
 function(req,
@@ -214,9 +264,12 @@ function(req,
   )
 }
 
-#* Remove one card quantity from a stored collection
-#* @param collection_id Collection identifier.
-#* @param name Card name.
+#* Remove a card from a stored collection
+#*
+#* Decreases the quantity of a named card in the collection by `quantity`
+#* (default 1). Deletes the row when quantity reaches zero.
+#* @param collection_id:[string] Collection identifier (UUID).
+#* @param name:[string] Exact card name.
 #* @param quantity Quantity delta (default 1).
 #* @param set_code Optional set code selector.
 #* @param collector_number Optional collector number selector.
@@ -224,7 +277,8 @@ function(req,
 #* @param finish Optional finish selector.
 #* @param card_condition Optional condition selector.
 #* @param scryfall_id Optional Scryfall UUID.
-#* @param notes Optional notes selector.
+#* @param notes:[string] Optional freeform notes.
+#* @tag Collections
 #* @serializer unboxedJSON
 #* @post /collections/<collection_id>/cards/remove
 function(req,
@@ -254,14 +308,18 @@ function(req,
   )
 }
 
-#* Import cards into SQLite collection DB (source file can be CSV or DB)
-#* @param db_path Optional target sqlite path (default: package mtg.db).
-#* @param source_type Optional source type: db, csv, text, or auto.
-#* @param source_table Optional source table name when source is db.
-#* @param filename Optional file name when sending application/octet-stream.
-#* @param dedupe Enable deduplication (true/false).
+#* Import cards into the SQLite collection DB (low-level)
+#*
+#* Accepts a multipart or raw file upload and writes the parsed card records
+#* into the SQLite collection database. Supports CSV and SQLite source files.
+#* @param db_path:[string] Optional absolute path to the target SQLite file.
+#* @param source_type:[string] Source type: `db`, `csv`, `text`, or `auto`.
+#* @param source_table:[string] Table name when source is an SQLite DB.
+#* @param filename:[string] File name hint (for `application/octet-stream` uploads).
+#* @param dedupe:[boolean] Enable row deduplication (default `true`).
 #* @parser multi
 #* @parser octet
+#* @tag Collections
 #* @serializer unboxedJSON
 #* @post /collection/db/import
 function(req, res) {
@@ -299,7 +357,8 @@ function(req, res) {
 #* @param misprint Misprint flag.
 #* @param altered Altered flag.
 #* @param condition Card condition.
-#* @param dedupe Enable deduplication (true/false).
+#* @param dedupe:[boolean] Enable row deduplication (default `true`).
+#* @tag Collections
 #* @serializer unboxedJSON
 #* @post /collection/db/add_card
 function(db_path = "",
@@ -341,8 +400,11 @@ function(db_path = "",
   )
 }
 
-#* Delete card(s) from SQLite collection DB
-#* @param db_path Optional target sqlite path (default: package mtg.db).
+#* Delete card(s) from the SQLite collection DB (low-level)
+#*
+#* Removes matching card records from the local SQLite database.
+#* Supports filtering by name, set, Scryfall ID, or ManaBox ID.
+#* @param db_path:[string] Optional path to the SQLite file (default: package DB).
 #* @param id Optional collection row id.
 #* @param manabox_id Optional ManaBox ID selector.
 #* @param scryfall_id Optional Scryfall ID selector.
@@ -351,7 +413,8 @@ function(db_path = "",
 #* @param collector_number Optional collector number selector.
 #* @param foil Optional foil selector.
 #* @param language Optional language selector.
-#* @param delete_all Delete all matching rows (true/false).
+#* @param delete_all:[boolean] Delete all matching rows (default `false` — deletes only first match).
+#* @tag Collections
 #* @serializer unboxedJSON
 #* @delete /collection/db/delete_card
 function(db_path = "",
@@ -379,9 +442,14 @@ function(db_path = "",
   )
 }
 
-#* Search combo references from Commander Spellbook
-#* @param q Card seed query.
-#* @param limit Max combo variants to fetch (1-100).
+#* Search combo variants from Commander Spellbook
+#*
+#* Queries the Commander Spellbook public database for known combo variants
+#* that include the specified card. Returns combo steps, prerequisites, and
+#* result descriptions.
+#* @param q:[string] Card name seed (e.g. `Thassa's Oracle`).
+#* @param limit:[integer] Maximum number of combo variants to return (1–100, default 40).
+#* @tag Reference
 #* @serializer unboxedJSON
 #* @get /reference/spellbook/variants
 function(q = "", limit = "40") {
@@ -392,12 +460,16 @@ function(q = "", limit = "40") {
   )
 }
 
-#* Search card references from MTGJSON
-#* @param q Card name query (optional).
-#* @param set_code Set code (recommended for set lookups).
-#* @param collector_number Exact collector number (optional).
-#* @param uuid MTGJSON card UUID (direct lookup).
-#* @param limit Max cards to return (1-200).
+#* Search cards from MTGJSON
+#*
+#* Looks up card data from the local MTGJSON dataset. Useful for finding
+#* printing-specific data (set codes, collector numbers, legalities, rulings).
+#* @param q:[string] Partial card name search.
+#* @param set_code:[string] Three-letter set code (e.g. `MH3`, `OTJ`).
+#* @param collector_number:[string] Exact collector number within the set.
+#* @param uuid:[string] MTGJSON UUID for direct card lookup.
+#* @param limit:[integer] Maximum cards to return (1–200, default 40).
+#* @tag Reference
 #* @serializer unboxedJSON
 #* @get /reference/mtgjson/cards
 function(q = "", set_code = "", collector_number = "", uuid = "", limit = "40") {
@@ -411,9 +483,13 @@ function(q = "", set_code = "", collector_number = "", uuid = "", limit = "40") 
   )
 }
 
-#* Search LotusNoir public posts (WordPress search endpoint)
-#* @param q Search query.
-#* @param limit Max posts to fetch (1-120).
+#* Search LotusNoir deck articles
+#*
+#* Queries the LotusNoir.fr WordPress site for deck articles and guides
+#* matching the search term. Returns post titles, URLs, and excerpts.
+#* @param q:[string] Search query (card name or archetype, e.g. `Raffine`).
+#* @param limit:[integer] Maximum posts to fetch (1–120, default 120).
+#* @tag Reference
 #* @serializer unboxedJSON
 #* @get /reference/lotusnoir/posts
 function(q = "", limit = "120") {
@@ -424,7 +500,19 @@ function(q = "", limit = "120") {
   )
 }
 
-#* Resolve bridge equation A + n*k + B from strategy cards
+#* Resolve a bridge equation A + n×k + B
+#*
+#* Analyses a pair of anchor cards A and B to find bridge cards k that
+#* efficiently connect their mechanical profiles. The n multiplier controls
+#* how many bridge copies to include.
+#*
+#* **JSON body fields:**
+#* - `card_a` (string) — name of anchor card A
+#* - `card_b` (string) — name of anchor card B
+#* - `n` (integer, optional) — number of bridge slots (default 1)
+#* - `limit` (integer, optional) — maximum candidates to return (default 20)
+#* - `client_id` (string, optional) — client identifier for collection filtering
+#* @tag Strategy
 #* @serializer unboxedJSON
 #* @post /strategy/bridge_equation
 function(req, res) {
@@ -434,7 +522,18 @@ function(req, res) {
   )
 }
 
-#* Normalize one or more cards into atomic mechanics/events
+#* Normalize cards into atomic mechanics and events
+#*
+#* Parses one or more card oracle texts and returns their full normalized
+#* mechanical profile: produced/consumed events, abilities, roles, cadence,
+#* and strategy tags.
+#*
+#* **JSON body fields:**
+#* - `cards` (array of objects) — each object must have `name` (string) and
+#*   optionally `oracle_text`, `type_line`, `keywords`, `cmc`
+#* - `card_names` (array of strings) — alternative: resolve by name from the
+#*   local Scryfall oracle
+#* @tag Cards
 #* @serializer unboxedJSON
 #* @post /cards/normalize
 function(req, res) {
@@ -444,7 +543,20 @@ function(req, res) {
   )
 }
 
-#* Find mechanical synergies for one target card
+#* Find mechanical synergies for a target card
+#*
+#* Scores all cards in the synergy catalog against the target card and
+#* returns the top matches ranked by bidirectional synergy score. Results
+#* include the event overlap detail and role analysis.
+#*
+#* **JSON body fields:**
+#* - `card_name` (string) — name of the target card
+#* - `limit` (integer, optional) — max results to return (default 20)
+#* - `collection_only` (boolean, optional) — restrict to owned cards
+#* - `client_id` (string, optional) — client identifier for collection access
+#* - `colors` (array of strings, optional) — filter by color identity
+#* - `format` (string, optional) — legality filter (e.g. `commander`)
+#* @tag Synergy
 #* @serializer unboxedJSON
 #* @post /synergy/find
 function(req, res) {
@@ -454,7 +566,20 @@ function(req, res) {
   )
 }
 
-#* Recommend cards to improve a whole deck (deck-wide synergy analysis)
+#* Recommend cards to improve a deck
+#*
+#* Analyses the mechanical profile of an entire deck and suggests cards that
+#* best complement its existing synergy structure. Weights recommendations
+#* by how many cards in the deck they interact with.
+#*
+#* **JSON body fields:**
+#* - `deck` (array of strings or objects) — current deck card names
+#* - `limit` (integer, optional) — max recommendations to return (default 20)
+#* - `collection_only` (boolean, optional) — restrict to owned cards
+#* - `client_id` (string, optional) — client identifier
+#* - `colors` (array of strings, optional) — color identity filter
+#* - `format` (string, optional) — legality filter (e.g. `commander`)
+#* @tag Synergy
 #* @serializer unboxedJSON
 #* @post /synergy/deck/recommend
 function(req, res) {
@@ -464,7 +589,22 @@ function(req, res) {
   )
 }
 
-#* Generate complete deck lists from format + colors + archetypes
+#* Generate a complete deck list
+#*
+#* Builds a full deck from scratch using the synergy engine, guided by
+#* format, color identity, and archetype preferences. Returns a ranked
+#* card list with slot assignments and synergy justifications.
+#*
+#* **JSON body fields:**
+#* - `format` (string) — target format, e.g. `commander`, `modern`, `standard`
+#* - `colors` (array of strings) — color identity, e.g. `["W","U","B"]`
+#* - `archetypes` (array of strings, optional) — strategic archetypes,
+#*   e.g. `["graveyard", "tokens"]`
+#* - `commander` (string, optional) — Commander card name
+#* - `collection_only` (boolean, optional) — use only owned cards
+#* - `client_id` (string, optional) — client identifier
+#* - `limit` (integer, optional) — max cards in the deck (default: format minimum)
+#* @tag Synergy
 #* @serializer unboxedJSON
 #* @post /synergy/deck/generate
 function(req, res) {
@@ -484,7 +624,14 @@ function(req, res) {
   )
 }
 
-#* Start an async background deck generation job with progress reporting
+#* Start an async deck generation job
+#*
+#* Identical parameters to `POST /synergy/deck/generate` but runs the
+#* generation asynchronously. Returns a `job_id` immediately. Poll
+#* `GET /synergy/jobs/<job_id>` for status and results.
+#*
+#* **JSON body fields:** same as `POST /synergy/deck/generate`.
+#* @tag Synergy
 #* @serializer unboxedJSON
 #* @post /synergy/deck/jobs/start
 function(req, res) {
@@ -502,7 +649,14 @@ function(req, res) {
   )
 }
 
-#* Start a background mechanical synergy job with progress reporting
+#* Start an async synergy find job
+#*
+#* Identical parameters to `POST /synergy/find` but runs asynchronously.
+#* Returns a `job_id` immediately. Poll `GET /synergy/jobs/<job_id>` for
+#* progress and results.
+#*
+#* **JSON body fields:** same as `POST /synergy/find`.
+#* @tag Synergy
 #* @serializer unboxedJSON
 #* @post /synergy/jobs/start
 function(req, res) {
@@ -512,8 +666,13 @@ function(req, res) {
   )
 }
 
-#* Fetch one background mechanical synergy job status
-#* @param job_id Job identifier.
+#* Get a background job status and results
+#*
+#* Polls the status of an async synergy or deck generation job. Returns
+#* `status` (`pending`, `running`, `done`, or `error`), a progress
+#* percentage, and — when `status=done` — the full result payload.
+#* @param job_id:[string] Job identifier returned by a `jobs/start` endpoint.
+#* @tag Synergy
 #* @serializer unboxedJSON
 #* @get /synergy/jobs/<job_id>
 function(job_id = "") {
@@ -524,14 +683,19 @@ function(job_id = "") {
 }
 
 #* Search cards from the local Scryfall oracle library
-#* @param q Free-text search (name or oracle text).
-#* @param colors Comma-separated required color codes, e.g. "W,U".
-#* @param cmc_min Minimum CMC (integer).
-#* @param cmc_max Maximum CMC (integer).
-#* @param type_line Partial match on type line (e.g. "Creature").
-#* @param keywords Partial match on keywords (e.g. "Flying").
-#* @param limit Max results (default 60, max 200).
-#* @param offset Pagination offset (default 0).
+#*
+#* Full-text and filtered search against the local Scryfall oracle database.
+#* Supports pagination via `limit` and `offset`.
+#* @param q:[string] Free-text search on card name and oracle text.
+#* @param colors:[string] Required color identity — comma-separated codes, e.g. `W,U`.
+#* @param cmc_min:[integer] Minimum converted mana cost.
+#* @param cmc_max:[integer] Maximum converted mana cost.
+#* @param type_line:[string] Partial match on type line, e.g. `Creature`, `Instant`.
+#* @param keywords:[string] Partial match on keyword abilities, e.g. `Flying`, `Lifelink`.
+#* @param collection_only:[boolean] Restrict results to cards present in the client's collection.
+#* @param limit:[integer] Maximum results to return (default 60, max 200).
+#* @param offset:[integer] Pagination offset (default 0).
+#* @tag Cards
 #* @serializer unboxedJSON
 #* @get /cards/search
 function(q = "", colors = "", cmc_min = "", cmc_max = "",
@@ -551,9 +715,13 @@ function(q = "", colors = "", cmc_min = "", cmc_max = "",
   )
 }
 
-#* Fetch one card from the Scryfall oracle catalog
-#* @param card_id Card UUID or card name.
-#* @param include_normalized Include normalized payload (true/false).
+#* Get a single card from the Scryfall oracle catalog
+#*
+#* Returns full oracle data for a card identified by its Scryfall UUID or
+#* exact name. Optionally includes the full normalized mechanical profile.
+#* @param card_id:[string] Scryfall UUID or exact card name (e.g. `Lightning Bolt`).
+#* @param include_normalized:[boolean] Include the normalized mechanical payload (default `true`).
+#* @tag Cards
 #* @serializer unboxedJSON
 #* @get /cards/<card_id>
 function(card_id = "", include_normalized = "true") {
@@ -564,39 +732,64 @@ function(card_id = "", include_normalized = "true") {
   )
 }
 
-#* List registered atomic gameplay events
+#* List all registered atomic gameplay events
+#*
+#* Returns the full event ontology: every atomic mechanic event the engine
+#* understands (e.g. `DRAW_CARD`, `CREATE_TOKEN`, `ETB`, `DIES`), with
+#* parent–child hierarchy, aliases, and tags.
+#* @tag Ontology
 #* @serializer unboxedJSON
 #* @get /events
 function() {
   query_call("query_synergy_list_events")
 }
 
-#* List mechanic decomposition rules
+#* List all mechanic decomposition rules
+#*
+#* Returns the full set of keyword-to-event expansion rules. Each entry
+#* shows which events a mechanic produces, consumes, or replaces, and
+#* which strategy tags it carries (e.g. `cycling` → produces `DRAW_CARD` +
+#* `DISCARD_CARD`).
+#* @tag Ontology
 #* @serializer unboxedJSON
 #* @get /mechanics
 function() {
   query_call("query_synergy_list_mechanics")
 }
 
-#* List registered strategic archetypes
+#* List all registered strategic archetypes
+#*
+#* Returns the catalogue of supported deck archetypes (e.g. `graveyard`,
+#* `tokens`, `spellslinger`, `ramp`) with their defining event profiles
+#* and strategy tag sets.
+#* @tag Ontology
 #* @serializer unboxedJSON
 #* @get /archetypes
 function() {
   query_call("query_synergy_list_archetypes")
 }
 
-#* List supported play formats
+#* List all supported play formats
+#*
+#* Returns the formats the engine can filter legality by
+#* (e.g. `commander`, `modern`, `standard`, `legacy`).
+#* @tag Ontology
 #* @serializer unboxedJSON
 #* @get /formats
 function() {
   query_call("query_synergy_list_formats")
 }
 
-#* Load a synergy catalog from a local SQLite database (cards_api table)
-#* @param db_path Optional absolute path to the SQLite file.
-#* @param table Optional table name (default: cards_api).
-#* @param where Optional WHERE clause without the keyword.
-#* @param limit Optional integer cap on rows returned.
+#* Load a synergy catalog from a local SQLite database
+#*
+#* Reads pre-computed synergy records from a SQLite database (typically the
+#* `cards_api` table produced by a bulk normalization run). Useful for
+#* inspecting or exporting the engine's catalog.
+#* @param db_path:[string] Absolute path to the SQLite file (default: package DB).
+#* @param table:[string] Table name to read (default: `cards_api`).
+#* @param where:[string] Optional SQL WHERE clause (without the `WHERE` keyword).
+#* @param limit:[integer] Maximum rows to return.
+#* @tag Synergy
 #* @serializer unboxedJSON
 #* @get /synergy/catalog/sqlite
 function(db_path = "", table = "cards_api", where = "", limit = "") {

@@ -70,8 +70,25 @@ start_api <- function(
       path_names <- names(spec$paths)
       keep <- !(path_names == "/" | grepl("^/ui(/|$)", path_names))
       spec$paths <- spec$paths[keep]
-      api$setApiSpec(spec)
     }
+
+    # Enrich OpenAPI info block with contact, license, and external docs
+    if (!is.list(spec$info)) spec$info <- list()
+    spec$info$contact <- list(
+      name  = "Florian Ricquier",
+      email = "florian.ricquier@mtgcodex.dev",
+      url   = "https://github.com/Andrameleck/mtgcodex.api"
+    )
+    spec$info$license <- list(
+      name = "AGPL-3.0",
+      url  = "https://www.gnu.org/licenses/agpl-3.0.txt"
+    )
+    spec$externalDocs <- list(
+      description = "Source code and issue tracker",
+      url         = "https://github.com/Andrameleck/mtgcodex.api"
+    )
+
+    api$setApiSpec(spec)
   }
 
   .start_api_log("info", "Starting API at http://%s:%s/", host, port)
