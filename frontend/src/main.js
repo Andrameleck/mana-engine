@@ -19,6 +19,11 @@ import {
   renderManaCostCell,
   configureCollectionUiHandlers
 } from "./ui.js";
+import { mountFilterSidebar, buildManaToggleRow, buildColorButtonRow } from "./widgets/filter_sidebar.js";
+import { renderPagination } from "./widgets/pagination.js";
+import { applyPreviewImage, renderPreviewMetaDl } from "./widgets/card_preview.js";
+import { attachDatalistAutocomplete } from "./widgets/autocomplete.js";
+import { buildCardTile } from "./widgets/card_tile.js";
 
 (function bootstrap() {
   const UI_TEXT = {
@@ -116,7 +121,7 @@ import {
       gen_card_pool: "Card pool",
       gen_use_collection: "Use only my collection",
       gen_generate_btn: "Generate decks",
-      gen_status_hint: "Pick your options then click Generate.",
+      gen_status_hint: "Waiting for generation.",
       gen_no_collection: "No collection loaded",
       gen_import_collection_hint: "Import a collection in the Collections tab.",
       gen_cards_count: "cards",
@@ -250,7 +255,7 @@ import {
       gen_card_pool: "Cartes disponibles",
       gen_use_collection: "Utiliser uniquement ma collection",
       gen_generate_btn: "G\u00e9n\u00e9rer les decks",
-      gen_status_hint: "Choisissez vos options puis cliquez sur G\u00e9n\u00e9rer.",
+      gen_status_hint: "En attente de g\u00e9n\u00e9ration.",
       gen_no_collection: "Aucune collection charg\u00e9e",
       gen_import_collection_hint: "Importez une collection dans l'onglet Collections.",
       gen_cards_count: "cartes",
@@ -460,6 +465,168 @@ import {
     card_finder: "#/card-finder"
   };
 
+  // ── Build sidebar DOM before nodes{} binds to element IDs ────────────────
+
+  (function _initStrategySidebar() {
+    const inner = document.getElementById("strategy-sidebar-inner");
+    if (!inner) return;
+    const FORMATS = ["commander", "modern", "legacy", "vintage", "pioneer", "standard", "pauper", "brawl", "historic"];
+    const runBtn = document.createElement("button");
+    runBtn.type = "button";
+    runBtn.id = "strategy-run-btn";
+    runBtn.className = "btn btn-primary btn-block btn-cta";
+    runBtn.textContent = "Compute synergies";
+    mountFilterSidebar(inner, [
+      {
+        label: "Seed card", i18n: "filter_seed_card", open: true,
+        build(body) {
+          body.innerHTML = `
+            <label class="field" for="strategy-seed-input">
+              <input id="strategy-seed-input" type="search" list="strategy-seed-list" placeholder="Entomb\u2026">
+              <datalist id="strategy-seed-list"></datalist>
+            </label>
+            <p id="strategy-source-meta" class="filter-help muted" style="display:none"></p>`;
+        }
+      },
+      {
+        label: "Format", i18n: "filter_format", open: true,
+        build(body) {
+          body.innerHTML = `
+            <label class="field" for="strategy-format">
+              <select id="strategy-format">
+                <option value="none" selected>Aucun (pas de filtre)</option>
+                ${FORMATS.map(f => `<option value="${f}">${f.charAt(0).toUpperCase() + f.slice(1)}</option>`).join("\n")}
+              </select>
+            </label>
+            <label class="checkbox-row" for="strategy-allow-illegal">
+              <input id="strategy-allow-illegal" type="checkbox">
+              <span id="strategy-allow-illegal-hint" data-i18n="allow_out_of_format">Hors format</span>
+            </label>`;
+        }
+      },
+      {
+        label: "Colors", i18n: "filter_colors", open: true,
+        build(body) {
+          body.append(buildManaToggleRow({
+            wrapClass: "strategy-mana-filter",
+            rowClass: "strategy-mana-filter-row",
+            toggleClass: "strategy-mana-toggle",
+            iconClass: "strategy-mana-icon",
+            dataAttr: "strategyMana"
+          }));
+        }
+      },
+      {
+        label: "Archetypes", i18n: "filter_archetypes_label",
+        build(body) {
+          body.innerHTML = `
+            <div class="strategy-archetype-filter" id="strategy-archetype-block">
+              <div class="strategy-archetype-head">
+                <div class="strategy-archetype-actions">
+                  <button type="button" id="strategy-archetype-all" class="ghost ghost--xs" data-i18n="archetype_all">Tout</button>
+                  <button type="button" id="strategy-archetype-none" class="ghost ghost--xs" data-i18n="archetype_none">Aucun</button>
+                  <label class="strategy-archetype-strict-toggle">
+                    <input id="strategy-archetype-strict" type="checkbox">
+                    <span>Strict</span>
+                  </label>
+                </div>
+              </div>
+              <div id="strategy-archetype-chips" class="strategy-archetype-chips"></div>
+              <p class="muted strategy-archetype-hint" data-i18n="archetype_filter_hint">Aucune s\u00e9lection = pas de filtre. Mode strict = ignore les groupes hors arch\u00e9type.</p>
+            </div>`;
+        }
+      },
+      {
+        label: "Depth", i18n: "filter_depth", row: true,
+        build(body) {
+          body.innerHTML = `
+            <label class="field" for="strategy-direct-limit">
+              <span class="field-label" id="strategy-direct-limit-label">Direct</span>
+              <input id="strategy-direct-limit" type="number" min="4" max="24" value="12">
+            </label>
+            <label class="field" for="strategy-group-limit">
+              <span class="field-label" id="strategy-group-limit-label">Groups</span>
+              <input id="strategy-group-limit" type="number" min="3" max="12" value="6">
+            </label>
+            <label class="field" for="strategy-refine-iterations">
+              <span class="field-label" id="strategy-refine-iterations-label">Refine</span>
+              <input id="strategy-refine-iterations" type="number" min="0" max="4" value="2">
+            </label>`;
+        }
+      },
+      {
+        label: "Advanced", i18n: "filter_advanced",
+        build(body) {
+          body.innerHTML = `
+            <label class="checkbox-row" for="strategy-only-collection">
+              <input id="strategy-only-collection" type="checkbox">
+              <span id="strategy-only-collection-hint">Limiter le calcul aux cartes de la collection charg\u00e9e</span>
+            </label>
+            <label class="checkbox-row" for="strategy-force-recompute">
+              <input id="strategy-force-recompute" type="checkbox">
+              <span id="strategy-force-recompute-hint">Forcer le recalcul (ignorer le cache)</span>
+            </label>`;
+        }
+      }
+    ], runBtn);
+  })();
+
+  (function _initCardFinderSidebar() {
+    const form = document.getElementById("card-finder-form");
+    if (!form) return;
+    const searchBtn = document.createElement("button");
+    searchBtn.type = "submit";
+    searchBtn.id = "cf-search-btn";
+    searchBtn.className = "btn btn-primary btn-cta";
+    searchBtn.textContent = "Search";
+    mountFilterSidebar(form, [
+      {
+        label: "Search", open: true,
+        build(body) {
+          body.innerHTML = `
+            <label class="field" for="cf-q">
+              <input type="search" id="cf-q" class="cf-input" placeholder="Name or text\u2026" autocomplete="off" list="cf-q-list">
+              <datalist id="cf-q-list"></datalist>
+            </label>`;
+        }
+      },
+      {
+        label: "Type & keywords", open: true,
+        build(body) {
+          body.innerHTML = `
+            <label class="field" for="cf-type">
+              <input type="text" id="cf-type" class="cf-input" placeholder="Creature, Instant\u2026" autocomplete="off">
+            </label>
+            <label class="field" for="cf-keywords">
+              <input type="text" id="cf-keywords" class="cf-input" placeholder="Flying, Lifelink\u2026" autocomplete="off">
+            </label>`;
+        }
+      },
+      {
+        label: "Colors", open: true,
+        build(body) {
+          body.append(buildColorButtonRow());
+        }
+      },
+      {
+        label: "CMC", open: true, row: true,
+        build(body) {
+          body.innerHTML = `
+            <div class="cf-subfield">
+              <label class="cf-label" for="cf-cmc-min">Min</label>
+              <input type="number" id="cf-cmc-min" class="cf-input cf-input--num" min="0" max="20" placeholder="0">
+            </div>
+            <div class="cf-subfield">
+              <label class="cf-label" for="cf-cmc-max">Max</label>
+              <input type="number" id="cf-cmc-max" class="cf-input cf-input--num" min="0" max="20" placeholder="\u2014">
+            </div>`;
+        }
+      }
+    ], searchBtn);
+  })();
+
+  // ─────────────────────────────────────────────────────────────────────────
+
   const nodes = {
     tabButtons: Array.from(document.querySelectorAll(".side-tab")),
     tabViews: Array.from(document.querySelectorAll(".tab-view")),
@@ -502,6 +669,9 @@ import {
       manaFilterInputs: Array.from(document.querySelectorAll("input[data-strategy-mana]")),
       runButton: document.getElementById("strategy-run-btn"),
       status: document.getElementById("strategy-status"),
+      progressEl: document.getElementById("strategy-progress"),
+      progressFill: document.getElementById("strategy-progress-fill"),
+      progressLabel: document.getElementById("strategy-progress-label"),
       directList: document.getElementById("strategy-direct-list"),
       groupList: document.getElementById("strategy-group-list"),
       previewTitle: document.getElementById("strategy-card-preview-title"),
@@ -815,9 +985,14 @@ import {
     }
 
     strategyNodes.seedInput.addEventListener("input", () => {
-      const query = String(strategyNodes.seedInput.value || "").trim();
-      state.strategy.seedName = query;
-      updateStrategySeedAutocomplete(query);
+      state.strategy.seedName = String(strategyNodes.seedInput.value || "").trim();
+    });
+    attachDatalistAutocomplete(strategyNodes.seedInput, strategyNodes.seedList, {
+      fetchNames: fetchScryfallAutocompleteNames,
+      debounceMs: 0,
+      getBaseNames: () => getStrategyBaseSeedCards().map((c) => String(c?.name || "").trim()).filter(Boolean),
+      normalize: normalizeStrategyName,
+      maxResults: 320
     });
 
     strategyNodes.seedInput.addEventListener("keydown", (event) => {
@@ -2128,7 +2303,17 @@ import {
       strategyNodes.refineIterationsInput.value = String(refineIterations);
     }
 
-    renderStrategySeedDatalist(model.cards, [], "");
+    // Populate seed datalist with collection cards on model load
+    if (strategyNodes.seedList) {
+      const seen = new Set();
+      const opts = (Array.isArray(model.cards) ? model.cards : [])
+        .map((c) => String(c?.name || "").trim())
+        .filter((name) => { const k = normalizeStrategyName(name); if (!k || seen.has(k)) return false; seen.add(k); return true; })
+        .slice(0, 800)
+        .map((name) => `<option value="${escapeHtml(name)}"></option>`)
+        .join("");
+      strategyNodes.seedList.innerHTML = opts;
+    }
   }
 
   function resetStrategyCardPreview() {
@@ -2184,45 +2369,18 @@ import {
     titleNode.textContent = cardName;
     textNode.innerHTML = strategyOracleTextToHtml(oracle || t("strategy_preview_oracle_fallback"));
 
-    const previewImageUrl = scryfallCdnImageUrl(scryfallId, "normal");
-    // Hide the preview image when the Scryfall CDN fails to deliver it
-    // (404 on a freshly-printed card, network glitch, ad-blocker, ...).
-    imageNode.onerror = function () {
-      imageNode.onerror = null;
-      imageNode.removeAttribute("src");
-      imageNode.classList.add("is-hidden");
-    };
-    if (previewImageUrl) {
-      imageNode.src = previewImageUrl;
-      imageNode.alt = `Apercu ${cardName}`;
-      imageNode.classList.remove("is-hidden");
-    } else {
-      imageNode.removeAttribute("src");
-      imageNode.alt = `Apercu ${cardName}`;
-      imageNode.classList.add("is-hidden");
-    }
+    applyPreviewImage(imageNode, scryfallCdnImageUrl(scryfallId, "normal"), `Apercu ${cardName}`);
 
-    const metaParts = [
-      ["source", sourceValue],
-      ["type", typeLine],
-      ["mana", mana],
-      ["set", [setCode, collector ? `#${collector}` : ""].filter(Boolean).join(" ")],
-      ["scryfall_id", scryfallId]
-    ].filter((entry) => String(entry[1] || "").trim().length > 0);
-
-    metaNode.innerHTML = "";
-    metaParts.forEach(([key, value]) => {
-      const dt = document.createElement("dt");
-      dt.textContent = strategyMetaLabel(key);
-      const dd = document.createElement("dd");
-      if (key === "mana") {
-        dd.innerHTML = strategyManaValueToHtml(value);
-      } else {
-        dd.textContent = String(value);
-      }
-      metaNode.appendChild(dt);
-      metaNode.appendChild(dd);
-    });
+    renderPreviewMetaDl(metaNode,
+      [
+        ["source", sourceValue],
+        ["type", typeLine],
+        ["mana", mana],
+        ["set", [setCode, collector ? `#${collector}` : ""].filter(Boolean).join(" ")],
+        ["scryfall_id", scryfallId]
+      ],
+      { labelFn: strategyMetaLabel, manaFn: strategyManaValueToHtml }
+    );
 
     const requestToken = ++STRATEGY_PREVIEW_STATE.requestToken;
     loadStrategyPreviewCardForLanguage(card, getCollectionLanguage())
@@ -2386,71 +2544,6 @@ import {
     }
     const model = getStrategyModelForCollection(collectionId, payload);
     return Array.isArray(model?.cards) ? model.cards : [];
-  }
-
-  function renderStrategySeedDatalist(baseCards, extraNames = [], queryText = "") {
-    const strategyNodes = nodes.strategy;
-    if (!strategyNodes?.seedList) {
-      return;
-    }
-
-    const query = normalizeStrategyName(queryText);
-    const seen = new Set();
-    const optionNames = [];
-
-    const maxBase = query ? 240 : 800;
-    (Array.isArray(baseCards) ? baseCards : []).forEach((card) => {
-      const name = String(card?.name || "").trim();
-      if (!name) {
-        return;
-      }
-      if (query && !normalizeStrategyName(name).includes(query)) {
-        return;
-      }
-      const key = normalizeStrategyName(name);
-      if (!key || seen.has(key)) {
-        return;
-      }
-      seen.add(key);
-      optionNames.push(name);
-    });
-
-    const scryfallNames = Array.isArray(extraNames) ? extraNames : [];
-    scryfallNames.forEach((nameValue) => {
-      const name = String(nameValue || "").trim();
-      if (!name) {
-        return;
-      }
-      const key = normalizeStrategyName(name);
-      if (!key || seen.has(key)) {
-        return;
-      }
-      seen.add(key);
-      optionNames.push(name);
-    });
-
-    const optionsMarkup = optionNames
-      .slice(0, maxBase + 80)
-      .map((name) => `<option value="${escapeHtml(name)}"></option>`)
-      .join("");
-    strategyNodes.seedList.innerHTML = optionsMarkup;
-  }
-
-  async function updateStrategySeedAutocomplete(queryText = "") {
-    const query = String(queryText || "").trim();
-    const token = ++state.strategy.seedAutocompleteToken;
-    const baseCards = getStrategyBaseSeedCards();
-
-    if (query.length < 2) {
-      renderStrategySeedDatalist(baseCards, [], query);
-      return;
-    }
-
-    const scryfallNames = await fetchScryfallAutocompleteNames(query);
-    if (token !== state.strategy.seedAutocompleteToken) {
-      return;
-    }
-    renderStrategySeedDatalist(baseCards, scryfallNames, query);
   }
 
   async function fetchScryfallAutocompleteNames(queryText) {
@@ -3108,6 +3201,7 @@ import {
       ? `Analyse mecanique backend en cours pour ${resolvedSeed.name}...`
       : `Running backend mechanical analysis for ${resolvedSeed.name}...`;
     const synergyResult = await fetchStrategySynergyResult(strategyNodes, synergyPayload, resolvedSeed.name, runToken);
+    if (strategyNodes.progressEl) strategyNodes.progressEl.style.display = "none";
     if (runToken !== state.strategy.runToken) {
       return;
     }
@@ -3524,7 +3618,12 @@ import {
 
       const percent = clampInt(status?.progress?.percent, 0, 100, 0);
       const stage = String(status?.progress?.stage || "").trim() || (currentUiLanguage() === "fr" ? "Analyse backend" : "Backend analysis");
-      strategyNodes.status.textContent = `${seedName}: ${stage} (${percent}%)...`;
+      strategyNodes.status.textContent = `${seedName}: ${stage}...`;
+      if (strategyNodes.progressEl) {
+        strategyNodes.progressEl.style.display = "";
+        if (strategyNodes.progressFill) strategyNodes.progressFill.style.width = `${percent}%`;
+        if (strategyNodes.progressLabel) strategyNodes.progressLabel.textContent = `${percent}%`;
+      }
       await waitStrategyMilliseconds(attempt < 6 ? 250 : 500);
     }
 
@@ -7978,18 +8077,10 @@ import {
     // Scryfall autocomplete for the name/text search field
     const cfQInput = document.getElementById("cf-q");
     const cfQList  = document.getElementById("cf-q-list");
-    let cfAutocompleteTimer = null;
     if (cfQInput && cfQList) {
-      cfQInput.addEventListener("input", () => {
-        clearTimeout(cfAutocompleteTimer);
-        const val = cfQInput.value.trim();
-        if (val.length < 2) { cfQList.innerHTML = ""; return; }
-        cfAutocompleteTimer = setTimeout(async () => {
-          const names = await fetchScryfallAutocompleteNames(val);
-          cfQList.innerHTML = names
-            .map((n) => `<option value="${escapeHtml(n)}"></option>`)
-            .join("");
-        }, 250);
+      attachDatalistAutocomplete(cfQInput, cfQList, {
+        fetchNames: fetchScryfallAutocompleteNames,
+        debounceMs: 250
       });
     }
 
@@ -8096,53 +8187,32 @@ import {
     }
 
     results.forEach((card) => {
-      const article = document.createElement("article");
-      article.classList.add("collection-card", "cf-card");
-
       const scryfallId = card.id || "";
       const imgUrl = scryfallId
         ? `https://cards.scryfall.io/art_crop/front/${scryfallId[0]}/${scryfallId[1]}/${scryfallId}.jpg`
         : "";
 
-      const imageFrame = document.createElement("div");
-      imageFrame.classList.add("collection-card-art");
+      const subtitle = [card.type_line, card.mana_cost, card.rarity, card.set_code]
+        .filter(Boolean).join(" · ");
 
-      if (imgUrl) {
-        const img = document.createElement("img");
-        img.src = imgUrl;
-        img.alt = card.name || "";
-        img.loading = "lazy";
-        img.decoding = "async";
-        img.addEventListener("error", () => {
-          imageFrame.innerHTML = `<span class="collection-card-fallback">${escapeHtml(card.name || "")}</span>`;
-          article.classList.add("is-image-missing");
-        }, { once: true });
-        imageFrame.appendChild(img);
-      } else {
-        imageFrame.innerHTML = `<span class="collection-card-fallback">${escapeHtml(card.name || "")}</span>`;
-        article.classList.add("is-image-missing");
-      }
-
-      article.appendChild(imageFrame);
+      const { article, metaDiv } = buildCardTile({
+        imageUrl: imgUrl,
+        name: card.name || "",
+        subtitle
+      });
+      article.classList.add("cf-card");
 
       const colorHtml = parseCfJsonArray(card.color_identity)
         .map((c) => `<img src="https://svgs.scryfall.io/card-symbols/${c}.svg" alt="${escapeHtml(c)}" class="cf-card-sym" loading="lazy">`)
         .join("");
-
-      const subtitle = [card.type_line, card.mana_cost, card.rarity, card.set_code]
-        .filter(Boolean).join(" · ");
-
-      const meta = document.createElement("div");
-      meta.classList.add("collection-card-meta");
-      meta.innerHTML = `
-        <p class="collection-card-name">${escapeHtml(card.name || "")}</p>
-        <p class="collection-card-line">${escapeHtml(subtitle)}</p>
-        ${colorHtml ? `<div class="cf-card-colors">${colorHtml}</div>` : ""}
-      `;
-      article.appendChild(meta);
+      if (colorHtml) {
+        const colorDiv = document.createElement("div");
+        colorDiv.className = "cf-card-colors";
+        colorDiv.innerHTML = colorHtml;
+        metaDiv.appendChild(colorDiv);
+      }
 
       article.addEventListener("click", () => renderCfViewer(card));
-
       grid.appendChild(article);
     });
   }
@@ -8160,21 +8230,7 @@ import {
 
     // Full card face image — same logic as Synergy Lab
     const scryfallId = String(card.id || "").trim().toLowerCase();
-    const imgUrl = scryfallCdnImageUrl(scryfallId, "normal");
-
-    imageEl.onerror = function () {
-      imageEl.onerror = null;
-      imageEl.removeAttribute("src");
-      imageEl.classList.add("is-hidden");
-    };
-    if (imgUrl) {
-      imageEl.src = imgUrl;
-      imageEl.alt = name;
-      imageEl.classList.remove("is-hidden");
-    } else {
-      imageEl.removeAttribute("src");
-      imageEl.classList.add("is-hidden");
-    }
+    applyPreviewImage(imageEl, scryfallCdnImageUrl(scryfallId, "normal"), name);
 
     hintEl.style.display = "none";
 
@@ -8184,25 +8240,14 @@ import {
       card.collector_number ? `#${card.collector_number}` : ""
     ].filter(Boolean).join(" ");
 
-    const metaParts = [
-      ["type", card.type_line],
-      ["mana", card.mana_cost],
-      ["set",  setLabel || card.set_name],
-    ].filter(([, v]) => String(v || "").trim().length > 0);
-
-    metaEl.innerHTML = "";
-    metaParts.forEach(([key, value]) => {
-      const dt = document.createElement("dt");
-      dt.textContent = strategyMetaLabel(key);
-      const dd = document.createElement("dd");
-      if (key === "mana") {
-        dd.innerHTML = strategyManaValueToHtml(value);
-      } else {
-        dd.textContent = String(value);
-      }
-      metaEl.appendChild(dt);
-      metaEl.appendChild(dd);
-    });
+    renderPreviewMetaDl(metaEl,
+      [
+        ["type", card.type_line],
+        ["mana", card.mana_cost],
+        ["set",  setLabel || card.set_name],
+      ],
+      { labelFn: strategyMetaLabel, manaFn: strategyManaValueToHtml }
+    );
 
     // Oracle text with inline mana symbols — same as Synergy Lab
     viewer.querySelector(".cf-viewer-oracle")?.remove();
@@ -8232,44 +8277,21 @@ import {
 
   function renderCfPagination(container) {
     if (!container) return;
-    container.innerHTML = "";
     const total = CF_STATE.total;
     const limit = CF_STATE.limit;
-    if (total <= limit) return;
-
+    if (total <= limit) {
+      container.innerHTML = "";
+      return;
+    }
     const totalPages = Math.ceil(total / limit);
-    const currentPage = Math.floor(CF_STATE.offset / limit) + 1;
-    const lang = currentUiLanguage();
-
-    const prev = document.createElement("button");
-    prev.type = "button";
-    prev.className = "cf-page-btn";
-    prev.textContent = lang === "fr" ? "← Précédent" : "← Prev";
-    prev.disabled = currentPage <= 1;
-    prev.addEventListener("click", () => {
-      CF_STATE.offset = Math.max(0, CF_STATE.offset - limit);
-      runCardFinderSearch();
+    const page = Math.floor(CF_STATE.offset / limit) + 1;
+    renderPagination(container, {
+      page,
+      totalPages,
+      infoText: `Page ${page} / ${totalPages}`,
+      onPrev: () => { CF_STATE.offset = Math.max(0, CF_STATE.offset - limit); runCardFinderSearch(); },
+      onNext: () => { CF_STATE.offset += limit; runCardFinderSearch(); }
     });
-
-    const info = document.createElement("span");
-    info.className = "cf-page-info";
-    info.textContent = lang === "fr"
-      ? `Page ${currentPage} / ${totalPages}`
-      : `Page ${currentPage} / ${totalPages}`;
-
-    const next = document.createElement("button");
-    next.type = "button";
-    next.className = "cf-page-btn";
-    next.textContent = lang === "fr" ? "Suivant →" : "Next →";
-    next.disabled = currentPage >= totalPages;
-    next.addEventListener("click", () => {
-      CF_STATE.offset += limit;
-      runCardFinderSearch();
-    });
-
-    container.appendChild(prev);
-    container.appendChild(info);
-    container.appendChild(next);
   }
 
 })();

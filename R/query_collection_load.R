@@ -378,17 +378,9 @@ query_collection_load_text <- function(text_path) {
     }
   }
 
-  # Free-text decklist: also drop deck-list section headers
-  # (Deck / Sideboard / Commander / ...).
-  card_lines <- query_collection_prepare_text_lines(
-    pre_clean,
-    drop_section_headers = TRUE
-  )
-
-  rows <- data.frame(
-    line = card_lines,
-    stringsAsFactors = FALSE
-  )
+  # Free-text decklist: parse section markers (Deck / Sideboard / Commander …)
+  # to assign a `section` column to each card line, then drop the headers.
+  rows <- .parse_text_deck_sections(pre_clean)
 
   list(
     ok = TRUE,
@@ -397,6 +389,55 @@ query_collection_load_text <- function(text_path) {
     rows = query_db_rows_to_records(rows),
     row_count = nrow(rows)
   )
+}
+
+# Parse a plain-text deck list, tracking section markers so each card line
+# carries an explicit `section` column ("Main" or "Sideboard").
+# Section markers are lines such as "Deck", "Sideboard", "SB:", etc.
+# @keywords internal
+.parse_text_deck_sections <- function(lines) {
+  # Regex that matches a bare section-header line (not a card line).
+  section_re <- paste0(
+    "^(",
+    "deck|mainboard|main board|main deck|",
+    "sideboard|side board|side deck|sb",
+    ")\\s*:?\\s*$"
+  )
+  # Lines to skip entirely (empty / comment / non-section header).
+  skip_re <- paste0(
+    "^(",
+    "commander|commanders|command zone|companion|maybeboard|maybe board|",
+    "about|name|lands|creatures|spells|artifacts|enchantments|planeswalkers|",
+    "instants|sorceries|tokens|battles",
+    ")\\s*:?\\s*$"
+  )
+
+  current_section <- "Main"
+  out_lines    <- character(0)
+  out_sections <- character(0)
+
+  for (line in lines) {
+    bare <- trimws(line)
+    if (!nzchar(bare)) next
+    if (grepl("^(#|//)", bare)) next
+    if (grepl(skip_re, bare, ignore.case = TRUE, perl = TRUE)) next
+    if (grepl(section_re, bare, ignore.case = TRUE, perl = TRUE)) {
+      current_section <- if (grepl("side|sb", bare, ignore.case = TRUE)) "Sideboard" else "Main"
+      next
+    }
+    # Also handle inline "SB: 1 Card Name" prefix.
+    if (grepl("^SB:\\s*", bare, ignore.case = TRUE)) {
+      current_section <- "Sideboard"
+      bare <- sub("^SB:\\s*", "", bare, ignore.case = TRUE)
+    }
+    out_lines    <- c(out_lines,    bare)
+    out_sections <- c(out_sections, current_section)
+  }
+
+  if (length(out_lines) == 0L) {
+    return(data.frame(line = character(0), section = character(0), stringsAsFactors = FALSE))
+  }
+  data.frame(line = out_lines, section = out_sections, stringsAsFactors = FALSE)
 }
 
 query_collection_guess_separator <- function(line) {

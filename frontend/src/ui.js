@@ -3,6 +3,8 @@ import {
   removeCardFromStoredCollection,
   getStoredCollection
 } from "./api.js";
+import { renderPagination } from "./widgets/pagination.js";
+import { buildCardTile } from "./widgets/card_tile.js";
 
 const COMPACT_COLUMN_ORDER = [
   "quantity",
@@ -616,51 +618,28 @@ function renderColorFilterButtons() {
 }
 
 function createCollectionCardTile(rowData) {
-  const tile = document.createElement("article");
-  tile.classList.add("collection-card", "data-row");
-  bindRowPreviewEvents(tile, rowData);
-
-  const imageFrame = document.createElement("div");
-  imageFrame.classList.add("collection-card-art");
-
-  const imageUrl = cardImageUrlFromRow(rowData);
-  if (imageUrl) {
-    const img = document.createElement("img");
-    img.src = imageUrl;
-    img.alt = formatMainCardTitle(rowData);
-    img.loading = "lazy";
-    img.decoding = "async";
-    img.addEventListener("error", () => {
-      imageFrame.innerHTML = `<span class="collection-card-fallback">${escapeHtml(formatMainCardTitle(rowData))}</span>`;
-      tile.classList.add("is-image-missing");
-    }, { once: true });
-    imageFrame.appendChild(img);
-  } else {
-    imageFrame.innerHTML = `<span class="collection-card-fallback">${escapeHtml(formatMainCardTitle(rowData))}</span>`;
-    tile.classList.add("is-image-missing");
-  }
-
   const quantity = readCardQuantity(rowData);
+  const { article, art, metaDiv } = buildCardTile({
+    imageUrl: cardImageUrlFromRow(rowData),
+    name: formatMainCardTitle(rowData),
+    subtitle: formatCardTileSubtitle(rowData)
+  });
+  article.classList.add("data-row");
+  bindRowPreviewEvents(article, rowData);
+
   const qtyBadge = document.createElement("span");
-  qtyBadge.classList.add("collection-card-qty");
+  qtyBadge.className = "collection-card-qty";
   qtyBadge.textContent = `x${quantity}`;
-  imageFrame.appendChild(qtyBadge);
+  art.appendChild(qtyBadge);
+
   if (UI_STATE.editMode && isStoredCollectionsContext()) {
-    imageFrame.appendChild(createCollectionCardEditControls(rowData));
+    art.appendChild(createCollectionCardEditControls(rowData));
   }
-  tile.appendChild(imageFrame);
 
-  const meta = document.createElement("div");
-  meta.classList.add("collection-card-meta");
-  meta.innerHTML = `
-    <p class="collection-card-name">${escapeHtml(formatMainCardTitle(rowData))}</p>
-    <p class="collection-card-line">${escapeHtml(formatCardTileSubtitle(rowData))}</p>
-  `;
-  appendCardTileMana(meta, rowData);
-  appendCardTileMarketPrice(meta, rowData, quantity);
-  tile.appendChild(meta);
+  appendCardTileMana(metaDiv, rowData);
+  appendCardTileMarketPrice(metaDiv, rowData, quantity);
 
-  return tile;
+  return article;
 }
 
 function createCollectionCardEditControls(rowData) {
@@ -884,9 +863,7 @@ function extractCardMarketEur(card) {
 
 function renderTablePager(totalRows, startIndex, pageLength) {
   const pager = document.getElementById("table-pager");
-  if (!pager) {
-    return;
-  }
+  if (!pager) return;
 
   if (totalRows <= UI_STATE.pageSize) {
     hideTablePager();
@@ -894,34 +871,20 @@ function renderTablePager(totalRows, startIndex, pageLength) {
   }
 
   const totalPages = Math.max(1, Math.ceil(totalRows / UI_STATE.pageSize));
+  const page = UI_STATE.currentPage;
   const start = startIndex + 1;
   const end = startIndex + pageLength;
   const dataLabel = UI_STATE.viewMode === "cards" ? uiText("cards") : uiText("rows");
   const onPageChange = UI_STATE.viewMode === "cards" ? renderCardsPage : renderTablePage;
 
   pager.classList.add("is-visible");
-  pager.innerHTML = `
-    <div class="table-pager-info">${dataLabel} ${start}-${end} / ${totalRows} (${uiText("page")} ${UI_STATE.currentPage}/${totalPages})</div>
-    <div class="table-pager-actions">
-      <button type="button" data-page="prev">Prev</button>
-      <button type="button" data-page="next">Next</button>
-    </div>
-  `;
-
-  const prevButton = pager.querySelector('button[data-page="prev"]');
-  const nextButton = pager.querySelector('button[data-page="next"]');
-  if (prevButton) {
-    prevButton.disabled = UI_STATE.currentPage <= 1;
-    prevButton.addEventListener("click", () => {
-      onPageChange(UI_STATE.currentPage - 1);
-    });
-  }
-  if (nextButton) {
-    nextButton.disabled = UI_STATE.currentPage >= totalPages;
-    nextButton.addEventListener("click", () => {
-      onPageChange(UI_STATE.currentPage + 1);
-    });
-  }
+  renderPagination(pager, {
+    page,
+    totalPages,
+    infoText: `${dataLabel} ${start}-${end} / ${totalRows} (${uiText("page")} ${page}/${totalPages})`,
+    onPrev: () => onPageChange(page - 1),
+    onNext: () => onPageChange(page + 1)
+  });
 }
 
 function hideTablePager() {
@@ -2141,13 +2104,34 @@ function readDeckZone(rowData) {
   return "main";
 }
 
+function aggregateDeckCardRows(rows) {
+  // Merge rows with the same card name, summing their quantities.
+  // First occurrence wins for all non-quantity fields.
+  const order = [];
+  const byName = new Map();
+  (rows || []).forEach((rowData) => {
+    const name = formatCellValue(readCellValue(rowData, "name")).trim()
+      || formatCellValue(readFirstCellValue(rowData, ["line", "card_line", "raw", "entry"])).trim();
+    if (!name) return;
+    const qty = readCardQuantity(rowData);
+    if (byName.has(name)) {
+      byName.get(name).quantity += qty;
+    } else {
+      byName.set(name, { ...rowData, quantity: qty });
+      order.push(name);
+    }
+  });
+  return order.map((n) => byName.get(n));
+}
+
 function createDeckCardSection(title, rows, zone) {
   const section = document.createElement("section");
   section.classList.add("deck-card-section", zone === "side" ? "is-side" : "is-main");
 
+  const aggregated = aggregateDeckCardRows(rows);
   const titleRow = document.createElement("div");
   titleRow.classList.add("deck-card-section-head");
-  const literalCount = sumCardQuantities(rows);
+  const literalCount = sumCardQuantities(aggregated);
   titleRow.innerHTML = `
     <h3>${escapeHtml(title)}</h3>
     <span>${literalCount} cartes</span>
@@ -2156,7 +2140,7 @@ function createDeckCardSection(title, rows, zone) {
 
   const grid = document.createElement("div");
   grid.classList.add("collection-card-grid", "deck-card-grid");
-  rows.forEach((rowData) => {
+  aggregated.forEach((rowData) => {
     const tile = createCollectionCardTile(rowData);
     if (zone === "side") {
       tile.classList.add("is-side");
@@ -2452,5 +2436,6 @@ export {
   setCollectionLanguage,
   bindRowPreviewEvents,
   renderManaCostCell,
-  configureCollectionUiHandlers
+  configureCollectionUiHandlers,
+  escapeHtml
 };

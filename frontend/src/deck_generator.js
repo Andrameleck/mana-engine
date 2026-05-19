@@ -7,6 +7,7 @@
 
 import { fetchSynergyDeckGenerate, startDeckGenJob, fetchSynergyJobStatus, listStoredCollections } from "./api.js";
 import { getCollectionLanguage } from "./ui.js";
+import { mountFilterSidebar, buildManaToggleRow } from "./widgets/filter_sidebar.js";
 
 // Minimal translation helper for this module
 const GEN_TEXT = {
@@ -698,6 +699,100 @@ async function runGenerate() {
 }
 
 function attachHandlers() {
+  // ── Build sidebar DOM before binding event listeners to IDs ──────────────
+  (function _initDeckGenSidebar() {
+    const wizard = document.getElementById("deck-gen-sidebar-inner");
+    if (!wizard) return;
+    const FORMATS = [
+      { value: "random",    label: "\uD83C\uDFB2 Al\u00e9atoire" },
+      { value: "commander", label: "Commander" },
+      { value: "brawl",     label: "Brawl" },
+      { value: "modern",    label: "Modern" },
+      { value: "legacy",    label: "Legacy" },
+      { value: "vintage",   label: "Vintage" },
+      { value: "pioneer",   label: "Pioneer" },
+      { value: "standard",  label: "Standard" },
+      { value: "pauper",    label: "Pauper" },
+      { value: "historic",  label: "Historic" }
+    ];
+    const runBtn = document.createElement("button");
+    runBtn.type = "button";
+    runBtn.id = "deck-gen-run-btn";
+    runBtn.className = "btn btn-primary btn-cta primary";
+    runBtn.dataset.i18n = "gen_generate_btn";
+    runBtn.textContent = "Generate decks";
+    mountFilterSidebar(wizard, [
+      {
+        label: "Format & commander", i18n: "gen_format_commander", open: true,
+        build(body) {
+          body.innerHTML = `
+            <div class="wizard-grid">
+              <label class="field" for="deck-gen-format">
+                <span class="field-label">Format</span>
+                <select id="deck-gen-format">
+                  ${FORMATS.map(f => `<option value="${f.value}">${f.label}</option>`).join("\n")}
+                </select>
+              </label>
+              <label class="field" for="deck-gen-commander">
+                <span class="field-label">Commander</span>
+                <input id="deck-gen-commander" type="search" list="deck-gen-commander-list" placeholder="Auto-select">
+                <datalist id="deck-gen-commander-list"></datalist>
+              </label>
+              <label class="field" for="deck-gen-variants">
+                <span class="field-label">Variants</span>
+                <input id="deck-gen-variants" type="number" min="1" max="5" value="3">
+              </label>
+            </div>`;
+        }
+      },
+      {
+        label: "Color identity", i18n: "gen_color_identity", open: true,
+        build(body) {
+          body.append(buildManaToggleRow({
+            wrapClass: "deck-gen-mana-filter",
+            rowClass: "deck-gen-mana-row",
+            toggleClass: "deck-gen-mana-toggle",
+            dataAttr: "deckGenColor"
+          }));
+        }
+      },
+      {
+        label: "Archetypes", i18n: "gen_archetypes_step",
+        build(body) {
+          body.innerHTML = `
+            <div class="deck-gen-archetype-block">
+              <div class="deck-gen-archetype-head">
+                <div class="deck-gen-archetype-actions">
+                  <button type="button" id="deck-gen-archetype-none" class="ghost ghost--xs" data-i18n="archetype_none">Aucun</button>
+                </div>
+              </div>
+              <div id="deck-gen-archetype-chips" class="deck-gen-archetype-chips"></div>
+              <p class="muted" data-i18n="gen_archetype_deck_hint">Pick one or more archetypes to steer the deck.</p>
+            </div>`;
+        }
+      },
+      {
+        label: "Card pool", i18n: "gen_card_pool", open: true,
+        build(body) {
+          body.innerHTML = `
+            <div class="deck-gen-collection-block">
+              <label class="checkbox-row deck-gen-collection-toggle-row">
+                <input type="checkbox" id="deck-gen-use-collection">
+                <span data-i18n="gen_use_collection">Use only my collection</span>
+              </label>
+              <div id="deck-gen-collection-picker" class="deck-gen-collection-picker is-hidden">
+                <select id="deck-gen-collection-select">
+                  <option value="">Loading\u2026</option>
+                </select>
+                <span id="deck-gen-collection-status" class="muted"></span>
+              </div>
+            </div>`;
+        }
+      }
+    ], runBtn);
+  })();
+  // ─────────────────────────────────────────────────────────────────────────
+
   const runBtn = $("deck-gen-run-btn");
   if (runBtn) runBtn.addEventListener("click", runGenerate);
   const clearBtn = $("deck-gen-archetype-none");
