@@ -54,6 +54,15 @@ html[data-theme="light"] body {
     linear-gradient(180deg, #f4ede0 0%, #ede5d4 100%);
 }
 
+/* ── Global shadow reset in light theme ────────────────────────────── */
+html[data-theme="light"] * {
+  box-shadow: none !important;
+}
+/* Re-enable functional row-active indicator (left border marker) */
+html[data-theme="light"] .entity-table-row.is-active {
+  box-shadow: inset 3px 0 0 var(--gold) !important;
+}
+
 html[data-theme="light"] .app-rail {
   background: linear-gradient(180deg, #ebe2ce 0%, #e2d8c2 100%);
 }
@@ -388,7 +397,6 @@ html[data-theme="light"] .deck-gen-card {
   background:
     linear-gradient(180deg, rgba(255, 253, 248, 0.72), rgba(250, 245, 234, 0.92)),
     var(--panel);
-  box-shadow: 0 6px 20px var(--shadow);
 }
 
 html[data-theme="light"] .deck-gen-card-head {
@@ -423,7 +431,7 @@ html[data-theme="light"] .deck-gen-collection-picker select {
 html[data-theme="light"] .entity-table-shell {
   background: var(--panel);
   border-color: var(--border);
-  box-shadow: 0 8px 24px var(--shadow);
+  box-shadow: none;
 }
 
 html[data-theme="light"] .entity-table thead {
@@ -459,13 +467,4 @@ html[data-theme="light"] .entity-item.is-active {
   background: rgba(139, 110, 40, 0.08);
 }
 
-/* ── Card tile shadows — remplace les rgba(0,0,0,...) non scopés ───── */
-html[data-theme="light"] .collection-card {
-  box-shadow: 0 1px 4px var(--shadow) !important;
-}
-html[data-theme="light"] .collection-card:hover {
-  box-shadow: 0 4px 12px var(--shadow-deep) !important;
-}
-html[data-theme="light"] .collection-card.row-active {
-  box-shadow: 0 0 0 2px var(--gold-glow) !important;
-}
+/* card tile shadows supprimées par le reset global ci-dessus */

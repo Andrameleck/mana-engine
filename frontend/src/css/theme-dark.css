@@ -61,6 +61,17 @@ html:not([data-theme="light"]) .app-rail {
   background: linear-gradient(180deg, #0d0a07 0%, #060503 100%);
 }
 
+/* ── Global shadow reset in dark theme ─────────────────────────────── */
+html[data-theme="dark"] *,
+html:not([data-theme="light"]) * {
+  box-shadow: none !important;
+}
+/* Re-enable functional row-active indicator (left border marker) */
+html[data-theme="dark"] .entity-table-row.is-active,
+html:not([data-theme="light"]) .entity-table-row.is-active {
+  box-shadow: inset 3px 0 0 rgba(201, 169, 97, 0.75) !important;
+}
+
 /* ── Landing view ──────────────────────────────────────────────────── */
 html[data-theme="dark"] #view-landing,
 html:not([data-theme="light"]) #view-landing {
@@ -478,7 +489,6 @@ html[data-theme="dark"] .entity-table-shell,
 html:not([data-theme="light"]) .entity-table-shell {
   background: linear-gradient(180deg, rgba(28, 21, 14, 0.94), rgba(18, 14, 10, 0.98));
   border-color: var(--border);
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.22);
 }
 
 html[data-theme="dark"] .entity-table thead,
@@ -499,7 +509,6 @@ html:not([data-theme="light"]) .entity-table-row:hover {
 html[data-theme="dark"] .entity-table-row.is-active,
 html:not([data-theme="light"]) .entity-table-row.is-active {
   background: linear-gradient(90deg, rgba(201, 169, 97, 0.10), rgba(201, 169, 97, 0.08));
-  box-shadow: inset 3px 0 0 rgba(201, 169, 97, 0.75);
 }
 
 html[data-theme="dark"] .entity-actions button,
