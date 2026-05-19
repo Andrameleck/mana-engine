@@ -51,7 +51,12 @@ build_status <- function(status = "queued", percent = 0, stage = "", error = "",
   left
 }
 
-call_query <- local({
+# Write an initial status immediately so the job is visible before sourcing R files
+if (nzchar(status_path)) {
+  write_job_json(status_path, build_status(status = "running", percent = 1, stage = "Loading modules"))
+}
+
+call_query <- tryCatch(local({
   ns <- NULL
   repo_root <- trimws(as.character(repo_path))
   if (!nzchar(repo_root)) {
@@ -76,6 +81,14 @@ call_query <- local({
     fun <- get(fun_name, mode = "function", inherits = TRUE)
     fun(...)
   }
+}), error = function(e) {
+  write_job_json(status_path, build_status(
+    status = "error",
+    percent = 1L,
+    stage = "Failed",
+    error = paste0("Module load error: ", conditionMessage(e))
+  ))
+  quit(status = 1L)
 })
 
 status_state <- new.env(parent = emptyenv())
@@ -110,7 +123,7 @@ progress_callback <- function(progress) {
 
 tryCatch({
   payload <- jsonlite::fromJSON(payload_path, simplifyVector = FALSE)
-  write_job_json(status_path, build_status(status = "running", percent = 1, stage = "Starting synergy job"))
+  write_job_json(status_path, build_status(status = "running", percent = 3, stage = "Loading synergy catalog"))
 
   catalog <- if (is.list(payload$cards) && length(payload$cards) > 0L) {
     payload$cards
@@ -121,6 +134,8 @@ tryCatch({
     }
     catalog_out$cards
   }
+
+  write_job_json(status_path, build_status(status = "running", percent = 10, stage = "Analysing card synergies"))
 
   result <- call_query(
     "query_synergy_find_in_catalog",
