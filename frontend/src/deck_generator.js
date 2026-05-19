@@ -705,7 +705,8 @@ function attachHandlers() {
     state.selectedArchetypes.clear();
     renderArchetypeChips();
   });
-  // Lazy-load archetype catalog when the tab is first activated.
+  // Load archetype catalog eagerly so chips are ready regardless of navigation path.
+  ensureArchetypeCatalog();
   document.querySelectorAll('.side-tab[data-tab="generator"]').forEach((btn) => {
     btn.addEventListener("click", () => { ensureArchetypeCatalog(); }, { once: false });
   });

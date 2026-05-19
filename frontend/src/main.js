@@ -153,7 +153,7 @@ import {
       credits_license: "GNU AGPL v3",
       credits_wip_notice: "<strong>Work in progress.</strong> Synergy scoring is still under active development and far from perfect — results can be inconsistent, incomplete, or wrong. The mechanical ontology, scoring weights, and role-inference logic are all subject to significant change. Use results as a starting point, not a ground truth.",
       // ── Card Finder ──
-      tabs_card_finder: "Card Finder",
+      tabs_card_finder: "Card Explorer",
       subtitle_card_finder: "Search & filter any card by color, CMC, mechanics and tags."
     },
     fr: {
@@ -287,7 +287,7 @@ import {
       credits_license: "GNU AGPL v3",
       credits_wip_notice: "<strong>Travail en cours.</strong> Le calcul de synergies est encore en d\u00e9veloppement actif et loin d'\u00eatre parfait\u00a0\u2014 les r\u00e9sultats peuvent \u00eatre incoh\u00e9rents, incomplets ou erron\u00e9s. L'ontologie m\u00e9canique, les poids de scoring et la logique d'inf\u00e9rence des r\u00f4les sont tous susceptibles d'\u00e9voluer significativement. Utilisez les r\u00e9sultats comme point de d\u00e9part, pas comme v\u00e9rit\u00e9 absolue.",
       // ── Card Finder ──
-      tabs_card_finder: "Chercheur de Cartes",
+      tabs_card_finder: "Explorateur de Cartes",
       subtitle_card_finder: "Recherchez et filtrez n'importe quelle carte par couleur, CMC, m\u00e9caniques et tags."
     }
   };
@@ -7975,6 +7975,24 @@ import {
     const form = document.getElementById("card-finder-form");
     if (!form) return;
 
+    // Scryfall autocomplete for the name/text search field
+    const cfQInput = document.getElementById("cf-q");
+    const cfQList  = document.getElementById("cf-q-list");
+    let cfAutocompleteTimer = null;
+    if (cfQInput && cfQList) {
+      cfQInput.addEventListener("input", () => {
+        clearTimeout(cfAutocompleteTimer);
+        const val = cfQInput.value.trim();
+        if (val.length < 2) { cfQList.innerHTML = ""; return; }
+        cfAutocompleteTimer = setTimeout(async () => {
+          const names = await fetchScryfallAutocompleteNames(val);
+          cfQList.innerHTML = names
+            .map((n) => `<option value="${escapeHtml(n)}"></option>`)
+            .join("");
+        }, 250);
+      });
+    }
+
     // Color toggle buttons
     form.querySelectorAll(".cf-color-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -8079,44 +8097,127 @@ import {
 
     results.forEach((card) => {
       const article = document.createElement("article");
-      article.className = "cf-card";
+      article.classList.add("collection-card", "cf-card");
 
       const scryfallId = card.id || "";
       const imgUrl = scryfallId
         ? `https://cards.scryfall.io/art_crop/front/${scryfallId[0]}/${scryfallId[1]}/${scryfallId}.jpg`
         : "";
 
+      const imageFrame = document.createElement("div");
+      imageFrame.classList.add("collection-card-art");
+
+      if (imgUrl) {
+        const img = document.createElement("img");
+        img.src = imgUrl;
+        img.alt = card.name || "";
+        img.loading = "lazy";
+        img.decoding = "async";
+        img.addEventListener("error", () => {
+          imageFrame.innerHTML = `<span class="collection-card-fallback">${escapeHtml(card.name || "")}</span>`;
+          article.classList.add("is-image-missing");
+        }, { once: true });
+        imageFrame.appendChild(img);
+      } else {
+        imageFrame.innerHTML = `<span class="collection-card-fallback">${escapeHtml(card.name || "")}</span>`;
+        article.classList.add("is-image-missing");
+      }
+
+      article.appendChild(imageFrame);
+
       const colorHtml = parseCfJsonArray(card.color_identity)
         .map((c) => `<img src="https://svgs.scryfall.io/card-symbols/${c}.svg" alt="${escapeHtml(c)}" class="cf-card-sym" loading="lazy">`)
         .join("");
 
-      const keywordsArr = parseCfJsonArray(card.keywords);
-      const kwHtml = keywordsArr.slice(0, 4)
-        .map((k) => `<span class="cf-kw-chip">${escapeHtml(k)}</span>`)
-        .join("");
+      const subtitle = [card.type_line, card.mana_cost, card.rarity, card.set_code]
+        .filter(Boolean).join(" · ");
 
-      article.innerHTML = `
-        <div class="cf-card-art">
-          ${imgUrl ? `<img src="${imgUrl}" alt="${escapeHtml(card.name || "")}" loading="lazy" decoding="async">` : `<span class="cf-card-art-fallback">${escapeHtml(card.name || "")}</span>`}
-        </div>
-        <div class="cf-card-body">
-          <p class="cf-card-name">${escapeHtml(card.name || "")}</p>
-          <p class="cf-card-type">${escapeHtml(card.type_line || "")}</p>
-          <div class="cf-card-colors">${colorHtml}</div>
-          ${kwHtml ? `<div class="cf-kw-chips">${kwHtml}</div>` : ""}
-          ${card.oracle_text ? `<p class="cf-card-oracle">${escapeHtml(String(card.oracle_text).slice(0, 120))}${String(card.oracle_text).length > 120 ? "…" : ""}</p>` : ""}
-          <p class="cf-card-meta">${escapeHtml(card.mana_cost || "")} &nbsp;·&nbsp; ${card.rarity || ""} &nbsp;·&nbsp; ${card.set_code || ""}</p>
-        </div>
+      const meta = document.createElement("div");
+      meta.classList.add("collection-card-meta");
+      meta.innerHTML = `
+        <p class="collection-card-name">${escapeHtml(card.name || "")}</p>
+        <p class="collection-card-line">${escapeHtml(subtitle)}</p>
+        ${colorHtml ? `<div class="cf-card-colors">${colorHtml}</div>` : ""}
       `;
+      article.appendChild(meta);
 
-      if (imgUrl) {
-        article.querySelector("img")?.addEventListener("error", function () {
-          this.parentElement.innerHTML = `<span class="cf-card-art-fallback">${escapeHtml(card.name || "")}</span>`;
-        }, { once: true });
-      }
+      article.addEventListener("click", () => renderCfViewer(card));
 
       grid.appendChild(article);
     });
+  }
+
+  function renderCfViewer(card) {
+    const viewer  = document.getElementById("cf-viewer");
+    const titleEl = document.getElementById("cf-viewer-title");
+    const imageEl = document.getElementById("cf-viewer-image");
+    const hintEl  = document.getElementById("cf-viewer-hint");
+    const metaEl  = document.getElementById("cf-viewer-meta");
+    if (!viewer || !titleEl || !imageEl || !hintEl || !metaEl) return;
+
+    const name = String(card.name || "").trim() || (currentUiLanguage() === "fr" ? "Carte" : "Card");
+    titleEl.textContent = name;
+
+    // Full card face image — same logic as Synergy Lab
+    const scryfallId = String(card.id || "").trim().toLowerCase();
+    const imgUrl = scryfallCdnImageUrl(scryfallId, "normal");
+
+    imageEl.onerror = function () {
+      imageEl.onerror = null;
+      imageEl.removeAttribute("src");
+      imageEl.classList.add("is-hidden");
+    };
+    if (imgUrl) {
+      imageEl.src = imgUrl;
+      imageEl.alt = name;
+      imageEl.classList.remove("is-hidden");
+    } else {
+      imageEl.removeAttribute("src");
+      imageEl.classList.add("is-hidden");
+    }
+
+    hintEl.style.display = "none";
+
+    // Meta rows — same labels and mana rendering as Synergy Lab
+    const setLabel = [
+      String(card.set_code || "").toUpperCase(),
+      card.collector_number ? `#${card.collector_number}` : ""
+    ].filter(Boolean).join(" ");
+
+    const metaParts = [
+      ["type", card.type_line],
+      ["mana", card.mana_cost],
+      ["set",  setLabel || card.set_name],
+    ].filter(([, v]) => String(v || "").trim().length > 0);
+
+    metaEl.innerHTML = "";
+    metaParts.forEach(([key, value]) => {
+      const dt = document.createElement("dt");
+      dt.textContent = strategyMetaLabel(key);
+      const dd = document.createElement("dd");
+      if (key === "mana") {
+        dd.innerHTML = strategyManaValueToHtml(value);
+      } else {
+        dd.textContent = String(value);
+      }
+      metaEl.appendChild(dt);
+      metaEl.appendChild(dd);
+    });
+
+    // Oracle text with inline mana symbols — same as Synergy Lab
+    viewer.querySelector(".cf-viewer-oracle")?.remove();
+    if (card.oracle_text) {
+      const oracle = document.createElement("p");
+      oracle.className = "cf-viewer-oracle";
+      oracle.innerHTML = strategyOracleTextToHtml(card.oracle_text);
+      metaEl.after(oracle);
+    }
+
+    // Highlight selected card in grid
+    document.querySelectorAll(".cf-card.row-active").forEach((el) => el.classList.remove("row-active"));
+    const clickedCard = [...document.querySelectorAll(".cf-card")]
+      .find((el) => el.querySelector(".collection-card-name")?.textContent === name);
+    clickedCard?.classList.add("row-active");
   }
 
   function parseCfJsonArray(raw) {

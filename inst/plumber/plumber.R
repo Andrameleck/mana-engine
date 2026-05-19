@@ -597,13 +597,13 @@ function() {
 #* @param limit Optional integer cap on rows returned.
 #* @serializer unboxedJSON
 #* @get /synergy/catalog/sqlite
-function(db_path = NULL, table = "cards_api", where = NULL, limit = NULL) {
+function(db_path = "", table = "cards_api", where = "", limit = "") {
   res <- query_call(
     "query_synergy_catalog_from_sqlite",
-    db_path = db_path,
+    db_path = if (nzchar(db_path)) db_path else NULL,
     table = table,
-    where = where,
-    limit = limit
+    where = if (nzchar(where)) where else NULL,
+    limit = if (nzchar(limit)) as.integer(limit) else NULL
   )
   if (is.list(res) && isFALSE(res$ok) && nzchar(query_api_scalar(res$error, default = ""))) {
     return(res)

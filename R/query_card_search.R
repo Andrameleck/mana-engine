@@ -119,10 +119,10 @@ query_card_search <- function(
     ""
   }
 
-  count_sql <- sprintf("SELECT COUNT(*) AS n FROM oracle_cards %s", where_sql)
+  count_sql <- sprintf("SELECT COUNT(*) AS n FROM cards %s", where_sql)
   data_sql  <- sprintf(
-    "SELECT id, name, mana_cost, cmc, type_line, oracle_text, colors, color_identity, keywords, rarity, set AS set_code, set_name, collector_number
-     FROM oracle_cards
+    "SELECT id, name, mana_cost, cmc, type_line, oracle_text, colors, color_identity, keywords, rarity, \"set\" AS set_code, set_name, collector_number
+     FROM cards
      %s
      ORDER BY name ASC
      LIMIT :lim OFFSET :off",

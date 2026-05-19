@@ -117,7 +117,7 @@
                 <path d="M11 8a3 3 0 0 1 3 3"></path>
               </svg>
             </span>
-            <span class="landing-tile-title" data-i18n="tabs_card_finder">Card Finder</span>
+            <span class="landing-tile-title" data-i18n="tabs_card_finder">Card Explorer</span>
             <span class="landing-tile-sub" data-i18n="subtitle_card_finder">Search &amp; filter any card by color, CMC, mechanics and tags.</span>
           </a>
 
@@ -152,13 +152,13 @@
       </a>
 
       <nav class="rail-nav" aria-label="Sections">
-        <button type="button" class="rail-tab side-tab" data-tab="card_finder" data-label="Card Finder" aria-label="Card Finder">
+        <button type="button" class="rail-tab side-tab" data-tab="card_finder" data-label="Card Explorer" aria-label="Card Explorer">
           <svg viewBox="0 0 24 24" class="rail-tab-icon side-tab-icon" aria-hidden="true">
             <circle cx="11" cy="11" r="7"></circle>
             <line x1="16.5" y1="16.5" x2="21" y2="21"></line>
             <path d="M11 8a3 3 0 0 1 3 3"></path>
           </svg>
-          <span class="rail-tab-label side-tab-label">Card Finder</span>
+          <span class="rail-tab-label side-tab-label">Card Explorer</span>
         </button>
         <button type="button" class="rail-tab side-tab is-active" data-tab="collections" data-label="Collections" aria-label="Collections">
           <svg viewBox="0 0 24 24" class="rail-tab-icon side-tab-icon" aria-hidden="true">
@@ -340,7 +340,6 @@
                 <summary class="filter-summary" data-i18n="filter_seed_card">Seed card</summary>
                 <div class="filter-body">
                   <label class="field" for="strategy-seed-input">
-                    <span class="field-label" id="strategy-seed-label">Carte seed</span>
                     <input id="strategy-seed-input" type="search" list="strategy-seed-list" placeholder="Entomb…">
                     <datalist id="strategy-seed-list"></datalist>
                   </label>
@@ -352,7 +351,6 @@
                 <summary class="filter-summary" data-i18n="filter_format">Format</summary>
                 <div class="filter-body">
                   <label class="field" for="strategy-format">
-                    <span class="field-label" id="strategy-format-label">Format</span>
                     <select id="strategy-format">
                       <option value="none" selected>Aucun (pas de filtre)</option>
                       <option value="commander">Commander</option>
@@ -394,10 +392,9 @@
                 <div class="filter-body">
                   <div class="strategy-archetype-filter" id="strategy-archetype-block">
                     <div class="strategy-archetype-head">
-                      <span class="strategy-archetype-title" data-i18n="archetype_targeted_label">Archétypes ciblés</span>
                       <div class="strategy-archetype-actions">
-                        <button type="button" id="strategy-archetype-all" class="ghost" data-i18n="archetype_all">Tout</button>
-                        <button type="button" id="strategy-archetype-none" class="ghost" data-i18n="archetype_none">Aucun</button>
+                        <button type="button" id="strategy-archetype-all" class="ghost ghost--xs" data-i18n="archetype_all">Tout</button>
+                        <button type="button" id="strategy-archetype-none" class="ghost ghost--xs" data-i18n="archetype_none">Aucun</button>
                         <label class="strategy-archetype-strict-toggle">
                           <input id="strategy-archetype-strict" type="checkbox">
                           <span>Strict</span>
@@ -487,89 +484,86 @@
               <span class="section-meta muted" data-i18n="gen_build_deck_sub">Pick your shell, then generate variants</span>
             </header>
 
-            <ol class="wizard-steps">
-              <li class="wizard-step">
-                <div class="wizard-step-content">
-                  <h4 class="wizard-step-title" data-i18n="gen_format_commander">Format &amp; commander</h4>
-                  <div class="wizard-grid">
-                    <label class="field" for="deck-gen-format">
-                      <span class="field-label">Format</span>
-                      <select id="deck-gen-format">
-                        <option value="random">🎲 Aléatoire</option>
-                        <option value="commander">Commander</option>
-                        <option value="brawl">Brawl</option>
-                        <option value="modern">Modern</option>
-                        <option value="legacy">Legacy</option>
-                        <option value="vintage">Vintage</option>
-                        <option value="pioneer">Pioneer</option>
-                        <option value="standard">Standard</option>
-                        <option value="pauper">Pauper</option>
-                        <option value="historic">Historic</option>
-                      </select>
-                    </label>
-                    <label class="field" for="deck-gen-commander">
-                      <span class="field-label">Commander</span>
-                      <input id="deck-gen-commander" type="search" list="deck-gen-commander-list" placeholder="Auto-select">
-                      <datalist id="deck-gen-commander-list"></datalist>
-                    </label>
-                    <label class="field" for="deck-gen-variants">
-                      <span class="field-label">Variants</span>
-                      <input id="deck-gen-variants" type="number" min="1" max="5" value="3">
-                    </label>
-                  </div>
-                </div>
-              </li>
-
-              <li class="wizard-step">
-                <div class="wizard-step-content">
-                  <h4 class="wizard-step-title" data-i18n="gen_color_identity">Color identity</h4>
-                  <label class="deck-gen-mana-filter">
-                    <span class="deck-gen-mana-row">
-                      <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="W"><img src="https://svgs.scryfall.io/card-symbols/W.svg" alt="W" loading="lazy"></label>
-                      <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="U"><img src="https://svgs.scryfall.io/card-symbols/U.svg" alt="U" loading="lazy"></label>
-                      <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="B"><img src="https://svgs.scryfall.io/card-symbols/B.svg" alt="B" loading="lazy"></label>
-                      <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="R"><img src="https://svgs.scryfall.io/card-symbols/R.svg" alt="R" loading="lazy"></label>
-                      <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="G"><img src="https://svgs.scryfall.io/card-symbols/G.svg" alt="G" loading="lazy"></label>
-                      <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="C"><img src="https://svgs.scryfall.io/card-symbols/C.svg" alt="C" loading="lazy"></label>
-                    </span>
+            <details class="filter-group" open>
+              <summary class="filter-summary" data-i18n="gen_format_commander">Format &amp; commander</summary>
+              <div class="filter-body">
+                <div class="wizard-grid">
+                  <label class="field" for="deck-gen-format">
+                    <span class="field-label">Format</span>
+                    <select id="deck-gen-format">
+                      <option value="random">🎲 Aléatoire</option>
+                      <option value="commander">Commander</option>
+                      <option value="brawl">Brawl</option>
+                      <option value="modern">Modern</option>
+                      <option value="legacy">Legacy</option>
+                      <option value="vintage">Vintage</option>
+                      <option value="pioneer">Pioneer</option>
+                      <option value="standard">Standard</option>
+                      <option value="pauper">Pauper</option>
+                      <option value="historic">Historic</option>
+                    </select>
+                  </label>
+                  <label class="field" for="deck-gen-commander">
+                    <span class="field-label">Commander</span>
+                    <input id="deck-gen-commander" type="search" list="deck-gen-commander-list" placeholder="Auto-select">
+                    <datalist id="deck-gen-commander-list"></datalist>
+                  </label>
+                  <label class="field" for="deck-gen-variants">
+                    <span class="field-label">Variants</span>
+                    <input id="deck-gen-variants" type="number" min="1" max="5" value="3">
                   </label>
                 </div>
-              </li>
+              </div>
+            </details>
 
-              <li class="wizard-step">
-                <div class="wizard-step-content">
-                  <h4 class="wizard-step-title" data-i18n="gen_archetypes_step">Archetypes</h4>
-                  <div class="deck-gen-archetype-block">
-                    <div class="deck-gen-archetype-head">
-                      <span class="deck-gen-archetype-title" data-i18n="gen_archetype_targeted">Archétypes ciblés</span>
-                      <div class="deck-gen-archetype-actions">
-                        <button type="button" id="deck-gen-archetype-none" class="ghost ghost--xs" data-i18n="archetype_none">Aucun</button>
-                      </div>
-                    </div>
-                    <div id="deck-gen-archetype-chips" class="deck-gen-archetype-chips"></div>
-                    <p class="muted" data-i18n="gen_archetype_deck_hint">Pick one or more archetypes to steer the deck.</p>
-                  </div>
-                </div>
-              </li>
+            <details class="filter-group" open>
+              <summary class="filter-summary" data-i18n="gen_color_identity">Color identity</summary>
+              <div class="filter-body">
+                <label class="deck-gen-mana-filter">
+                  <span class="deck-gen-mana-row">
+                    <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="W"><img src="https://svgs.scryfall.io/card-symbols/W.svg" alt="W" loading="lazy"></label>
+                    <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="U"><img src="https://svgs.scryfall.io/card-symbols/U.svg" alt="U" loading="lazy"></label>
+                    <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="B"><img src="https://svgs.scryfall.io/card-symbols/B.svg" alt="B" loading="lazy"></label>
+                    <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="R"><img src="https://svgs.scryfall.io/card-symbols/R.svg" alt="R" loading="lazy"></label>
+                    <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="G"><img src="https://svgs.scryfall.io/card-symbols/G.svg" alt="G" loading="lazy"></label>
+                    <label class="deck-gen-mana-toggle"><input type="checkbox" data-deck-gen-color="C"><img src="https://svgs.scryfall.io/card-symbols/C.svg" alt="C" loading="lazy"></label>
+                  </span>
+                </label>
+              </div>
+            </details>
 
-              <li class="wizard-step">
-                <div class="wizard-step-content">
-                  <h4 class="wizard-step-title" data-i18n="gen_card_pool">Card pool</h4>
-                  <div class="deck-gen-collection-block">
-                    <label class="checkbox-row deck-gen-collection-toggle-row">
-                      <input type="checkbox" id="deck-gen-use-collection">
-                      <span data-i18n="gen_use_collection">Use only my collection</span>
-                    </label>
-                    <div id="deck-gen-collection-picker" class="deck-gen-collection-picker is-hidden">
-                      <select id="deck-gen-collection-select">
-                        <option value="">Loading…</option>
-                      </select>
-                      <span id="deck-gen-collection-status" class="muted"></span>
+            <details class="filter-group">
+              <summary class="filter-summary" data-i18n="gen_archetypes_step">Archetypes</summary>
+              <div class="filter-body">
+                <div class="deck-gen-archetype-block">
+                  <div class="deck-gen-archetype-head">
+                    <div class="deck-gen-archetype-actions">
+                      <button type="button" id="deck-gen-archetype-none" class="ghost ghost--xs" data-i18n="archetype_none">Aucun</button>
                     </div>
                   </div>
+                  <div id="deck-gen-archetype-chips" class="deck-gen-archetype-chips"></div>
+                  <p class="muted" data-i18n="gen_archetype_deck_hint">Pick one or more archetypes to steer the deck.</p>
                 </div>
-              </li>
-            </ol>
+              </div>
+            </details>
+
+            <details class="filter-group" open>
+              <summary class="filter-summary" data-i18n="gen_card_pool">Card pool</summary>
+              <div class="filter-body">
+                <div class="deck-gen-collection-block">
+                  <label class="checkbox-row deck-gen-collection-toggle-row">
+                    <input type="checkbox" id="deck-gen-use-collection">
+                    <span data-i18n="gen_use_collection">Use only my collection</span>
+                  </label>
+                  <div id="deck-gen-collection-picker" class="deck-gen-collection-picker is-hidden">
+                    <select id="deck-gen-collection-select">
+                      <option value="">Loading…</option>
+                    </select>
+                    <span id="deck-gen-collection-status" class="muted"></span>
+                  </div>
+                </div>
+              </div>
+            </details>
 
             <div class="wizard-cta">
               <button type="button" id="deck-gen-run-btn" class="btn btn-primary btn-cta primary" data-i18n="gen_generate_btn">Generate decks</button>
@@ -726,7 +720,8 @@
 
               <div class="cf-field">
                 <label class="cf-label" for="cf-q">Search</label>
-                <input type="search" id="cf-q" class="cf-input" placeholder="Name or text…" autocomplete="off">
+                <input type="search" id="cf-q" class="cf-input" placeholder="Name or text…" autocomplete="off" list="cf-q-list">
+                <datalist id="cf-q-list"></datalist>
               </div>
 
               <div class="cf-field">
@@ -782,9 +777,21 @@
           <!-- Results area -->
           <div class="card-finder-results">
             <div id="cf-status" class="cf-status muted">Enter a search above.</div>
-            <div id="cf-grid" class="cf-grid"></div>
+            <div id="cf-grid" class="collection-card-grid cf-grid"></div>
             <div id="cf-pagination" class="cf-pagination"></div>
           </div>
+
+          <!-- Card viewer -->
+          <aside id="cf-viewer" class="cf-viewer strategy-result-preview" aria-live="polite">
+            <div class="strategy-result-head">
+              <h4 id="cf-viewer-title" data-i18n="preview_card_header">Card preview</h4>
+            </div>
+            <div class="strategy-card-preview-body">
+              <img id="cf-viewer-image" alt="Card preview" loading="lazy">
+              <p id="cf-viewer-hint" class="muted">Click a card to preview it.</p>
+              <dl id="cf-viewer-meta" class="card-preview-meta"></dl>
+            </div>
+          </aside>
 
         </div>
       </section>
