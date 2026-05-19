@@ -7,10 +7,10 @@ Wants=network-online.target
 Type=simple
 User=debian
 Group=debian
-WorkingDirectory=/home/debian/git/mtgcodex.api
+WorkingDirectory=/opt/mana-engine
 EnvironmentFile=/etc/mana-engine/mana-engine-api.env
 Environment=MANA_ENGINE_API_WORKER=%i
-ExecStart=/usr/bin/Rscript /home/debian/git/mtgcodex.api/scripts/run-api.R
+ExecStart=/usr/bin/Rscript /opt/mana-engine/scripts/run-api.R
 Restart=on-failure
 RestartSec=5
 

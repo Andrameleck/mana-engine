@@ -43,27 +43,37 @@ MANA_ENGINE_SCRYFALL_BOOTSTRAP=force docker compose up --build
 
 ## Systemd service on a VM
 
-The repository includes a `systemd` + Nginx deployment that starts both the
-API and the web UI through `mtgcodex.api::start_api()`.
+The repository includes example `systemd` + Nginx deployment files that start
+both the API and the web UI through `mtgcodex.api::start_api()`.
 
 Default service settings:
 
 - host: first IP returned by `hostname -I`
 - port: `8010`
 - workers: `2`
-- UI: `http://<vm-ip>:8010/ui`
+- UI: `http://<vm-ip>:8010/ui` for local HTTP installs
 
 Install and start it with:
 
 ```bash
-cd /home/debian/git/mtgcodex.api
+cd /opt/mana-engine
 sudo ./scripts/install-systemd-service.sh
 ```
 
 Override host or port during install if needed:
 
 ```bash
-sudo MANA_ENGINE_API_HOST=51.38.230.244 MANA_ENGINE_API_PORT=8010 ./scripts/install-systemd-service.sh
+sudo MANA_ENGINE_API_HOST=203.0.113.10 MANA_ENGINE_API_PORT=8010 ./scripts/install-systemd-service.sh
+```
+
+Production deployments should keep real domains, IPs, service paths, and
+secrets in a private infra repository or directly under `/etc`. To enable TLS
+with Let's Encrypt, pass public domains explicitly:
+
+```bash
+sudo MANA_ENGINE_TLS_DOMAINS=example.org,www.example.org \
+  MANA_ENGINE_TLS_EMAIL=admin@example.org \
+  ./scripts/install-systemd-service.sh
 ```
 
 The generated runtime environment is stored in

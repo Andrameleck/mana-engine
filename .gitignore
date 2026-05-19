@@ -30,6 +30,15 @@ vignettes/*.yml
 
 # R Environment Variables
 .Renviron
+.env
+.env.*
+!.env.example
+
+# Local deployment overrides and secrets
+deploy/*.local
+deploy/*.local.*
+*.pem
+*.key
 
 # RStudio Connect folder
 rsconnect/
