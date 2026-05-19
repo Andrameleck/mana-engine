@@ -80,7 +80,7 @@ query_req_client_id <- function(req) {
 #* A browser-based UI is available at `/ui/`.
 #*
 #* Source code and issue tracker:
-#* [github.com/Andrameleck/mtgcodex.api](https://github.com/Andrameleck/mtgcodex.api)
+#* [github.com/Andrameleck/mana-engine](https://github.com/Andrameleck/mana-engine)
 #*
 #* @apiTag System Health checks and server diagnostics
 #* @apiTag Cards Card search, lookup, and mechanical normalization

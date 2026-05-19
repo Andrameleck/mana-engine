@@ -11,8 +11,8 @@ Description: A mechanics-first synergy engine and Plumber API for Magic: The
     to identify synergies, score pairs bidirectionally, detect packages and
     combos, and generate decks. Includes a browser-based UI served at /ui/.
 License: AGPL (>= 3)
-BugReports: https://github.com/Andrameleck/mtgcodex.api/issues
-URL: https://github.com/Andrameleck/mtgcodex.api
+BugReports: https://github.com/Andrameleck/mana-engine/issues
+URL: https://github.com/Andrameleck/mana-engine
 LazyData: true
 Depends:
     R (>= 4.1.0)

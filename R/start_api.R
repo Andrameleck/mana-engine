@@ -78,7 +78,7 @@ start_api <- function(
     spec$info$contact <- list(
       name  = "Florian Ricquier",
       email = "florian.ricquier@mtgcodex.dev",
-      url   = "https://github.com/Andrameleck/mtgcodex.api"
+      url   = "https://github.com/Andrameleck/mana-engine"
     )
     spec$info$license <- list(
       name = "AGPL-3.0",
@@ -86,7 +86,7 @@ start_api <- function(
     )
     spec$externalDocs <- list(
       description = "Source code and issue tracker",
-      url         = "https://github.com/Andrameleck/mtgcodex.api"
+      url         = "https://github.com/Andrameleck/mana-engine"
     )
 
     api$setApiSpec(spec)
