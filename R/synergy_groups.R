@@ -1500,25 +1500,3 @@ query_synergy_detect_groups_for_seed <- function(seed,
   )
 }
 
-query_synergy_detect_packages_for_target <- function(target,
-                                                     candidates,
-                                                     format_name = "commander",
-                                                     max_packages = 10L,
-                                                     min_edge_score = 35L,
-                                                     progress_callback = NULL,
-                                                     progress_range = c(88, 97)) {
-  group_out <- query_synergy_detect_groups_for_seed(
-    seed = target,
-    candidates = candidates,
-    format_name = format_name,
-    max_groups = max_packages,
-    min_edge_score = min_edge_score,
-    max_group_size = 4L,
-    max_paths = max(96L, length(query_synergy_to_list(candidates)) * 12L),
-    max_branching = 6L,
-    progress_callback = progress_callback,
-    progress_range = progress_range
-  )
-
-  query_synergy_to_list(group_out$groups)
-}
