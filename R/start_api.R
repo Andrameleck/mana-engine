@@ -1,13 +1,14 @@
 #' Start the Mana-Engine Plumber Server
 #'
 #' Starts the Plumber HTTP API server. The API exposes endpoints for
-#' collection management, synergy scoring, deck generation, and a
-#' browser-based UI served at `/ui/`.
+#' collection management, synergy scoring, and deck generation. Production
+#' deployments usually serve the browser UI from a separate web repository via
+#' the reverse proxy.
 #'
 #' @param host Character scalar. IP address to bind to (default `"0.0.0.0"`).
 #' @param port Integer. TCP port to listen on (default `8000`).
 #' @param swagger Logical. Enable Swagger UI (default `TRUE`).
-#' @param hide_ui_from_swagger Logical. Hide `/ui/` routes from Swagger
+#' @param hide_ui_from_swagger Logical. Hide legacy `/ui/` routes from Swagger
 #'   to reduce noise (default `TRUE`).
 #' @param ... Additional arguments passed to `plumber::pr_run()`.
 #'

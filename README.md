@@ -1,6 +1,6 @@
 # Mana-Engine
 
-Minimal Plumber API + UI for loading and displaying a collection from:
+Minimal Plumber API for loading and displaying a collection from:
 - SQLite database (`db`)
 - CSV (`csv`)
 - text file (`text`)
@@ -11,7 +11,7 @@ Minimal Plumber API + UI for loading and displaying a collection from:
 mtgcodex.api::start_api(host = "0.0.0.0", port = 8000)
 ```
 
-Then open `http://localhost:8000/ui`.
+Then call `http://localhost:8000/health` to confirm the API is running.
 
 ## Docker Compose
 
@@ -24,7 +24,7 @@ mechanics tables, and stores it in the persistent `mana-engine-cache` volume.
 docker compose up --build
 ```
 
-Then open `http://localhost:8010/ui`.
+Then call `http://localhost:8010/health`.
 
 Useful environment variables:
 
@@ -43,15 +43,16 @@ MANA_ENGINE_SCRYFALL_BOOTSTRAP=force docker compose up --build
 
 ## Systemd service on a VM
 
-The repository includes example `systemd` + Nginx deployment files that start
-both the API and the web UI through `mtgcodex.api::start_api()`.
+The repository includes example `systemd` + Nginx deployment files for the API.
+Production deployments should serve the web UI from the separate
+`mana-engine-web` repository through the private infra repository.
 
 Default service settings:
 
 - host: first IP returned by `hostname -I`
 - port: `8010`
 - workers: `2`
-- UI: `http://<vm-ip>:8010/ui` for local HTTP installs
+- health check: `http://<vm-ip>:8010/health`
 
 Install and start it with:
 
@@ -82,26 +83,11 @@ The generated runtime environment is stored in
 Worker processes listen on loopback ports starting at `8011`, and Nginx
 publishes the public endpoint on port `8010`.
 
-## Frontend (Vite)
+## Frontend
 
-The web UI is now structured as a Vite app in `frontend/`.
-
-### Dev server
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### Production build served by Plumber
-
-```bash
-cd frontend
-npm run build
-```
-
-Build output is written to `inst/www/`, which is what `/ui` and `/ui/static/<file>` serve.
+The web UI source now lives outside this public API repository, in the separate
+`mana-engine-web` repository. Production wiring lives in the private
+`mana-engine-infra` repository.
 
 ## Endpoints
 
@@ -118,8 +104,6 @@ Build output is written to `inst/www/`, which is what `/ui` and `/ui/static/<fil
 - `GET /cards/<card_id>?include_normalized=true|false`
 - `GET /events` (atomic event vocabulary)
 - `GET /mechanics` (mechanic decomposition rules)
-- `GET /ui`
-- `GET /ui/static/<file>`
 
 ## Synergy Engine (MVP)
 
