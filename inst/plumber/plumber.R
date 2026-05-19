@@ -16,7 +16,7 @@ query_call <- local({
       query_dir <- query_dir_candidates[which(query_dir_exists)[1]]
       query_files <- list.files(
         path = query_dir,
-        pattern = "^(query_|synergy_).*\\.R$",
+        pattern = "^(query_|synergy_|bridge_|util_).*\\.R$",
         full.names = TRUE
       )
       for (query_file in query_files) {
@@ -535,17 +535,19 @@ function(job_id = "") {
 #* @serializer unboxedJSON
 #* @get /cards/search
 function(q = "", colors = "", cmc_min = "", cmc_max = "",
-         type_line = "", keywords = "", limit = "60", offset = "0") {
+         type_line = "", keywords = "", collection_only = "",
+         limit = "60", offset = "0") {
   query_call(
     "query_card_search",
-    q         = q,
-    colors    = colors,
-    cmc_min   = cmc_min,
-    cmc_max   = cmc_max,
-    type_line = type_line,
-    keywords  = keywords,
-    limit     = limit,
-    offset    = offset
+    q                = q,
+    colors           = colors,
+    cmc_min          = cmc_min,
+    cmc_max          = cmc_max,
+    type_line        = type_line,
+    keywords         = keywords,
+    collection_only  = collection_only,
+    limit            = limit,
+    offset           = offset
   )
 }
 

@@ -6729,6 +6729,49 @@ label.strategy-mana-filter {
    ║  DECK GENERATOR — wizard layout                                     ║
    ╚══════════════════════════════════════════════════════════════════════╝ */
 
+/* ─── Decks Lab disclaimer banner ─── */
+.gen-disclaimer {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 18px;
+  margin-bottom: 4px;
+  background: rgba(210, 100, 20, 0.12);
+  border: 1px solid rgba(210, 100, 20, 0.45);
+  border-left: 4px solid #d26414;
+  border-radius: var(--r-lg);
+  color: var(--text);
+}
+.gen-disclaimer-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  color: #d26414;
+}
+.gen-disclaimer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.gen-disclaimer-title {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #d26414;
+}
+.gen-disclaimer-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.gen-disclaimer-text strong {
+  color: #d26414;
+}
+
 .generator-layout {
   display: grid;
   grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
@@ -6935,6 +6978,10 @@ label.strategy-mana-filter {
 .page--lab > .lab-layout,
 .page--gen > .generator-layout {
   margin-top: -8px;
+}
+/* When a disclaimer banner precedes the layout, cancel the negative pull */
+.page--gen > .gen-disclaimer + .generator-layout {
+  margin-top: 12px;
 }
 
 /* Compact archetype chips */
@@ -7913,6 +7960,31 @@ body.landing-open {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.cf-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  user-select: none;
+}
+.cf-toggle-label:has(.cf-toggle-input:disabled) {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.cf-toggle-input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--gold);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.cf-hint {
+  margin: 4px 0 0;
+  font-size: 11px;
 }
 
 .cf-input--num {

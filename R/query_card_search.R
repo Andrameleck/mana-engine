@@ -20,6 +20,7 @@ query_card_search <- function(
   cmc_max  = "",
   type_line = "",
   keywords = "",
+  collection_only = "",
   limit    = "60",
   offset   = "0"
 ) {
@@ -41,6 +42,8 @@ query_card_search <- function(
   type_val     <- trimws(as.character(type_line[[1]] %||% ""))
   keywords_val <- trimws(as.character(keywords[[1]] %||% ""))
   colors_raw   <- trimws(as.character(colors[[1]] %||% ""))
+
+  coll_only_val <- isTRUE(trimws(tolower(as.character(collection_only[[1]] %||% ""))) == "true")
 
   limit_val  <- query_card_search_clamp_int(limit,  1L, 200L, 60L)
   offset_val <- query_card_search_clamp_int(offset, 0L, 50000L, 0L)
@@ -110,6 +113,27 @@ query_card_search <- function(
         sprintf("lower(COALESCE(color_identity, '')) LIKE '%%' || lower(:%s) || '%%'", param_name)
       )
       bind_vals[[param_name]] <- code
+    }
+  }
+
+  # Collection-only filter — restrict results to cards present in the user's collections
+  if (coll_only_val) {
+    coll_db <- tryCatch(query_collections_store_path(), error = function(e) "")
+    if (nzchar(coll_db) && file.exists(coll_db)) {
+      coll_names <- tryCatch(
+        with_db(coll_db, function(con) {
+          DBI::dbGetQuery(con, "SELECT DISTINCT lower(name) AS name FROM collection_cards")[["name"]]
+        }),
+        error = function(e) character(0)
+      )
+      if (length(coll_names) > 0L) {
+        escaped <- paste0("'", gsub("'", "''", coll_names), "'", collapse = ", ")
+        where_clauses <- c(where_clauses,
+          sprintf("lower(name) IN (%s)", escaped)
+        )
+      } else {
+        where_clauses <- c(where_clauses, "1 = 0")
+      }
     }
   }
 

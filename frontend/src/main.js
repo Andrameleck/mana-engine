@@ -122,6 +122,8 @@ import { buildCardTile } from "./widgets/card_tile.js";
       gen_use_collection: "Use only my collection",
       gen_generate_btn: "Generate decks",
       gen_status_hint: "Waiting for generation.",
+      gen_disclaimer_title: "Module under development",
+      gen_disclaimer_body: "This feature is still under active development. Deck generation can take <strong>several minutes</strong> depending on your collection size and selected parameters.",
       gen_no_collection: "No collection loaded",
       gen_import_collection_hint: "Import a collection in the Collections tab.",
       gen_cards_count: "cards",
@@ -159,7 +161,9 @@ import { buildCardTile } from "./widgets/card_tile.js";
       credits_wip_notice: "<strong>Work in progress.</strong> Synergy scoring is still under active development and far from perfect — results can be inconsistent, incomplete, or wrong. The mechanical ontology, scoring weights, and role-inference logic are all subject to significant change. Use results as a starting point, not a ground truth.",
       // ── Card Finder ──
       tabs_card_finder: "Card Explorer",
-      subtitle_card_finder: "Search & filter any card by color, CMC, mechanics and tags."
+      subtitle_card_finder: "Search & filter any card by color, CMC, mechanics and tags.",
+      cf_collection_only: "Collection only",
+      cf_no_collection_hint: "No collection loaded"
     },
     fr: {
       tabs_collections: "Collections",
@@ -256,6 +260,8 @@ import { buildCardTile } from "./widgets/card_tile.js";
       gen_use_collection: "Utiliser uniquement ma collection",
       gen_generate_btn: "G\u00e9n\u00e9rer les decks",
       gen_status_hint: "En attente de g\u00e9n\u00e9ration.",
+      gen_disclaimer_title: "Module en cours de conception",
+      gen_disclaimer_body: "Cette fonctionnalit\u00e9 est encore en d\u00e9veloppement actif. La g\u00e9n\u00e9ration d'un deck peut prendre <strong>plusieurs minutes</strong> selon la taille de votre collection et les param\u00e8tres choisis.",
       gen_no_collection: "Aucune collection charg\u00e9e",
       gen_import_collection_hint: "Importez une collection dans l'onglet Collections.",
       gen_cards_count: "cartes",
@@ -293,7 +299,9 @@ import { buildCardTile } from "./widgets/card_tile.js";
       credits_wip_notice: "<strong>Travail en cours.</strong> Le calcul de synergies est encore en d\u00e9veloppement actif et loin d'\u00eatre parfait\u00a0\u2014 les r\u00e9sultats peuvent \u00eatre incoh\u00e9rents, incomplets ou erron\u00e9s. L'ontologie m\u00e9canique, les poids de scoring et la logique d'inf\u00e9rence des r\u00f4les sont tous susceptibles d'\u00e9voluer significativement. Utilisez les r\u00e9sultats comme point de d\u00e9part, pas comme v\u00e9rit\u00e9 absolue.",
       // ── Card Finder ──
       tabs_card_finder: "Explorateur de Cartes",
-      subtitle_card_finder: "Recherchez et filtrez n'importe quelle carte par couleur, CMC, m\u00e9caniques et tags."
+      subtitle_card_finder: "Recherchez et filtrez n'importe quelle carte par couleur, CMC, m\u00e9caniques et tags.",
+      cf_collection_only: "Collection uniquement",
+      cf_no_collection_hint: "Aucune collection charg\u00e9e"
     }
   };
 
@@ -620,6 +628,19 @@ import { buildCardTile } from "./widgets/card_tile.js";
               <label class="cf-label" for="cf-cmc-max">Max</label>
               <input type="number" id="cf-cmc-max" class="cf-input cf-input--num" min="0" max="20" placeholder="\u2014">
             </div>`;
+        }
+      },
+      {
+        label: t("cf_collection_only"), open: true,
+        build(body) {
+          const hasCollection = state.collections && state.collections.length > 0;
+          body.innerHTML = `
+            <label class="cf-toggle-label">
+              <input type="checkbox" id="cf-collection-only" class="cf-toggle-input"${hasCollection ? "" : " disabled"}>
+              <span class="cf-toggle-text">${escapeHtml(t("cf_collection_only"))}</span>
+            </label>
+            ${!hasCollection ? `<p class="cf-hint muted">${escapeHtml(t("cf_no_collection_hint"))}</p>` : ""}
+          `;
         }
       }
     ], searchBtn);
@@ -8118,6 +8139,7 @@ import { buildCardTile } from "./widgets/card_tile.js";
     const cmcMin   = (document.getElementById("cf-cmc-min")?.value || "").trim();
     const cmcMax   = (document.getElementById("cf-cmc-max")?.value || "").trim();
     const colors   = cfSelectedColors().join(",");
+    const collOnly = document.getElementById("cf-collection-only")?.checked ?? false;
 
     if (!q && !typeVal && !kwVal && !cmcMin && !cmcMax && !colors) {
       status.textContent = currentUiLanguage() === "fr"
@@ -8129,7 +8151,7 @@ import { buildCardTile } from "./widgets/card_tile.js";
     }
 
     CF_STATE.loading = true;
-    CF_STATE.lastQuery = { q, typeVal, kwVal, cmcMin, cmcMax, colors };
+    CF_STATE.lastQuery = { q, typeVal, kwVal, cmcMin, cmcMax, colors, collOnly };
     status.textContent = currentUiLanguage() === "fr" ? "Recherche en cours…" : "Searching…";
     status.classList.remove("muted");
     grid.innerHTML = "";
@@ -8142,6 +8164,7 @@ import { buildCardTile } from "./widgets/card_tile.js";
     if (cmcMin)  params.set("cmc_min", cmcMin);
     if (cmcMax)  params.set("cmc_max", cmcMax);
     if (colors)  params.set("colors", colors);
+    if (collOnly) params.set("collection_only", "true");
     params.set("limit", String(CF_STATE.limit));
     params.set("offset", String(CF_STATE.offset));
 
