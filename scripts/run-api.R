@@ -69,7 +69,7 @@ if (!file.exists(start_api_file)) {
 
 query_files <- list.files(
   path = file.path(project_dir, "R"),
-  pattern = "^(query_|synergy_).*\\.R$",
+  pattern = "^(query_|synergy_|bridge_|util_).*\\.R$",
   full.names = TRUE
 )
 for (query_file in query_files) {

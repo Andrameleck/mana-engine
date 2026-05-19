@@ -40,7 +40,7 @@ query_collection_db_import <- function(req,
   con <- NULL
   out <- tryCatch(
     {
-      con <- db_connect(resolved$path)
+      con <- .query_api_db_connect(resolved$path)
       query_collection_db_ensure_indexes(con)
       DBI::dbBegin(con)
 
@@ -81,7 +81,7 @@ query_collection_db_import <- function(req,
       list(ok = FALSE, error = e$message)
     },
     finally = {
-      db_disconnect(con)
+      .query_api_db_disconnect(con)
     }
   )
 
@@ -153,7 +153,7 @@ query_collection_db_add_card <- function(db_path = "",
   con <- NULL
   out <- tryCatch(
     {
-      con <- db_connect(resolved$path)
+      con <- .query_api_db_connect(resolved$path)
       query_collection_db_ensure_indexes(con)
       DBI::dbBegin(con)
 
@@ -186,7 +186,7 @@ query_collection_db_add_card <- function(db_path = "",
       list(ok = FALSE, error = e$message)
     },
     finally = {
-      db_disconnect(con)
+      .query_api_db_disconnect(con)
     }
   )
 
@@ -226,7 +226,7 @@ query_collection_db_delete_card <- function(db_path = "",
   con <- NULL
   out <- tryCatch(
     {
-      con <- db_connect(resolved$path)
+      con <- .query_api_db_connect(resolved$path)
       DBI::dbBegin(con)
 
       target_ids <- integer(0)
@@ -327,7 +327,7 @@ query_collection_db_delete_card <- function(db_path = "",
       list(ok = FALSE, error = e$message)
     },
     finally = {
-      db_disconnect(con)
+      .query_api_db_disconnect(con)
     }
   )
 
@@ -397,7 +397,7 @@ query_collection_db_read_source_rows <- function(source_path,
   con <- NULL
   out <- tryCatch(
     {
-      con <- db_connect(source_path)
+      con <- .query_api_db_connect(source_path)
       tables <- DBI::dbListTables(con)
       if (length(tables) == 0L) {
         return(list(
@@ -458,7 +458,7 @@ query_collection_db_read_source_rows <- function(source_path,
       list(ok = FALSE, error = e$message)
     },
     finally = {
-      db_disconnect(con)
+      .query_api_db_disconnect(con)
     }
   )
 

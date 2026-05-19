@@ -156,7 +156,14 @@ query_synergy_jobs_dir <- function(base_dir = "") {
     root <- query_synergy_jobs_env$jobs_dir
   }
   if (!nzchar(root)) {
-    root <- file.path(tempdir(), "mana_engine_synergy_jobs")
+    cache_root <- trimws(Sys.getenv("MANA_ENGINE_SYNERGY_CACHE_DIR", unset = ""))
+    if (!nzchar(cache_root)) {
+      cache_root <- trimws(Sys.getenv("MTGCODEX_SYNERGY_CACHE_DIR", unset = ""))
+    }
+    if (!nzchar(cache_root)) {
+      cache_root <- file.path(tempdir(), "mana-engine-cache")
+    }
+    root <- file.path(cache_root, "jobs")
   }
   if (!dir.exists(root)) {
     dir.create(root, recursive = TRUE, showWarnings = FALSE)
@@ -190,10 +197,15 @@ query_synergy_new_job_id <- function() {
 }
 
 query_synergy_job_runner_path <- function() {
-  candidates <- c(
-    file.path(getwd(), "inst", "jobs", "run_synergy_job.R"),
-    file.path(getwd(), "..", "inst", "jobs", "run_synergy_job.R")
-  )
+  project_dirs <- unique(c(
+    trimws(Sys.getenv("MANA_ENGINE_API_PROJECT_DIR", unset = "")),
+    trimws(Sys.getenv("MTGCODEX_API_PROJECT_DIR", unset = "")),
+    getwd(),
+    file.path(getwd(), ".."),
+    "/app"
+  ))
+  project_dirs <- project_dirs[nzchar(project_dirs)]
+  candidates <- unique(file.path(project_dirs, "inst", "jobs", "run_synergy_job.R"))
   existing <- candidates[file.exists(candidates)]
   if (length(existing) > 0L) {
     return(normalizePath(existing[[1]], winslash = "/", mustWork = TRUE))

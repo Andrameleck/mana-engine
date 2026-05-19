@@ -58,7 +58,7 @@ call_query <- local({
   if (dir.exists(query_dir)) {
     query_files <- list.files(
       query_dir,
-      pattern    = "^(query_|synergy_).*\\.R$",
+      pattern    = "^(query_|synergy_|bridge_|util_).*\\.R$",
       full.names = TRUE
     )
     for (query_file in query_files) {

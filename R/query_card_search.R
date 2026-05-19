@@ -158,13 +158,13 @@ query_card_search <- function(
 
   # ── Query ─────────────────────────────────────────────────────────────────
   con <- tryCatch(
-    db_connect(db_path),
+    .query_api_db_connect(db_path),
     error = function(e) NULL
   )
   if (is.null(con)) {
     return(query_api_error("Failed to connect to Scryfall oracle database.", results = list()))
   }
-  on.exit(db_disconnect(con), add = TRUE)
+  on.exit(.query_api_db_disconnect(con), add = TRUE)
 
   total <- tryCatch({
     row <- DBI::dbGetQuery(con, count_sql, params = bind_vals[names(bind_vals) != "lim" & names(bind_vals) != "off"])

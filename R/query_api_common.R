@@ -1,5 +1,16 @@
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
+.query_api_db_connect <- function(db_path) {
+  DBI::dbConnect(RSQLite::SQLite(), dbname = db_path)
+}
+
+.query_api_db_disconnect <- function(con) {
+  if (!is.null(con) && DBI::dbIsValid(con)) {
+    DBI::dbDisconnect(con)
+  }
+  invisible(NULL)
+}
+
 query_api_error <- function(message, ...) {
   list(
     ok = FALSE,

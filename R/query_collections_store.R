@@ -136,7 +136,7 @@ query_collections_import_csv <- function(req, name = "", platform = "auto", file
       )
     },
     finally = {
-      db_disconnect(con)
+      .query_api_db_disconnect(con)
     }
   )
 
@@ -184,7 +184,7 @@ query_collections_list <- function(client_id = "") {
       list(ok = FALSE, error = e$message)
     },
     finally = {
-      db_disconnect(con)
+      .query_api_db_disconnect(con)
     }
   )
 
@@ -271,7 +271,7 @@ query_collections_get <- function(collection_id = "", client_id = "") {
       list(ok = FALSE, error = e$message)
     },
     finally = {
-      db_disconnect(con)
+      .query_api_db_disconnect(con)
     }
   )
 
@@ -333,7 +333,7 @@ query_collections_delete <- function(collection_id = "", client_id = "") {
       list(ok = FALSE, error = e$message)
     },
     finally = {
-      db_disconnect(con)
+      .query_api_db_disconnect(con)
     }
   )
 
@@ -479,7 +479,7 @@ query_collections_mutate_card <- function(collection_id = "",
       list(ok = FALSE, error = e$message)
     },
     finally = {
-      db_disconnect(con)
+      .query_api_db_disconnect(con)
     }
   )
 
@@ -498,7 +498,7 @@ query_collections_store_path <- function() {
 }
 
 query_collections_connect <- function(db_path) {
-  con <- db_connect(db_path)
+  con <- .query_api_db_connect(db_path)
   query_collections_ensure_schema(con)
   con
 }

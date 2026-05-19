@@ -1501,10 +1501,15 @@ query_synergy_deck_generate_job <- function(req = NULL) {
 }
 
 .deck_gen_job_runner_path <- function() {
-  candidates <- c(
-    file.path(getwd(), "inst", "jobs", "run_deck_gen_job.R"),
-    file.path(getwd(), "..", "inst", "jobs", "run_deck_gen_job.R")
-  )
+  project_dirs <- unique(c(
+    trimws(Sys.getenv("MANA_ENGINE_API_PROJECT_DIR", unset = "")),
+    trimws(Sys.getenv("MTGCODEX_API_PROJECT_DIR", unset = "")),
+    getwd(),
+    file.path(getwd(), ".."),
+    "/app"
+  ))
+  project_dirs <- project_dirs[nzchar(project_dirs)]
+  candidates <- unique(file.path(project_dirs, "inst", "jobs", "run_deck_gen_job.R"))
   existing <- candidates[file.exists(candidates)]
   if (length(existing) > 0L) {
     return(normalizePath(existing[[1]], winslash = "/", mustWork = TRUE))

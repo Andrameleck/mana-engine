@@ -64,3 +64,6 @@ inst/extdata/*/*.rds
 inst/collection/library_scryfall.sqlite
 inst/collection/library_scryfall.sqlite-*
 inst/collection/library_scryfall.sqlite.bak
+
+AGENTS.md
+AGENTS*.md
