@@ -5576,6 +5576,13 @@ code, kbd, samp {
   overflow: hidden;
   background: var(--panel-strong);
 }
+/* Quand entity-list enveloppe un entity-table-shell, la boîte externe est redondante */
+.entity-list:has(.entity-table-shell) {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
 .entity-list > p,
 .folder-grid > p {
   padding: 10px 14px;
