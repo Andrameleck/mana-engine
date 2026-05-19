@@ -946,13 +946,14 @@ query_synergy_find_in_catalog <- function(payload = list(),
       nzchar(cid) && !(cid %in% pool_ids)
     }, utils::head(scored_positive, package_top_n + expansion_bridge_n * 3L))
     bridge_cards <- lapply(bridge_tier, function(entry) entry$card)
-    if (length(bridge_cards) > 0L) {
+    expansion_slots <- max(0L, package_top_n - length(package_pool))
+    if (length(bridge_cards) > 0L && expansion_slots > 0L) {
       package_pool <- query_synergy_expand_group_pool(
         initial_pool = package_pool,
         bridge_candidates = bridge_cards,
         registry = registry,
         format_name = format_name,
-        expansion_cap = expansion_bridge_n
+        expansion_cap = min(expansion_bridge_n, expansion_slots)
       )
     }
   }
