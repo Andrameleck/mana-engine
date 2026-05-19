@@ -6,7 +6,7 @@ test_that("stored collection card quantity mutations update rows and totals", {
   on.exit(unlink(tmp), add = TRUE)
 
   con <- mtgcodex.api:::query_collections_connect(tmp)
-  on.exit(mtgcodex.api:::query_db_disconnect(con), add = TRUE)
+  on.exit(mtgcodex.api:::db_disconnect(con), add = TRUE)
 
   DBI::dbExecute(
     con,

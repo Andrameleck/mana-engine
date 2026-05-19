@@ -761,7 +761,7 @@ query_lotusnoir_db_connect <- function(db_path = "") {
   }
 
   dir.create(dirname(target), recursive = TRUE, showWarnings = FALSE)
-  query_db_connect(target)
+  db_connect(target)
 }
 
 query_lotusnoir_db_ensure_schema <- function(con) {
@@ -1258,7 +1258,7 @@ query_lotusnoir_download_decks_sqlite <- function(db_path = "",
                                                   verbose = TRUE) {
   con <- NULL
   on.exit({
-    query_db_disconnect(con)
+    db_disconnect(con)
   }, add = TRUE)
 
   con <- query_lotusnoir_db_connect(db_path)
@@ -1450,10 +1450,10 @@ query_lotusnoir_card_stats <- function(card_name,
 
   con <- NULL
   on.exit({
-    query_db_disconnect(con)
+    db_disconnect(con)
   }, add = TRUE)
 
-  con <- query_db_connect(db_target)
+  con <- db_connect(db_target)
   query_lotusnoir_db_ensure_schema(con)
 
   filter_sql <- ""

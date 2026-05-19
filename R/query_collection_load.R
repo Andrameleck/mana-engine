@@ -81,16 +81,11 @@ query_collection_load_db <- function(db_path, table_name) {
     return(deps)
   }
 
-  con <- NULL
-  db_payload <- tryCatch(
-    {
-      con <- query_db_connect(db_path)
+  tryCatch(
+    with_db(db_path, function(con) {
       tables <- DBI::dbListTables(con)
       if (length(tables) == 0L) {
-        return(list(
-          ok = FALSE,
-          error = "database has no tables"
-        ))
+        return(list(ok = FALSE, error = "database has no tables"))
       }
 
       selected_table <- query_collection_resolve_table_name(tables, table_name)
@@ -116,16 +111,9 @@ query_collection_load_db <- function(db_path, table_name) {
         rows = query_db_rows_to_records(rows),
         row_count = nrow(rows)
       )
-    },
-    error = function(e) {
-      list(ok = FALSE, error = e$message)
-    },
-    finally = {
-      query_db_disconnect(con)
-    }
+    }),
+    error = function(e) list(ok = FALSE, error = e$message)
   )
-
-  db_payload
 }
 
 query_collection_load_db_rows <- function(con, selected_table, tables) {

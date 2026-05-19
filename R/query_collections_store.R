@@ -136,7 +136,7 @@ query_collections_import_csv <- function(req, name = "", platform = "auto", file
       )
     },
     finally = {
-      query_db_disconnect(con)
+      db_disconnect(con)
     }
   )
 
@@ -184,7 +184,7 @@ query_collections_list <- function(client_id = "") {
       list(ok = FALSE, error = e$message)
     },
     finally = {
-      query_db_disconnect(con)
+      db_disconnect(con)
     }
   )
 
@@ -271,7 +271,7 @@ query_collections_get <- function(collection_id = "", client_id = "") {
       list(ok = FALSE, error = e$message)
     },
     finally = {
-      query_db_disconnect(con)
+      db_disconnect(con)
     }
   )
 
@@ -333,7 +333,7 @@ query_collections_delete <- function(collection_id = "", client_id = "") {
       list(ok = FALSE, error = e$message)
     },
     finally = {
-      query_db_disconnect(con)
+      db_disconnect(con)
     }
   )
 
@@ -479,7 +479,7 @@ query_collections_mutate_card <- function(collection_id = "",
       list(ok = FALSE, error = e$message)
     },
     finally = {
-      query_db_disconnect(con)
+      db_disconnect(con)
     }
   )
 
@@ -498,7 +498,7 @@ query_collections_store_path <- function() {
 }
 
 query_collections_connect <- function(db_path) {
-  con <- query_db_connect(db_path)
+  con <- db_connect(db_path)
   query_collections_ensure_schema(con)
   con
 }
@@ -1131,10 +1131,8 @@ query_collections_enrich_rows <- function(rows) {
     return(rows)
   }
 
-  ref_con <- NULL
   rows <- tryCatch(
-    {
-      ref_con <- query_db_connect(ref_path)
+    with_db(ref_path, function(ref_con) {
       for (i in seq_len(nrow(rows))) {
         has_mana <- nzchar(rows$mana_cost[[i]])
         has_text <- nzchar(rows$oracle_text[[i]])
@@ -1162,13 +1160,8 @@ query_collections_enrich_rows <- function(rows) {
         }
       }
       rows
-    },
-    error = function(e) {
-      rows
-    },
-    finally = {
-      query_db_disconnect(ref_con)
-    }
+    }),
+    error = function(e) rows
   )
 
   rows$abilities <- rows$keywords

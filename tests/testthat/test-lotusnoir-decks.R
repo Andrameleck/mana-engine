@@ -108,8 +108,7 @@ test_that("lotusnoir sqlite schema stores deck and cards", {
 
   tmp <- tempfile(fileext = ".sqlite")
   con <- mtgcodex.api:::query_lotusnoir_db_connect(tmp)
-  on.exit(mtgcodex.api:::query_db_disconnect(con), add = TRUE)
-
+  on.exit(mtgcodex.api:::db_disconnect(con), add = TRUE)
   mtgcodex.api:::query_lotusnoir_db_ensure_schema(con)
   mtgcodex.api:::query_lotusnoir_db_upsert_deck_urls(
     con,
@@ -153,7 +152,7 @@ test_that("lotusnoir card_stats returns deck counts formats and cooccurrences", 
 
   tmp <- tempfile(fileext = ".sqlite")
   con <- mtgcodex.api:::query_lotusnoir_db_connect(tmp)
-  on.exit(mtgcodex.api:::query_db_disconnect(con), add = TRUE)
+  on.exit(mtgcodex.api:::db_disconnect(con), add = TRUE)
   mtgcodex.api:::query_lotusnoir_db_ensure_schema(con)
 
   deck_a <- list(
