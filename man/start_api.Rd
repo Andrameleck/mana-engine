@@ -19,7 +19,7 @@ start_api(
 
 \item{swagger}{Logical. Enable Swagger UI (default \code{TRUE}).}
 
-\item{hide_ui_from_swagger}{Logical. Hide \verb{/ui/} routes from Swagger
+\item{hide_ui_from_swagger}{Logical. Hide legacy \verb{/ui/} routes from Swagger
 to reduce noise (default \code{TRUE}).}
 
 \item{...}{Additional arguments passed to \code{plumber::pr_run()}.}
@@ -29,6 +29,7 @@ Invisible \code{NULL}. Called for side effects.
 }
 \description{
 Starts the Plumber HTTP API server. The API exposes endpoints for
-collection management, synergy scoring, deck generation, and a
-browser-based UI served at \verb{/ui/}.
+collection management, synergy scoring, and deck generation. Production
+deployments usually serve the browser UI from a separate web repository via
+the reverse proxy.
 }

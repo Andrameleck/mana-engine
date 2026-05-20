@@ -101,6 +101,33 @@ function() {
   query_call("query_health")
 }
 
+#* Submit user feedback
+#*
+#* Stores feedback (bug reports, suggestions, etc.) to a local NDJSON file and
+#* optionally sends an email notification if SMTP env vars are configured.
+#*
+#* **JSON body fields:**
+#* - `type` (string) — `"bug"`, `"suggestion"`, or `"other"` (default `"other"`)
+#* - `message` (string, required) — feedback text
+#* - `email` (string, optional) — reply-to address
+#* - `client_id` (string, optional) — client identifier
+#* @tag System
+#* @serializer unboxedJSON
+#* @post /feedback
+function(req, res) {
+  body <- tryCatch(
+    jsonlite::fromJSON(req$postBody, simplifyVector = FALSE),
+    error = function(e) list()
+  )
+  query_call(
+    "query_feedback_submit",
+    type      = body$type      %||% "",
+    message   = body$message   %||% "",
+    email     = body$email     %||% "",
+    client_id = body$client_id %||% query_req_client_id(req)
+  )
+}
+
 #* Load a collection from a source file (legacy)
 #*
 #* Parses a collection file from disk and returns the card records. Prefer
