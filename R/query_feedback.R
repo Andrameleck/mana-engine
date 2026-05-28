@@ -70,6 +70,70 @@ query_feedback_submit <- function(type, message, email, client_id) {
 }
 
 #' @noRd
+query_feedback_list <- function(limit = "100", type = "", token = "") {
+  admin_token <- trimws(as.character(Sys.getenv("FEEDBACK_ADMIN_TOKEN", unset = "")))
+  token <- trimws(as.character(token %||% ""))
+  if (nzchar(admin_token) && !identical(token, admin_token)) {
+    return(list(ok = FALSE, error = "Unauthorized."))
+  }
+
+  limit_int <- suppressWarnings(as.integer(limit))
+  if (!is.finite(limit_int) || is.na(limit_int)) {
+    limit_int <- 100L
+  }
+  limit_int <- max(1L, min(500L, limit_int))
+
+  valid_types <- c("bug", "suggestion", "other")
+  type <- trimws(tolower(as.character(type %||% "")))
+  if (!type %in% valid_types) {
+    type <- ""
+  }
+
+  project_root <- Sys.getenv("MANA_ENGINE_API_PROJECT_DIR", unset = "")
+  if (!nzchar(project_root)) {
+    cwd <- getwd()
+    probe <- cwd
+    for (i in seq_len(6L)) {
+      if (file.exists(file.path(probe, "DESCRIPTION"))) { project_root <- probe; break }
+      probe <- dirname(probe)
+    }
+    if (!nzchar(project_root)) project_root <- cwd
+  }
+
+  feedback_path <- file.path(project_root, "inst", "feedback", "feedback.ndjson")
+  if (!file.exists(feedback_path)) {
+    return(list(ok = TRUE, count = 0L, items = list()))
+  }
+
+  lines <- readLines(feedback_path, warn = FALSE, encoding = "UTF-8")
+  lines <- trimws(lines)
+  lines <- lines[nzchar(lines)]
+  lines <- rev(lines)
+
+  if (length(lines) == 0L) {
+    return(list(ok = TRUE, count = 0L, items = list()))
+  }
+
+  entries <- lapply(lines, function(line) {
+    tryCatch(
+      jsonlite::fromJSON(line, simplifyVector = FALSE),
+      error = function(e) NULL
+    )
+  })
+  entries <- Filter(Negate(is.null), entries)
+
+  if (nzchar(type)) {
+    entries <- Filter(function(entry) identical(tolower(as.character(entry$type %||% "")), type), entries)
+  }
+
+  if (length(entries) > limit_int) {
+    entries <- entries[seq_len(limit_int)]
+  }
+
+  list(ok = TRUE, count = as.integer(length(entries)), items = entries)
+}
+
+#' @noRd
 query_feedback_send_email <- function(entry) {
   email_to  <- Sys.getenv("FEEDBACK_EMAIL_TO",   unset = "")
   smtp_host <- Sys.getenv("FEEDBACK_SMTP_HOST",  unset = "")

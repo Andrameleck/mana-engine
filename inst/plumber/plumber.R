@@ -128,6 +128,26 @@ function(req, res) {
   )
 }
 
+#* List stored feedback entries
+#*
+#* Returns latest feedback records stored by `POST /feedback`.
+#*
+#* Query params:
+#* - `limit` (integer, optional, default 100, max 500)
+#* - `type` (string, optional) - `bug`, `suggestion`, `other`
+#* - `token` (string, optional) - required only when `FEEDBACK_ADMIN_TOKEN` is configured
+#* @tag System
+#* @serializer unboxedJSON
+#* @get /feedback
+function(req, res, limit = "100", type = "", token = "") {
+  query_call(
+    "query_feedback_list",
+    limit = limit,
+    type = type,
+    token = token
+  )
+}
+
 #* Load a collection from a source file (legacy)
 #*
 #* Parses a collection file from disk and returns the card records. Prefer
