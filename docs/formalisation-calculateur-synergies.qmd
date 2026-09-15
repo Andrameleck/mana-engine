@@ -1,0 +1,1222 @@
+---
+title: "Mana-engine : formaliser les synergies et la construction de decks"
+subtitle: "Espace multidimensionnel, capacités, interactions et optimisation"
+author: "Document de conception pour Mana-engine"
+date: "2026-09-13"
+lang: fr
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    theme: cosmo
+    code-copy: true
+    html-math-method: mathjax
+    mermaid:
+      theme: neutral
+---
+
+::: {.callout-important}
+## Statut du document
+
+Ce document définit une **architecture mathématique proposée**. Il ne décrit pas des fonctionnalités déjà toutes implémentées dans Mana-engine et ne constitue pas une preuve de conformité à l'ensemble des règles de Magic.
+
+Les cartes A, B, C et les résultats statistiques illustratifs sont **fictifs**. Le chapitre « Motifs, moteurs stratégiques, cartes déployées et soutien » utilise également la liste réelle de 60 cartes fournie par l'utilisateur, sans lui attribuer de performances simulées. Les hypothèses simplificatrices sont explicites. Les règles officielles et le texte des cartes doivent être versionnés dans une implémentation ; les [règles publiées par Wizards](https://magic.wizards.com/en/rules) constituent la référence normative.
+:::
+
+# L'idée générale, sans équations
+
+L'intuition de départ consiste à placer chaque carte dans un espace dont les dimensions décrivent ses couleurs, ses types, ses coûts, ses effets et ses conditions. C'est une représentation utile, mais deux recherches différentes doivent être distinguées :
+
+1. **Ressemblance** : quelles cartes possèdent des caractéristiques comparables ?
+2. **Complémentarité** : ce qu'une carte produit permet-il à une autre de fonctionner ou d'être plus efficace ?
+
+Deux producteurs de jetons peuvent se ressembler. Un producteur de jetons et une capacité qui récompense l'arrivée de créatures peuvent se compléter. Ces relations ne sont ni équivalentes ni incompatibles : une paire peut présenter les deux.
+
+Il faut ensuite distinguer trois niveaux de conclusion :
+
+| Niveau | Question | Résultat autorisé |
+|---|---|---|
+| Correspondance structurelle | Des sorties et des conditions semblent-elles compatibles ? | Interaction candidate |
+| Faisabilité | Existe-t-il une séquence respectant les conditions et les ressources du modèle ? | Interaction réalisable dans un contexte déclaré |
+| Utilité | Cette interaction améliore-t-elle un résultat du deck ? | Gain mesuré pour un objectif et des scénarios donnés |
+
+Une carte peut avoir beaucoup de correspondances et apporter peu. Une seule interaction peut être décisive. Un nombre de correspondances n'est donc pas, par définition, une probabilité de synergie.
+
+```{mermaid}
+%%| label: fig-vue-ensemble
+%%| fig-cap: "Les trois niveaux du calcul : repérer, vérifier, évaluer."
+flowchart TD
+  A["Cartes et textes de référence"] --> B["Description structurée des capacités"]
+  B --> C["Espace de caractéristiques"]
+  B --> D["Entrées, sorties, événements et modificateurs"]
+  C --> E["Ressemblances et alternatives"]
+  D --> F["Correspondances fonctionnelles candidates"]
+  F --> G["Vérification des conditions et des séquences"]
+  G --> H["Groupes réalisables et moteurs avec interface"]
+  E --> I["Construction de decks sous contraintes"]
+  H --> I
+  I --> J["Évaluation sur des scénarios définis"]
+  J --> K["Résultats, limites et explications"]
+  J -->|"Besoins observés et remplacements"| I
+```
+
+# Objet mathématique et notation
+
+## Ce que le calculateur cherche
+
+Étant donnés un ensemble de cartes disponibles, un commandant éventuel, des cartes imposées et des contraintes, on cherche plusieurs decks admissibles qui atteignent au mieux des objectifs déclarés.
+
+La recherche de cartes reliant A à B est un cas particulier : on cherche un petit ensemble supplémentaire permettant une interaction pertinente impliquant A et B.
+
+| Symbole | Définition | Domaine ou unité |
+|---|---|---|
+| $\mathcal C=\{c_1,\ldots,c_N\}$ | Catalogue de cartes distinctes du modèle | Ensemble fini |
+| $\phi(c)$ | Description vectorielle d'une carte | Espace de caractéristiques $\mathcal X$ |
+| $\mathcal A(c)$ | Capacités structurées de la carte | Ensemble fini |
+| $\mathfrak M$ | Moteur : motif, interface et réalisations possibles | Structure paramétrée |
+| $\Sigma$ | Stratégie : moteurs, cartes exploitées, soutien, politique et objectifs | Structure contextuelle |
+| $\kappa$ | Contexte : format, règles, commandant, restrictions, modèle | Données versionnées |
+| $x_i$ | Nombre d'exemplaires de $c_i$ dans la bibliothèque initiale | Entier non négatif |
+| $D$ | Deck, représenté par le vecteur des quantités et son commandant | Multiensemble |
+| $s$ | État de partie représenté par le modèle | $s\in\mathcal S_\kappa$ |
+| $a$ | Action ou étape de résolution modélisée | Opérateur partiel |
+| $\tau$ | Trajectoire d'états et d'actions | Séquence |
+| $H$ | Horizon de l'évaluation | Tours ou étapes, à préciser |
+| $\pi$ | Politique de jeu : règle de choix des actions | Fonction de l'information disponible |
+| $\omega$ | Tirages et événements aléatoires du scénario | Variable aléatoire |
+| $Y_j$ | Résultat mesuré numéro $j$ | Probabilité, cartes, mana, tours, etc. |
+| $V_j(D\mid\kappa,\pi)$ | Espérance du résultat $Y_j$ | Même unité que $Y_j$ |
+
+On distingue l'identité d'une carte, ses impressions et ses exemplaires physiques. Plusieurs impressions d'une même carte ne créent pas plusieurs choix indépendants pour une contrainte de singleton. Les prix et la possession peuvent dépendre de l'impression, tandis que les capacités sont rattachées à l'identité de jeu et à leurs faces.
+
+## Hypothèses de la première version du modèle
+
+- Le catalogue, les textes et les règles sont figés pour une exécution.
+- Le modèle déclare les capacités qu'il sait interpréter. Une capacité inconnue ne devient pas une capacité sans effet.
+- Les simulations utilisent une politique de jeu documentée et un horizon fini.
+- Une bibliothèque est mélangée selon le protocole déclaré ; les mulligans et les recherches de cartes sont traités explicitement s'ils sont activés.
+- Un résultat obtenu sans adversaires mesure une régularité interne. Il ne mesure pas un taux de victoire multijoueur.
+- L'exemple de construction Commander de ce document suppose **un seul commandant fixé**. Les configurations à plusieurs commandants nécessitent une extension des contraintes.
+
+# Représenter une carte dans un espace multidimensionnel
+
+## Un espace de données mixtes
+
+Une couleur est une catégorie, un coût comporte des quantités et des symboles, un effet décrit une transformation. On ne doit pas traiter toutes ces informations comme des nombres de même nature.
+
+On définit d'abord un espace produit :
+
+$$
+\mathcal X=\mathcal X_{\mathrm{id}}
+\times\mathcal X_{\mathrm{coûts}}
+\times\mathcal X_{\mathrm{entrées}}
+\times\mathcal X_{\mathrm{sorties}}
+\times\mathcal X_{\mathrm{événements}}
+\times\mathcal X_{\mathrm{modificateurs}}.
+$$
+
+Une vectorisation numérique de cet espace peut ensuite être construite pour l'indexation. Elle est une **projection descriptive** de la carte, qui doit rester liée à ses capacités structurées.
+
+Exemples de représentations :
+
+| Propriété | Encodage possible | Limite à préserver |
+|---|---|---|
+| Couleurs | Indicateurs W, U, B, R, G | Couleur et identité couleur sont distinctes |
+| Types | Plusieurs indicateurs simultanés | Une créature-artefact conserve les deux types |
+| Coût de mana | Expression structurée | La valeur de mana ne décrit pas les paiements possibles |
+| Production de jetons | Quantité et prédicat du jeton | Condition, fréquence et état engagé séparés |
+| Pioche | Action, quantité, bénéficiaire | Piocher et mettre une carte en main sont distingués |
+| Déclenchement | Événement et filtre | Lancer un sort et créer un jeton sont distingués |
+| Information non interprétée | Valeur inconnue et provenance | Inconnu n'est pas faux ni zéro |
+
+Chaque propriété extraite conserve au minimum son texte source, la version de l'extracteur et son statut de validation. Une confiance d'extraction éventuelle n'est pas une mesure de puissance.
+
+```{mermaid}
+%%| label: fig-espace-blocs
+%%| fig-cap: "Comparer les mêmes dimensions révèle des ressemblances ; relier des blocs différents révèle des complémentarités candidates."
+flowchart LR
+  subgraph A["Description de A"]
+    AI["Identité et types"]
+    AC["Coûts et conditions"]
+    AO["Sorties et événements"]
+  end
+  subgraph B["Description de B"]
+    BI["Identité et types"]
+    BC["Coûts et conditions"]
+    BO["Sorties et événements"]
+    BT["Événements récompensés"]
+  end
+  AI -.->|"Comparaison descriptive"| BI
+  AO -.->|"Comparaison descriptive"| BO
+  AO -->|"Peut fournir une entrée"| BC
+  AO -->|"Peut satisfaire un déclencheur"| BT
+```
+
+## Formaliser la ressemblance
+
+Pour des ensembles de caractéristiques binaires connues $F_i$ et $F_j$, un indice de Jaccard pondéré est :
+
+$$
+\operatorname{Sim}(i,j)=
+\frac{\sum_{k\in F_i\cap F_j}w_k}
+{\sum_{k\in F_i\cup F_j}w_k},
+\qquad w_k>0.
+$$
+
+Il appartient à $[0,1]$ lorsque le dénominateur est positif. Si les deux ensembles sont vides, on renvoie « comparaison indisponible » : l'absence de propriétés ne doit pas créer une forte ressemblance.
+
+On compare uniquement des dimensions connues des deux côtés et on rapporte séparément leur couverture. Une similarité élevée calculée sur deux dimensions connues parmi cent reste peu informative.
+
+Pour une variable quantitative, il faut choisir une échelle : un écart de deux unités de mana ne se compare pas directement à un écart de deux points de vie. Les pondérations et normalisations sont des choix de modèle à valider.
+
+**Usage prévu :** rechercher des remplaçants, de la redondance et des groupes descriptifs. La formule ne démontre aucune interaction entre capacités.
+
+## Pourquoi compter les dimensions communes ne suffit pas
+
+Considérons les descriptions simplifiées suivantes. Les conditions de mise en jeu sont omises ici, puis réintroduites dans la vérification.
+
+| Carte fictive | Produit une créature | Produit un artefact | Récompense une arrivée de créature | Récompense un lancement d'artefact |
+|---|---:|---:|---:|---:|
+| A : crée une créature-artefact | 1 | 1 | 0 | 0 |
+| B : crée une créature-artefact | 1 | 1 | 0 | 0 |
+| C : pioche à l'arrivée d'une créature | 0 | 0 | 1 | 0 |
+| E : pioche au lancement d'un artefact | 0 | 0 | 0 | 1 |
+
+A et B se ressemblent. L'effet de A peut déclencher C, mais la création du jeton ne constitue pas un lancement de sort pour E. Le calcul doit comparer **des dimensions reliées par une règle sémantique**, et pas seulement des coordonnées identiques.
+
+# Décrire les capacités et leurs interfaces
+
+## Une carte porte plusieurs capacités
+
+On représente une carte par :
+
+$$
+c=(\mathrm{id},\mathrm{caractéristiques},\mathcal A(c),\mathrm{provenance}).
+$$
+
+Une capacité $a\in\mathcal A(c)$ reçoit la structure :
+
+$$
+a=(\mathrm{kind},P_a,C_a,E_a,\Gamma_a,M_a,L_a).
+$$
+
+| Terme | Sens |
+|---|---|
+| $\mathrm{kind}$ | Activée, déclenchée, statique, effet de sort, etc. |
+| $P_a$ | Préconditions et filtres : zone, contrôleur, cibles, timing… |
+| $C_a$ | Coûts et ressources à mobiliser ou à consommer |
+| $E_a$ | Effets et événements produits à la résolution |
+| $\Gamma_a$ | Événement déclencheur éventuel et son filtre |
+| $M_a$ | Modifications continues ou remplacements représentés |
+| $L_a$ | Limites : fréquence, durée, restrictions d'utilisation |
+
+Une capacité statique modifie les règles applicables ou les caractéristiques ; elle n'est pas forcément une action que le joueur choisit d'exécuter. Une capacité déclenchée réagit à un événement ; elle ne produit pas nécessairement son effet immédiatement.
+
+## Des entrées et sorties typées
+
+Une ressource est décrite par un type et des attributs. Par exemple :
+
+$$
+r=(\mathrm{objet},\mathrm{zone},\mathrm{contrôleur},\mathrm{types},
+\mathrm{état},\mathrm{quantité},\mathrm{restrictions}).
+$$
+
+Un événement possède un autre schéma :
+
+$$
+e=(\mathrm{kind},\mathrm{objet},\mathrm{acteur},
+\mathrm{zone\_origine},\mathrm{zone\_destination},\mathrm{attributs}).
+$$
+
+Ces schémas sont extensibles. Les références à « cette créature » ou « un autre artefact » doivent être liées à des identités d'objets, pas seulement à des étiquettes.
+
+On distingue quatre interfaces :
+
+- **Entrée consommée** : mana dépensé, carte défaussée, permanent sacrifié.
+- **Condition non consommée** : contrôler un artefact, avoir un certain total de points de vie.
+- **Événement observé** : lancer un sort, arriver sur le champ de bataille, attaquer.
+- **Cible d'un modificateur** : créature recevant un bonus, sort dont le coût est réduit.
+
+```{mermaid}
+%%| label: fig-interfaces
+%%| fig-cap: "La même production peut alimenter plusieurs relations de nature différente."
+flowchart LR
+  A["A : crée une créature-artefact"] --> R["Objet sur le champ de bataille"]
+  A --> E["Événement : arrivée d'une créature-artefact"]
+  R --> B["B : exige de contrôler un artefact"]
+  R --> C["C : peut consommer cet artefact"]
+  R --> D["D : donne un bonus aux créatures-artefacts"]
+  E --> F["F : récompense cette arrivée"]
+```
+
+Les flèches représentent des **candidatures de relations**. Elles n'autorisent pas à consommer plusieurs fois le même objet.
+
+# Une compatibilité orientée pour sélectionner les candidats
+
+## Relations entre sorties et exigences
+
+Soit $O(a)$ l'ensemble des sorties canoniques d'une capacité et $I(b)$ l'ensemble des entrées, conditions, événements attendus et cibles de modification de l'autre.
+
+On définit un test typé :
+
+$$
+M_\kappa(o,i)\in\{\mathrm{vrai},\mathrm{faux},\mathrm{inconnu}\}.
+$$
+
+« Vrai » signifie qu'une correspondance de cette nature est établie au niveau descriptif, sous les hypothèses portées par les ports. Cela ne signifie pas que toutes les conditions de la capacité destinataire sont satisfaites en partie.
+
+Plus précisément, après avoir lié les références à un même objet ou événement $v$, soit $O_o(v)$ le prédicat garanti par la sortie et $R_i(v)$ le prédicat demandé. Avec une théorie de types et de règles $\mathcal K_\kappa$, on peut définir :
+
+$$
+M_\kappa(o,i)=
+\begin{cases}
+\mathrm{vrai}, & \mathcal K_\kappa\models\forall v\,[O_o(v)\Rightarrow R_i(v)],\\
+\mathrm{faux}, & \mathcal K_\kappa\models\neg\exists v\,[O_o(v)\land R_i(v)],\\
+\mathrm{inconnu}, & \text{sinon ou si la procédure ne conclut pas.}
+\end{cases}
+$$
+
+Cette définition suppose $O_o$ satisfaisable dans la théorie ; une sortie contradictoire est une erreur de description, à rejeter avant le test. Elle porte sur le type et les attributs de l'interface, pas sur la disponibilité actuelle de la carte. Une sortie conditionnelle reste attachée à sa garde, vérifiée lors de l'exécution. Les variables de quantité et les coûts conjoints sont traités dans la vérification de faisabilité.
+
+Exemples :
+
+- Un jeton créature-artefact correspond à une exigence de type artefact.
+- Son arrivée correspond à un événement d'arrivée d'artefact.
+- Sa création ne correspond pas à un événement de lancement de sort.
+- Une sortie dont le contrôleur n'est pas déterminé peut donner une correspondance inconnue avec « sous votre contrôle ».
+
+Pour une capacité destinataire ayant $|I(b)|>0$, un score de présélection possible est :
+
+$$
+K_\kappa(a\to b)=
+\frac{1}{|I(b)|}
+\sum_{i\in I(b)}
+\mathbf 1\!\left[\exists o\in O(a):M_\kappa(o,i)=\mathrm{vrai}\right].
+$$
+
+On pose $K_\kappa(a\to b)=0$ si $I(b)$ est vide. Les ports inconnus restent au dénominateur et leur proportion est rapportée séparément. La canonisation évite de compter deux fois deux formulations équivalentes d'un même port.
+
+Cette formule prend des valeurs dans $[0,1]$. Elle mesure une couverture descriptive d'interfaces, **ni une faisabilité, ni une probabilité, ni une utilité**. Le nombre de ports dépend du schéma choisi : on ne compare pas aveuglément des scores provenant de versions différentes de ce schéma.
+
+Pour des cartes, une agrégation simple est :
+
+$$
+K_\kappa(c_i\to c_j)=
+\max_{a\in\mathcal A(c_i),\,b\in\mathcal A(c_j)}K_\kappa(a\to b),
+$$
+
+avec maximum égal à zéro si aucune paire de capacités n'est représentée. Les correspondances inconnues sont conservées dans un canal distinct ; zéro n'est donc pas une preuve d'absence de synergie.
+
+En général :
+
+$$
+K_\kappa(c_i\to c_j)\ne K_\kappa(c_j\to c_i).
+$$
+
+## Pourquoi un produit scalaire est seulement une approximation
+
+Une approximation vectorielle pourrait écrire :
+
+$$
+\widetilde K(i\to j)=p_i^\top Bq_j,
+$$
+
+où $p_i$ décrit les sorties, $q_j$ les besoins et $B$ les correspondances entre leurs catégories. $B$ permet de relier des dimensions différentes.
+
+Cependant, si $q_j$ contient des quantités demandées, ce produit peut augmenter lorsque le coût augmente : une carte plus exigeante semblerait alors meilleure. On réserve donc cette approximation à des indicateurs de présence ou à une représentation calibrée ; on ne l'interprète pas comme un rendement.
+
+Le contrôle des quantités appartient à la vérification des actions, où une ressource consommée ne peut pas être réutilisée sans être recréée.
+
+# Passer de la correspondance à la faisabilité
+
+## L'état et les actions admissibles
+
+Un état représenté peut inclure :
+
+$$
+s=(\mathrm{objets},\mathrm{zones},\mathrm{mana},\mathrm{vie},
+\mathrm{tour},\mathrm{phase},\mathrm{priorité},\mathrm{pile},
+\mathrm{effets},\mathrm{historique}).
+$$
+
+Les objets conservent notamment leurs types, leur contrôleur, leurs marqueurs et leur état engagé. L'historique contient ce qui est nécessaire aux restrictions « une fois par tour » ou aux conditions portant sur des événements passés.
+
+Pour une action $a$, une affectation $\theta$ choisit les objets, cibles et modes concernés. L'action est admissible si :
+
+$$
+\operatorname{Adm}(a,s,\theta)=
+P_a(s,\theta)\land
+\operatorname{Payable}(C_a,s,\theta)\land
+\operatorname{Timing}(a,s)\land
+\operatorname{Limits}(L_a,s).
+$$
+
+Toutes ces conditions doivent être vraies. Si l'une est inconnue, l'action n'est pas présentée comme prouvée admissible.
+
+Le modèle définit une transition partielle, éventuellement aléatoire :
+
+$$
+s_{t+1}\sim T_\kappa(\cdot\mid s_t,a_t,\theta_t).
+$$
+
+Une activation ou un lancement peut d'abord payer un coût et placer un objet sur la pile. La résolution est une autre étape : elle ne doit pas être confondue avec le paiement. Un modèle simplifié sans réponses adverses peut regrouper certaines étapes, à condition de déclarer cette approximation et ses limites.
+
+## Quantités, objets et double comptage
+
+Dans un sous-modèle de ressources fongibles, avec stock $r\in\mathbb N^d$, consommation $u_a$ et production $v_a$ :
+
+$$
+r\ge u_a,\qquad r'=r-u_a+v_a.
+$$
+
+L'inégalité est composante par composante. Cette équation ne représente pas à elle seule les règles de mana coloré, les restrictions de dépense ou les objets à plusieurs types.
+
+Par exemple, une unique créature-artefact est un seul objet. Deux compteurs indépendants « une créature » et « un artefact » pourraient autoriser à tort deux sacrifices distincts. La vérification doit affecter les coûts à des objets identifiés et appliquer exactement les possibilités de réutilisation autorisées par les règles du coût concerné.
+
+Même problème pour les rôles : une carte sacrifiée pour produire du mana peut ne plus être disponible pour attaquer. Ses bénéfices ne s'additionnent pas automatiquement.
+
+## Exemple de séquence vérifiable
+
+On suppose A, B et C déjà sur le champ de bataille, toutes les capacités connues, aucune réponse adverse et aucune limite de fréquence supplémentaire.
+
+- A : « Payez un mana : créez un jeton de créature-artefact 1/1. »
+- B : « Chaque fois qu'une créature-artefact arrive sous votre contrôle, piochez une carte. »
+- C : « Vos créatures-artefacts ont +1/+1. »
+
+État initial : un mana disponible, bibliothèque non vide, aucune créature-artefact.
+
+```{mermaid}
+%%| label: fig-sequence
+%%| fig-cap: "Exemple fictif : coût, production, déclenchement et effet continu."
+sequenceDiagram
+  participant J as Joueur
+  participant A as Capacité de A
+  participant S as État de partie
+  participant B as Capacité de B
+  participant C as Effet de C
+  J->>A: Active et paie un mana
+  A->>S: À la résolution, crée le jeton
+  S->>B: Événement d'arrivée correspondant
+  C-->>S: Le jeton bénéficie du bonus continu
+  B->>S: À sa résolution, fait piocher une carte
+```
+
+Après la séquence : zéro mana de ce stock, un jeton bénéficiant du bonus et une carte piochée. Si le mana initial manque, l'activation proposée n'est pas admissible. Si B récompense les sorts lancés au lieu des arrivées, la pioche n'est pas déclenchée par la création du jeton.
+
+Cet exemple prouve seulement le comportement du sous-modèle déclaré. Il ne mesure pas encore la probabilité d'assembler A, B et C dans un deck.
+
+# Hypergraphe de capacités et recherche de groupes
+
+## Pourquoi des relations à plusieurs entrées
+
+Un graphe ordinaire représente facilement « A contribue à B ». Une capacité peut toutefois exiger **à la fois** plusieurs ressources et plusieurs conditions. On utilise alors un hypergraphe orienté :
+
+$$
+\mathcal H=(\mathcal V,\mathcal E),\qquad
+e=(U_e,V_e,g_e).
+$$
+
+$U_e$ est un multiensemble d'entrées requises, $V_e$ un multiensemble de sorties et $g_e$ une garde logique. Les nœuds représentent des faits, des événements ou des ressources typées ; les hyperarêtes portent les capacités et leur carte source.
+
+Les ressources consommées, les conditions seulement lues et les événements restent distingués dans le stockage.
+
+```{mermaid}
+%%| label: fig-et-ou
+%%| fig-cap: "Une capacité peut exiger plusieurs conditions ET accepter plusieurs fournisseurs alternatifs."
+flowchart LR
+  A["Producteur A"] --> R["Artefact disponible"]
+  B["Producteur B"] --> R
+  R --> G{"ET : toutes les exigences"}
+  M["Mana payable"] --> G
+  T["Timing et fréquence autorisés"] --> G
+  G --> C["Capacité consommatrice"]
+  C --> O["Effet obtenu"]
+```
+
+L'inspiration des réseaux de Petri est utile pour représenter les consommations, productions et conflits de ressources. Une extension doit cependant traiter les prédicats, les identités d'objets et les règles spécifiques ; un réseau de flux simple n'est pas un moteur complet de Magic. Voir les [introductions aux réseaux de Petri de l'Université de Hambourg](https://www.informatik.uni-hamburg.de/TGI/PetriNets/introductions/).
+
+## Chemin dans le graphe et trajectoire réalisable
+
+Une trajectoire candidate est :
+
+$$
+\tau=(s_0,a_0,\theta_0,s_1,\ldots,a_{T-1},\theta_{T-1},s_T).
+$$
+
+Elle n'est acceptée que si chaque action est admissible et chaque transition est conforme au modèle. Pour un objectif $g(s)$, une preuve existentielle de faisabilité prend la forme :
+
+$$
+\exists\tau:\quad T\le H,\quad g(s_T)=\mathrm{vrai}.
+$$
+
+Avec de l'aléatoire, une trajectoire possible ne signifie pas une réussite garantie ou probable. On conserve sa probabilité lorsque le modèle permet de la calculer ; la régularité sera évaluée séparément.
+
+Une recherche limitée par le temps ou la profondeur distingue :
+
+- **Témoin trouvé** : une trajectoire valide est fournie.
+- **Impossible dans le modèle borné** : l'espace borné pertinent a été exploré exhaustivement.
+- **Indéterminé** : recherche interrompue, règles inconnues ou espace seulement partiellement exploré.
+
+Une boucle graphique ne prouve pas une combo infinie. Il faut démontrer la répétabilité, la restauration des préconditions, les bilans de ressources, les limites d'activation et un bénéfice effectivement cumulable.
+
+## Retrouver les cartes qui relient A et B
+
+Soit $S$ le groupe imposé et $Z\subseteq\mathcal C\setminus S$ un ensemble de cartes supplémentaires. On fixe une limite $k$ et un objectif $g$ :
+
+$$
+|Z|\le k.
+$$
+
+On recherche des $Z$ pour lesquels $S\cup Z$ permet une trajectoire atteignant $g$. Pour éviter de déclarer A et B « reliées » alors que l'une ne sert à rien, on exige une contribution identifiable des cartes imposées : action utilisée, condition fournie ou modification nécessaire à la trajectoire présentée.
+
+Retirer une carte peut invalider ce témoin sans invalider toutes les autres stratégies possibles. Il faut donc distinguer **nécessaire au témoin fourni** et **nécessaire à toute solution**.
+
+Un complément est minimal par inclusion si aucun sous-ensemble strict $Z'\subsetneq Z$ ne satisfait le même critère. Cela ne signifie pas qu'il a la plus petite taille parmi toutes les solutions.
+
+Sans objectif utilisateur, le système explore plusieurs objectifs déclarés : produire du mana utilisable, piocher, développer le champ de bataille, protéger une menace, etc. Il ne peut pas chercher « toutes les stratégies intéressantes » sans définition opérationnelle de l'intérêt.
+
+## Contenir la combinatoire
+
+Le nombre de compléments de taille au plus $k$ parmi $n$ candidats est :
+
+$$
+\sum_{j=0}^{k}\binom{n}{j}.
+$$
+
+Il est fini mais devient rapidement grand. L'implémentation doit combiner :
+
+1. Indexation des capacités par ressources et événements.
+2. Recherche à rebours depuis un besoin, puis vérification en avant.
+3. Limites explicites sur les cartes supplémentaires, les actions et le temps.
+4. Déduplication des solutions fonctionnellement équivalentes.
+5. Conservation de plusieurs solutions intéressantes selon les objectifs.
+
+Un filtrage trop strict par ressemblance peut supprimer précisément les cartes de liaison recherchées. La présélection doit aussi explorer les fournisseurs de besoins, les bénéficiaires de sorties et les cartes remplissant des fonctions de soutien.
+
+# Motifs, moteurs stratégiques, cartes déployées et soutien {#sec-moteurs}
+
+## Pourquoi ajouter ce niveau de représentation
+
+La cohérence d'un deck peut venir d'un **moyen d'accès commun** à des cartes dont les effets finaux diffèrent. Ces cartes n'ont pas besoin de s'alimenter directement entre elles.
+
+L'exemple fourni par l'utilisateur emploie Entomb et Buried Alive pour préparer des cartes au cimetière, puis Reanimate et Exhume pour les mettre sur le champ de bataille. Les créatures accessibles par ce mécanisme peuvent apporter des ressources, restreindre les actions adverses ou protéger le joueur. Accélération, sélection et interaction soutiennent les séquences.
+
+Le nom humain « Reanimator » décrit cette famille après reconnaissance. Il ne doit pas être une condition nécessaire pour découvrir les capacités qui la composent.
+
+On introduit cinq niveaux, qui restent reliés aux textes et aux actions concrètes :
+
+```{mermaid}
+%%| label: fig-niveaux-strategiques
+%%| fig-cap: "Un moteur généralise plusieurs réalisations concrètes d'un même service."
+flowchart LR
+  A["Capacités typées"] --> B["Motifs de transformation"]
+  B --> C["Moteurs avec interface"]
+  C --> D["Stratégies et choix conditionnels"]
+  D --> E["Decks avec quantités"]
+  E -->|"Mesures et contre-exemples"| C
+```
+
+## Motif : une structure avec des paramètres
+
+Un motif $\nu$ est un petit hypergraphe de capacités avec des variables de ressources, de zones et d'objets. Une instanciation $\eta$ associe ces variables à des capacités et objets concrets, en respectant leurs types et contraintes conjointes.
+
+Exemple de motif de déploiement :
+
+$$
+p\in\mathrm{Bibliothèque}
+\xrightarrow{\ a\ }
+p\in\mathrm{Cimetière}
+\xrightarrow{\ b\ }
+p\in\mathrm{Champ\ de\ bataille}.
+$$
+
+La variable $p$ suit la carte concernée par les effets. Les identités d'objets de jeu sont mises à jour aux changements de zone conformément aux règles ; on ne suppose pas que toutes les propriétés de l'ancien objet persistent.
+
+Le motif impose notamment que la carte choisie pour $a$ soit admissible pour $b$. Entomb peut choisir une carte quelconque ; cela n'implique pas que toutes ses sorties conviennent à Reanimate. Le moteur doit **choisir une carte de créature appropriée**, puis suivre cette sélection dans les étapes suivantes.
+
+Sous une convention de composition de fonctions, « effectuer Entomb puis Reanimate » s'écrit $T_{\mathrm{Reanimate}}\circ T_{\mathrm{Entomb}}$, lorsque les opérateurs sont déterministes et définis sur les états rencontrés. Avec choix, aléatoire et réponses adverses, on compose les transitions d'état et leurs politiques, pas simplement deux noms de zones.
+
+La recherche de motifs peut combiner des règles de composition générales et l'exploration des capacités. Elle ne découvre pas automatiquement un objectif intéressant en l'absence de critères d'évaluation.
+
+## Moteur : un service paramétré et ses réalisations
+
+On définit un moteur stratégique par :
+
+$$
+\mathfrak M=(\nu,\mathcal I,\mathcal O,\mathcal R,\mathcal L).
+$$
+
+| Élément | Définition |
+|---|---|
+| $\nu$ | Motif abstrait ou famille de motifs |
+| $\mathcal I(s,p)$ | Contrat d'entrée : état requis et paramètres admissibles |
+| $\mathcal O(s',p)$ | Service obtenu à l'état de sortie |
+| $\mathcal R$ | Instanciations concrètes possibles par des cartes et capacités |
+| $\mathcal L$ | Limites, règles supportées et hypothèses d'exécution |
+
+Un moteur peut servir une seule fois et être stratégiquement déterminant. La répétabilité et la fiabilité sont des propriétés à analyser, pas des prérequis à sa définition.
+
+Pour un état initial $s$, une carte paramètre $p$, un horizon d'actions $H$ et le contexte $\kappa$, soit $\mathcal T_H(\mathfrak M,p,s\mid\kappa)$ l'ensemble des trajectoires conformes aux réalisations du moteur, partant de $s$, respectant $\mathcal I(s,p)$ et atteignant $\mathcal O(s',p)$ dans cet horizon.
+
+On définit la compatibilité contextuelle :
+
+$$
+\operatorname{Compat}_H(p,\mathfrak M,s\mid\kappa)=
+\mathbf 1\left[\mathcal T_H(\mathfrak M,p,s\mid\kappa)\ne\varnothing\right].
+$$
+
+Cette définition mathématique est binaire ; la procédure de recherche conserve les trois statuts « témoin trouvé », « impossible dans le modèle borné » et « indéterminé » lorsqu'elle ne peut pas décider cette existence.
+
+La compatibilité ne contient pas un prédicat opaque « carte puissante ». Elle répond à une question d'accès ou de transformation. L'intérêt de la sortie est évalué ensuite. Un transfert réalisable vers le champ de bataille peut être peu utile ou mener à une défaite.
+
+## Carte déployée, bénéfice final et soutien
+
+Le terme anglais *payload* désigne ici une carte que le moteur permet de déployer ou d'exploiter. Il ne désigne pas nécessairement une grosse créature : selon le moteur, il peut s'agir d'un sort lancé, d'un permanent ou d'une ressource transformée. Le *payoff* désigne le bénéfice recherché, qui peut être porté par cette carte ou par une autre capacité.
+
+Une stratégie est représentée par :
+
+$$
+\Sigma=(\mathbb M,\mathcal P,\mathcal U,\pi,\mathbf g),
+$$
+
+où $\mathbb M$ est un ensemble de moteurs compatibles, $\mathcal P$ les cartes ou classes de cartes à exploiter, $\mathcal U$ les fonctions de soutien, $\pi$ la politique de choix et $\mathbf g$ les objectifs.
+
+Cette notation n'impose pas trois lots disjoints de cartes. Une carte peut participer au moteur, produire un bénéfice et soutenir une autre séquence. Le deck reste le vecteur de quantités $x$ ; l'appartenance à plusieurs fonctions ne multiplie pas les exemplaires disponibles.
+
+| Fonction de soutien | Effet recherché sur les trajectoires | Ce qui doit être mesuré |
+|---|---|---|
+| Accélération | Rendre certaines actions payables plus tôt | Distribution des tours de réussite et ressources consommées |
+| Sélection | Modifier l'accès aux pièces nécessaires | Disponibilité réelle après les choix et coûts de sélection |
+| Protection et perturbation | Réduire certaines interruptions | Réussite contre des interactions adverses spécifiées |
+| Redondance | Ouvrir des réalisations alternatives | Gain de disponibilité face à la saturation et aux cartes inutilisables |
+| Récupération | Rétablir une trajectoire après un échec | Délai et probabilité de reconstruction |
+
+L'ajout d'une carte de soutien n'est pas toujours bénéfique : elle occupe un emplacement, coûte des ressources et peut retarder l'exécution. Sa valeur se mesure par remplacement dans un deck complet, selon la méthode du chapitre suivant.
+
+## Étude de cas : la liste de 60 cartes fournie
+
+La liste comporte 60 cartes, dont 21 terrains. Elle sert de **cas de reconstruction d'une logique stratégique**. Son format et sa légalité à une date donnée ne sont pas présumés ; il ne s'agit pas d'appliquer les contraintes Commander de 99 cartes à cet exemple.
+
+| Partie descriptive | Cartes et quantités de la liste |
+|---|---|
+| Cartes à déployer par réanimation | 1 Elesh Norn ; 1 Sire of Insanity ; 2 Atraxa, Grand Unifier ; 1 Archon of Cruelty ; 1 Platinum Emperion ; 2 Iona, Shield of Emeria |
+| Préparation du cimetière | 4 Entomb ; 4 Buried Alive |
+| Accès depuis le cimetière | 4 Reanimate ; 2 Exhume |
+| Accélération et sélection | 4 Dark Ritual ; 4 Brainstorm |
+| Interaction à évaluer selon le scénario | 2 Flusterstorm ; 2 Mana Short ; 2 Duress ; 2 Thoughtseize |
+| Autre permanent à évaluer | 1 Ashiok, Sculptor of Fears |
+| Terrains | 2 Bojuka Bog ; 3 Dismal Backwater ; 3 Island ; 4 Polluted Delta ; 5 Swamp ; 4 Underground River |
+
+Ce classement est une lecture initiale, pas une affectation exclusive de rôles. L'identifiant exact et les faces de chaque carte doivent être résolus à l'import. L'entrée « Elesh Norn » est conservée telle que fournie, sans lui attribuer arbitrairement les capacités d'une autre carte portant un nom plus long.
+
+```{mermaid}
+%%| label: fig-moteur-reanimation
+%%| fig-cap: "Même accès, plusieurs finalités : les bénéfices des créatures sont exploités après leur arrivée, selon leur capacité et son timing."
+flowchart TD
+  P["Créature choisie dans la bibliothèque"] --> A{"Réalisation du transfert"}
+  A --> E["Entomb"]
+  A --> B["Buried Alive"]
+  E --> G["Créature au cimetière"]
+  B --> G
+  G --> R{"Réalisation de la réanimation"}
+  R --> RE["Reanimate"]
+  R --> EX["Exhume"]
+  RE --> F["Créature sur le champ de bataille"]
+  EX --> F
+  F --> V["Ressources : Atraxa"]
+  F --> L["Restriction de sorts : Iona"]
+  F --> I["Pression et interaction : Archon"]
+  F --> D["Stabilisation du total de vie : Emperion"]
+  S["Accélération, sélection et interaction"] -.-> A
+  S -.-> R
+```
+
+Le moteur accepte des créatures aux finalités différentes. Il ne les choisit pas seulement sur la base de leur valeur de mana. Pour Atraxa, l'effet d'arrivée révèle des cartes et permet d'en mettre certaines en main selon leurs types : ce bénéfice ne doit pas être traduit comme une instruction de pioche. [Notes officielles de Phyrexia: All Will Be One](https://magic.wizards.com/en/news/feature/phyrexia-all-will-be-one-release-notes)
+
+Les textes du référentiel local consultés pour cette étude décrivent Entomb comme une recherche suivie d'une mise au cimetière, Dark Ritual comme une production de trois manas noirs pour un mana noir, et Exhume comme un retour de créature pour chaque joueur. Buried Alive permet de chercher jusqu'à trois créatures pour les mettre au cimetière, avec un coût de trois manas dont un noir. [Notes officielles de Modern Horizons 3](https://magic.wizards.com/en/news/feature/modern-horizons-3-release-notes)
+
+### Un témoin d'exécution et son bilan
+
+Supposons : notre phase principale avec priorité et pile vide, un Swamp dégagé sur le champ de bataille, Dark Ritual, Entomb et Reanimate en main, Atraxa dans la bibliothèque, 20 points de vie, et aucune réponse adverse ni restriction supplémentaire. Les sorts se résolvent successivement.
+
+| Étape | Mana noir disponible après l'étape | Changement pertinent |
+|---|---:|---|
+| Engager Swamp | 1 | Source engagée |
+| Lancer et résoudre Dark Ritual | 3 | Un sort consommé depuis la main ; production de mana |
+| Lancer et résoudre Entomb | 2 | Atraxa passe de la bibliothèque au cimetière ; bibliothèque mélangée |
+| Lancer et résoudre Reanimate | 1 | Atraxa arrive ; perte de 7 points de vie dans ces hypothèses |
+| Résoudre la capacité d'arrivée d'Atraxa | 1 | Acquisition de cartes dépendant des dix cartes révélées |
+
+Ce témoin utilise une source initiale de mana, trois cartes de sorts et une cible dans la bibliothèque. Il ne démontre pas la fréquence de cette main ni une victoire. Les trois paiements de sorts totalisent trois manas noirs dépensés ; le rituel en produit trois après son propre paiement. Confondre mana produit, mana brut dépensé et mana initial requis fausserait le bilan.
+
+Sans Dark Ritual, Entomb suivi de Reanimate demande ici deux manas noirs disponibles au cours de la séquence. Dark Ritual suivi de Buried Alive consomme les trois manas produits par le rituel : il ne reste pas automatiquement de quoi lancer Reanimate dans cette branche.
+
+Reanimate met la créature sur le champ de bataille **avant** de faire perdre de la vie. La perte n'est pas un coût supplémentaire à payer pour lancer le sort. Si elle entraîne la défaite, la capacité d'arrivée d'Atraxa ne sauve pas rétroactivement le joueur. Avec Platinum Emperion réanimé, sa capacité peut empêcher cette variation de vie dès cette résolution. La carte déployée modifie donc les conséquences du moteur lui-même. [Précisions officielles sur Reanimate](https://magic.wizards.com/en/news/feature/outlaws-of-thunder-junction-release-notes)
+
+### Des chemins alternatifs et des interactions de soutien
+
+La préparation ne doit pas être réduite au seul chemin bibliothèque → cimetière. Une créature déjà en main demande un autre transfert. Le texte de Thoughtseize du référentiel autorise à cibler un joueur, y compris soi-même : sous les conditions appropriées, cette carte peut contribuer à défausser sa propre créature, ou perturber la main adverse. Son rôle dépend de l'action choisie, et les deux usages ne sont pas simultanés.
+
+Brainstorm fait piocher trois cartes puis en remettre deux de la main sur la bibliothèque. En comptant Brainstorm quitté de la main, il n'apporte pas à lui seul un gain net de trois cartes. Il peut replacer une créature en main dans une zone où Entomb peut la chercher ; cette possibilité est distincte de simplement augmenter le nombre de pièces vues. Ses choix et le remélange ultérieur doivent être simulés. [Texte et précisions officiels sur Brainstorm](https://media.wizards.com/2021/downloads/STX_Release_Notes/EN_MTGSTX_FAQ_04122021.pdf)
+
+Exhume peut aussi bénéficier aux adversaires. Une carte qui fait défausser une créature adverse peut donc améliorer leur sortie lors de cette résolution. Le score de protection ne doit pas être ajouté sans tenir compte de cette conséquence.
+
+## Coût effectif : un ensemble de bilans, pas un scalaire universel
+
+Pour une trajectoire $\tau$, on conserve un vecteur :
+
+$$
+\mathbf c(\tau)=
+\bigl(\mathbf m_{\mathrm{initial}},\mathbf m_{\mathrm{dépensé}},
+n_{\mathrm{cartes\ consommées}},\ell_{\mathrm{perdue}},
+\ell_{\mathrm{gagnée}},t_{\mathrm{obtention}}\bigr).
+$$
+
+Les vecteurs de mana distinguent les couleurs et les restrictions ; le timing reste porté par la trajectoire. Les autres composantes sont respectivement des nombres de cartes, des points de vie et une date d'obtention. Les effets défavorables sur l'état adverse sont conservés dans les résultats de trajectoire, et ne sont pas tous résumés par ce vecteur de coût.
+
+Pour les trajectoires réalisables, on peut conserver les bilans non dominés :
+
+$$
+\mathcal C_{\mathrm{eff}}(p\mid\mathfrak M,s)
+=\operatorname{Pareto}\{\mathbf c(\tau):
+\tau\in\mathcal T_H(\mathfrak M,p,s\mid\kappa)\}.
+$$
+
+La dominance oriente les dépenses et le délai vers la minimisation, les gains de vie vers la maximisation ; d'autres objectifs peuvent être ajoutés. Les contraintes de paiement restent vérifiées avant toute comparaison. Des bilans identiques ne rendent pas deux trajectoires équivalentes face à l'interaction adverse.
+
+La différence « valeur de mana de la créature moins coût de Reanimate » est un indicateur descriptif très incomplet. Elle omet la préparation, les cartes consommées, les couleurs, la perte de vie et l'accès réel au lancement normal. Un coût imprimé de sept manas ne signifie pas automatiquement une disponibilité au tour 7.
+
+## Compression temporelle : comparer des distributions de réussite
+
+Soit $T_\rho(p)$ le premier tour où la carte $p$ est déployée par le mode d'accès $\rho$ selon un protocole fixé. On pose $T_\rho=+\infty$ en cas de non-obtention. Pour des tours discrets non négatifs :
+
+$$
+F_\rho(t)=\Pr(T_\rho(p)\le t).
+$$
+
+Les courbes $F_{\mathrm{moteur}}$ et $F_{\mathrm{référence}}$ donnent une information plus complète qu'un unique « tour moyen ». Elles doivent comparer le même événement de sortie, une même distribution d'états initiaux et des politiques de jeu documentées.
+
+Pour un horizon de tours $H_T$, on peut utiliser le temps tronqué :
+
+$$
+\overline T_\rho^{(H_T)}
+=\mathbb E[\min(T_\rho,H_T+1)]
+=\sum_{t=0}^{H_T}(1-F_\rho(t)).
+$$
+
+Le gain temporel tronqué est alors :
+
+$$
+\Delta T^{(H_T)}=
+\overline T_{\mathrm{référence}}^{(H_T)}-
+\overline T_{\mathrm{moteur}}^{(H_T)}
+=\sum_{t=0}^{H_T}
+\bigl(F_{\mathrm{moteur}}(t)-F_{\mathrm{référence}}(t)\bigr).
+$$
+
+Un gain positif favorise le moteur sur cette mesure. Les échecs reçoivent la valeur conventionnelle $H_T+1$, sans prétendre réussir à ce tour. Le gain combine vitesse et fréquence d'obtention ; on publie aussi les courbes et la probabilité de réussite avant l'horizon.
+
+Si le deck ne peut jamais lancer normalement la carte, la référence peut rester à zéro : le moteur ouvre alors un accès plutôt que d'avancer un lancement qui aurait réellement eu lieu. Conditionner la moyenne uniquement aux parties réussies pourrait masquer un moteur très rapide mais presque toujours indisponible.
+
+Le bénéfice obtenu dépend également de la date et de la situation adverse. On l'évalue par une fonction $u_j(p,t,s)$ ou par les résultats complets de trajectoire. Aucun principe général ne garantit qu'une carte déployée plus tôt améliore tous les objectifs, notamment si cela consomme la protection nécessaire.
+
+## Diversité des cartes déployées : couverture de décisions réelles
+
+Une interface commune permet de choisir plusieurs réponses à des situations différentes. Cette diversité n'est utile que si le moteur permet effectivement d'accéder à la réponse au bon moment.
+
+Soit $h$ l'information disponible au moment du choix, $\nu_h$ une distribution de situations d'évaluation fixée, et $A_{\mathfrak M}(\mathcal P,h)$ l'ensemble des options déployables connues à ce moment. $u(p,h)$ est leur utilité attendue selon cette information, et $u_0(h)$ la valeur de l'option de ne pas engager ce déploiement.
+
+Une mesure diagnostique de couverture décisionnelle est :
+
+$$
+\operatorname{Cov}(\mathcal P)=
+\mathbb E_{h\sim\nu_h}
+\left[\max\left(\{u_0(h)\}\cup
+\{u(p,h):p\in A_{\mathfrak M}(\mathcal P,h)\}\right)\right].
+$$
+
+Cette formule représente un choix parmi les options réellement disponibles. Elle suppose les utilités évaluées et le protocole de situations fixé ; elle n'autorise pas à choisir après avoir vu des informations adverses cachées. Si l'accès à une carte n'est qu'aléatoirement possible, son risque fait partie de l'évaluation de l'action correspondante.
+
+Ajouter une carte aux options sans coût ne peut pas dégrader le maximum. Ajouter cette carte **au deck** peut en revanche dégrader la régularité en prenant la place d'une autre : la sélection finale utilise donc des remplacements à taille fixe et réévalue l'accès. Une pénalité universelle de redondance serait également incorrecte : plusieurs cartes similaires peuvent être nécessaires pour rendre un effet disponible.
+
+La distinction « moteur, cartes déployées, soutien » est une organisation de la recherche et des explications, pas une fonction additive $V(M)+V(P)+V(S)$.
+
+## Généraliser et valider sans recopier un archétype
+
+Le même cadre doit traiter d'autres services : convertir des lancements de sorts en jetons, amplifier des marqueurs, réduire des coûts, donner accès à des cartes exilées, protéger une menace, etc. Tous ne sont pas des transferts de zone et tous n'ont pas une carte déployée distincte. Le paramètre $p$ peut alors désigner une ressource ou une action à exploiter.
+
+Pour le cas fourni, la réussite du calculateur ne consiste pas à reproduire exactement les 60 choix historiques. Il doit retrouver les motifs d'accès, sélectionner des réalisations viables, expliquer les différentes finalités et mesurer les compromis du soutien. Des listes différentes peuvent satisfaire cette exigence.
+
+Le jeu de validation doit notamment inclure :
+
+- Une carte accessible mais peu utile, pour séparer interface et intérêt.
+- Une créature utile mais déjà en main, pour exiger un chemin de préparation adapté.
+- Dark Ritual suivi de Buried Alive avec aucun mana restant, pour éviter une réanimation gratuite inventée.
+- Reanimate avec une perte de vie fatale, puis avec Platinum Emperion, pour vérifier l'ordre et les modificateurs.
+- Exhume dans un contexte favorable à l'adversaire, pour évaluer les deux côtés.
+- Une option de déploiement diverse mais inaccessible dans la situation, pour éviter un choix omniscient.
+- Un cas analogue hors cimetière, réservé à l'évaluation, pour vérifier la généralisation des motifs.
+
+# Mesurer la valeur et la synergie
+
+## Définir des résultats observables
+
+La valeur d'un deck doit dépendre d'une mesure explicite :
+
+$$
+V_j(D\mid\kappa,\pi)=
+\mathbb E_{\omega\sim\Omega_\kappa}
+\left[Y_j(\tau(D,\pi,\omega;\kappa))\right].
+$$
+
+La politique $\pi$ utilise seulement l'information accessible au joueur représenté. Une politique qui connaît l'ordre caché de la bibliothèque donnerait une mesure différente et généralement optimiste.
+
+Exemples de $Y_j$ :
+
+| Mesure | Définition possible | Interprétation |
+|---|---|---|
+| Lancement du commandant | Indicateur de lancement avant le tour $t$ | Régularité de mise en place |
+| Fonctionnement du moteur | Indicateur d'une séquence fonctionnelle avant $t$ | Régularité de la stratégie définie |
+| Production utile | Ressource nette utilisable à un horizon | Rendement selon le modèle |
+| Reconstruction | Indicateur de réactivation après une perturbation donnée | Résilience dans ce scénario |
+| Victoire | Indicateur de victoire dans un modèle adversarial défini | Performance limitée aux adversaires et politiques modélisés |
+
+On ne somme pas directement des tours, des cartes piochées et des euros. Pour un score agrégé, il faut des transformations et préférences explicites, ou conserver un vecteur de résultats.
+
+## Valeur d'un remplacement
+
+Pour un deck complet, on compare des decks de même taille. Si $c_r$ est présent et si le remplacement reste admissible :
+
+$$
+\Delta_j(c_i\leftarrow c_r\mid D)=
+V_j(D-\{c_r\}+\{c_i\})-V_j(D).
+$$
+
+La notation désigne ici des opérations de multiensemble sur un exemplaire. Les paramètres $\kappa$ et $\pi$ sont identiques et omis pour alléger l'écriture.
+
+On teste également des remplacements par groupes de même cardinalité. Une sélection uniquement carte par carte peut manquer une interaction dont les pièces ont peu de valeur séparément.
+
+## Interaction entre deux cartes : expérience à quatre variantes
+
+On fixe un deck de référence avec deux emplacements. Chaque emplacement contient soit sa carte de référence, soit la carte candidate correspondante. Toutes les variantes doivent respecter les mêmes contraintes.
+
+Soit $f(U)$ la valeur de la variante dans laquelle les candidats de $U\subseteq\{A,B\}$ remplacent leurs références respectives. L'interaction est :
+
+$$
+I_{AB}=f(\{A,B\})-f(\{A\})-f(\{B\})+f(\varnothing).
+$$
+
+Le terme de référence est indispensable, sauf si la mesure a déjà été centrée sur zéro. Cette définition dépend des cartes de référence, du reste du deck, de l'objectif et de l'échelle de mesure.
+
+| Variante fictive | Probabilité de fonctionnement avant le tour 5 |
+|---|---:|
+| Références | $0{,}20$ |
+| A uniquement | $0{,}25$ |
+| B uniquement | $0{,}24$ |
+| A et B | $0{,}50$ |
+
+$$
+I_{AB}=0{,}50-0{,}25-0{,}24+0{,}20=0{,}21.
+$$
+
+L'interaction vaut **21 points de pourcentage**, et non « une puissance de 21 % ». Le gain total sur le deck de référence est, lui, de 30 points. Ces nombres sont illustratifs, pas issus de simulations du calculateur.
+
+Une interaction positive ne garantit pas que les deux cartes méritent leur place : une autre paire peut donner un meilleur résultat absolu. Une interaction nulle pour cet objectif ne prouve pas une indépendance dans tous les aspects du jeu.
+
+## Interactions d'ordre supérieur
+
+Pour $m$ emplacements et leur ensemble de candidats $G$, le contraste d'ordre $m$ est :
+
+$$
+I_G=\sum_{U\subseteq G}(-1)^{|G|-|U|}f(U).
+$$
+
+Pour trois candidats :
+
+$$
+\begin{aligned}
+I_{ABC}={}&f(ABC)-f(AB)-f(AC)-f(BC)\\
+&+f(A)+f(B)+f(C)-f(\varnothing).
+\end{aligned}
+$$
+
+Chaque terme est la valeur d'un deck complet avec ses remplacements correspondants. Le contraste mesure ce qui n'est pas expliqué par les effets des sous-groupes sur cette échelle. Son calcul exact demande $2^m$ variantes : on le réserve à de petits groupes sélectionnés.
+
+## La place exacte de l'ANOVA
+
+Une expérience factorielle peut faire varier la présence des candidats dans leurs emplacements et étudier les effets principaux et les interactions. Pour deux facteurs binaires, un modèle descriptif sur l'échelle des probabilités est :
+
+$$
+\mathbb E[Y\mid z_A,z_B]=
+\beta_0+\beta_Az_A+\beta_Bz_B+\beta_{AB}z_Az_B.
+$$
+
+Avec les quatre moyennes de cellule, $\beta_{AB}$ correspond au contraste $I_{AB}$. Un résultat binaire peut être analysé avec un modèle binomial, par exemple logistique, mais son coefficient d'interaction est alors sur l'échelle des log-odds et n'est pas directement le contraste en points de probabilité.
+
+L'ANOVA ne construit pas les capacités ni les clusters. Elle fait partie des outils possibles pour analyser des expériences déjà définies. Toute inférence doit tenir compte du protocole, de la variance, de l'appariement et des comparaisons multiples.
+
+## Estimation et incertitude
+
+Avec $R$ trajectoires indépendantes suivant le protocole :
+
+$$
+\widehat V_j=\frac1R\sum_{r=1}^R Y_{j,r}.
+$$
+
+Pour un indicateur de réussite, l'erreur-type approximative est :
+
+$$
+\operatorname{SE}(\widehat p)\approx
+\sqrt{\frac{\widehat p(1-\widehat p)}{R}}.
+$$
+
+Cette approximation devient insuffisante près de 0 ou 1 et pour de petits échantillons ; on utilise alors un intervalle adapté, par exemple Wilson. Une absence d'échec observé n'établit pas une certitude.
+
+Pour comparer deux decks, on peut coupler les scénarios aléatoires avec une correspondance explicite des emplacements. On calcule alors les différences par paire et leur incertitude ; on ne les traite pas comme des échantillons indépendants. Réutiliser seulement le même numéro de graine ne garantit pas un appariement pertinent si les trajectoires consomment différemment l'aléatoire.
+
+Les decks sélectionnés sont réévalués sur des scénarios non utilisés pendant l'optimisation, afin de limiter la sélection de résultats artificiellement favorables.
+
+# Redondance, saturation et complémentarité
+
+## Une première mesure probabiliste de disponibilité
+
+Pour une bibliothèque mélangée de $N$ cartes, dont $K$ satisfont un critère fixe, après $n$ tirages uniformes sans remise :
+
+$$
+\Pr(X\ge1)=1-\frac{\binom{N-K}{n}}{\binom{N}{n}},
+\qquad 0\le K\le N,\quad 0\le n\le N.
+$$
+
+Par convention, $\binom{a}{b}=0$ si $b>a$ pour les entiers non négatifs concernés. La probabilité vaut zéro si $K=0$ ou $n=0$, et un si tous les échantillons possibles contiennent une carte satisfaisant le critère.
+
+Cette formule mesure **avoir vu une carte**, pas pouvoir la lancer ni activer son effet. Les mulligans sélectifs, les recherches, les conditions d'activation et les rôles qui se chevauchent demandent un modèle supplémentaire.
+
+## Pourquoi le glouton n'a pas une garantie générale ici
+
+Une fonction sous-modulaire présente des gains marginaux décroissants :
+
+$$
+F(A\cup\{c\})-F(A)\ge F(B\cup\{c\})-F(B),
+\quad A\subseteq B,\ c\notin B.
+$$
+
+Certaines fonctions de couverture saturante satisfont cette propriété. Une interaction complémentaire peut la violer. Contre-exemple exact :
+
+$$
+F(S)=\mathbf 1[\{A,B\}\subseteq S].
+$$
+
+Ajouter B à l'ensemble vide apporte zéro ; ajouter B à $\{A\}$ apporte un. Le gain augmente donc lorsque l'autre pièce est déjà présente.
+
+Les garanties du glouton pour une fonction monotone sous-modulaire sous contrainte de cardinalité ne s'appliquent pas automatiquement à la qualité globale d'un deck. Voir cette [formalisation des algorithmes gloutons sous ces hypothèses](https://devel.isa-afp.org/entries/Submodular_Greedy.html).
+
+Une stratégie pratique peut malgré tout utiliser une construction gloutonne, puis des échanges multiples, plusieurs points de départ et une recherche de groupes. Il faut la qualifier d'heuristique et mesurer ses résultats.
+
+# Construire un deck sous contraintes
+
+## Variables de sélection et légalité
+
+Pour le cas d'un seul commandant fixé et exclu du catalogue de sélection de la bibliothèque :
+
+$$
+x_i\in\{0,\ldots,u_i\},\qquad \sum_{i=1}^N x_i=99.
+$$
+
+$u_i$ est la multiplicité autorisée après prise en compte du format, des exceptions et du mode de collection. Les terrains de base et les textes autorisant plusieurs exemplaires nécessitent des bornes adaptées ; imposer $x_i\in\{0,1\}$ à toutes les cartes serait incorrect pour ce périmètre.
+
+Les contraintes de légalité sont générées à partir des données et des règles versionnées :
+
+- Carte admissible dans le format et identité couleur compatible.
+- Règles de commandant et exceptions supportées.
+- Quantités imposées ou cartes exclues par l'utilisateur.
+- Restrictions supplémentaires demandées, par exemple budget ou absence de certaines combos.
+
+Une légalité inconnue ne doit pas être silencieusement considérée comme vérifiée. Ce document donne un schéma d'optimisation ; les [règles officielles du format Commander](https://magic.wizards.com/en/formats/commander) doivent guider le validateur concret.
+
+Avec $o_i$ exemplaires possédés :
+
+$$
+x_i\le o_i
+$$
+
+en mode « collection uniquement ». Pour un achat complémentaire, on introduit $b_i=\max(0,x_i-o_i)$ et, avec des prix non négatifs $p_i$ :
+
+$$
+\sum_i p_i b_i\le B.
+$$
+
+Un prix inconnu n'est pas un prix nul. Le modèle doit indiquer comment il gère cette incertitude. Le budget du commandant est ajouté séparément s'il entre dans le budget demandé.
+
+## Couverture des fonctions
+
+Soit $a_{ir}\in\{0,1\}$ l'indicateur descriptif du rôle $r$ pour la carte $i$ :
+
+$$
+h_r(x)=\sum_i a_{ir}x_i.
+$$
+
+Une carte peut porter plusieurs rôles. Ce comptage indique des possibilités, pas des effets tous disponibles simultanément.
+
+Une pénalité souple de sous-couverture est :
+
+$$
+P_{\mathrm{rôles}}(x)=\sum_r w_r\max(0,\ell_r-h_r(x)),
+\qquad w_r\ge0.
+$$
+
+Les cibles $\ell_r$ dépendent de la stratégie ; elles ne sont pas des constantes universelles de Commander. Les dépendances conditionnelles doivent être raffinées par les scénarios et les mesures de régularité.
+
+## Représenter des groupes dans un solveur
+
+Pour chaque groupe candidat $g$, on définit des quantités requises $q_{gi}$ et une variable binaire $y_g$ indiquant sa présence complète.
+
+Des indicateurs $z_{gi}$ représentent exactement la condition $x_i\ge q_{gi}$ pour chaque carte requise. Avec $m_g$ cartes distinctes requises :
+
+$$
+y_g\le z_{gi}\quad\forall i\in g,
+\qquad
+y_g\ge\sum_{i\in g}z_{gi}-(m_g-1).
+$$
+
+Ainsi $y_g=1$ si et seulement si toutes les quantités requises sont présentes. La reification des seuils $z_{gi}$ fait partie de l'implémentation du solveur.
+
+La présence du groupe n'implique pas qu'il sera pioché ou joué. Un bonus de groupe dans un objectif de construction reste une approximation de sa contribution, à valider ensuite.
+
+Un objectif de présélection possible est :
+
+$$
+\widetilde Q(x)=\sum_i v_i x_i+\sum_g b_g y_g-P_{\mathrm{rôles}}(x)-P_{\mathrm{risques}}(x).
+$$
+
+Les coefficients sont des paramètres d'un modèle approximatif. Des groupes qui se recouvrent peuvent compter plusieurs fois le même bénéfice ; il faut limiter ou calibrer ce double comptage. Cette formule ne définit pas une puissance universelle.
+
+CP-SAT est un outil possible pour ces contraintes discrètes. Il travaille avec des coefficients entiers : les coûts ou scores doivent être convertis à une échelle appropriée. Son statut « optimal » concerne l'objectif et les contraintes encodés, pas le meilleur deck de Magic dans l'absolu. [Documentation officielle de CP-SAT](https://developers.google.com/optimization/cp/cp_solver)
+
+## Plusieurs objectifs plutôt qu'une note universelle
+
+On peut conserver :
+
+$$
+\mathbf V(D)=
+\bigl(p_{\mathrm{mise\ en\ place}},p_{\mathrm{moteur}},
+p_{\mathrm{reconstruction}},-\mathrm{prix}\bigr).
+$$
+
+Toutes les composantes sont ici orientées vers la maximisation. $D_1$ domine $D_2$ si toutes ses composantes sont au moins aussi bonnes et au moins une strictement meilleure. L'ensemble non dominé forme un front de Pareto relativement aux objectifs définis.
+
+Les valeurs estimées portent une incertitude : de faibles différences ne doivent pas être présentées comme une supériorité établie. La préférence finale peut dépendre de la vitesse, du budget ou de la résilience souhaités par l'utilisateur.
+
+# Architecture de recherche proposée
+
+## Une boucle de construction et d'évaluation
+
+```{mermaid}
+%%| label: fig-boucle-optimisation
+%%| fig-cap: "La construction propose des decks ; l'évaluation mesure leurs comportements."
+flowchart TD
+  A["Commandant, cartes imposées, collection et objectifs"] --> B["Validation et catalogue admissible"]
+  B --> C["Candidats par besoins, sorties et fonctions de soutien"]
+  C --> D["Groupes, moteurs et options compatibles"]
+  D --> E["Solveur ou heuristique sous contraintes"]
+  E --> F["Plusieurs decks candidats"]
+  F --> G["Simulations et indicateurs avec incertitude"]
+  G --> H["Défauts observés : mana, disponibilité, fragilité"]
+  H --> C
+  G --> I["Évaluation finale sur scénarios réservés"]
+  I --> J["Decks proposés et explications"]
+```
+
+```text
+Entrées : catalogue versionné, contexte, cartes imposées, objectifs, limites
+
+1. Charger les capacités déjà extraites et leurs statuts de validation.
+2. Construire le catalogue admissible et vérifier la faisabilité des contraintes.
+3. Indexer les ressources, événements, exigences et modifications.
+4. Trouver des candidats par correspondances orientées et fonctions de soutien.
+5. Chercher des groupes bornés ; généraliser leurs interfaces en moteurs.
+   Conserver les témoins, les options de déploiement et les hypothèses.
+6. Construire plusieurs decks complets respectant les contraintes.
+7. Mesurer les objectifs selon le même protocole de jeu.
+8. Proposer des remplacements simples et multiples guidés par les défauts mesurés.
+9. Répéter dans le budget de calcul déclaré.
+10. Réévaluer les finalistes sur des scénarios réservés.
+11. Retourner les résultats, leur incertitude, les limites et les explications.
+```
+
+Le budget de calcul est un paramètre explicite. Si la recherche est interrompue, le système retourne le meilleur résultat trouvé et son statut ; il n'annonce pas une recherche exhaustive.
+
+## Composants envisageables dans Mana-engine
+
+| Composant | Responsabilité | Technologie possible |
+|---|---|---|
+| Référentiel | Cartes, textes, impressions, légalité, versions | Stockage existant et SQLite |
+| Extraction | Texte vers capacités typées et provenance | Modules R et annotations contrôlées |
+| Index fonctionnel | Fournisseurs, consommateurs, déclencheurs | Tables indexées et structures creuses |
+| Vérificateur | Gardes, coûts, événements et trajectoires | Noyau déterministe pour les règles supportées |
+| Constructeur | Quantités, moteurs, options de déploiement, soutien et contraintes | Heuristiques ou OR-Tools CP-SAT |
+| Évaluateur | Trajectoires, résultats et incertitude | Simulateur ciblé utilisant les mêmes capacités |
+| API et interface | Requêtes, explications et navigation | R/API et mana-engine-web |
+
+Cette répartition ne nécessite pas de changer immédiatement de langage. L'extraction et l'indexation doivent être réutilisées entre requêtes. Un solveur Python peut être ajouté comme composant délimité si le choix d'OR-Tools le justifie.
+
+Les descriptions générées automatiquement, y compris par un modèle de langage, doivent être validées avant d'être utilisées comme preuves de règles. Les cartes non comprises doivent rester visibles dans les limites du résultat.
+
+## Contrat minimal d'une explication
+
+Exemple de structure de réponse proposée, sans engagement sur le nom des champs de l'API actuelle :
+
+```yaml
+relation:
+  source_card: "A"
+  target_card: "B"
+  kind: "event_trigger"
+  evidence: "Une arrivée de créature-artefact correspond au filtre de B."
+  prerequisites:
+    - "B est présent avant l'événement."
+    - "Les coûts de la capacité de A sont payables."
+  structural_status: "matched"
+  feasibility_status: "witness_found"
+  witness_id: "scenario-fictif-01"
+  model_version: "proposition-1"
+  unsupported_rules: []
+  evaluation:
+    status: "not_evaluated"
+    objective: null
+    estimate: null
+    uncertainty: null
+```
+
+Un témoin de faisabilité n'invente pas une estimation statistique. Chaque niveau de preuve possède son propre statut.
+
+# Représentation graphique pour l'utilisateur
+
+## Carte de ressemblances et liens de complémentarité
+
+La visualisation proposée combine deux couches :
+
+- Une position fondée sur les caractéristiques descriptives, pour explorer les ressemblances.
+- Des liens orientés fondés sur les capacités, pour expliquer les correspondances et les interactions évaluées.
+
+```{mermaid}
+%%| label: fig-paysage
+%%| fig-cap: "Schéma conceptuel de groupes descriptifs reliés par leurs fonctions. Les positions ne sont pas des résultats calculés."
+flowchart LR
+  subgraph P["Producteurs de jetons"]
+    A["A"]
+    B["B : alternative à A"]
+  end
+  subgraph R["Récompenses d'arrivée"]
+    C["C : pioche"]
+  end
+  subgraph M["Modificateurs"]
+    D["D : bonus aux créatures"]
+  end
+  A -.->|"Ressemblance"| B
+  A -->|"Déclenche l'effet si les conditions sont réunies"| C
+  B -->|"Autre fournisseur du même événement"| C
+  D -->|"Améliore les jetons produits"| A
+```
+
+Une projection $\psi:\mathcal X\to\mathbb R^2$ permet d'afficher une position $z_i=\psi(\phi(c_i))$. Cette projection perd généralement de l'information. Les calculs de compatibilité utilisent les données complètes et les capacités, pas la distance entre les points affichés.
+
+Une ACP peut servir de point de départ pour des variables numériques convenablement encodées. UMAP peut aider à explorer des voisinages ; sa représentation dépend notamment de la métrique et de paramètres contrôlant les voisinages et l'espacement. Les groupes visuels doivent être interprétés en tenant compte de ces choix. [Documentation des paramètres UMAP](https://umap-learn.readthedocs.io/en/latest/parameters.html)
+
+## Informations à afficher
+
+Au clic sur une carte ou un lien :
+
+1. Capacité source et capacité destinataire, avec leur texte de référence.
+2. Type de relation : ressemblance, fourniture, déclenchement, modification ou protection.
+3. Conditions requises et ressources consommées.
+4. Séquence témoin et moteur associé lorsqu'ils existent, avec le rôle de la carte.
+5. Mesure du gain, protocole et incertitude lorsqu'ils existent.
+6. Règles ou capacités non prises en charge.
+
+La largeur d'un lien doit avoir une légende explicite. Un lien « nombre de correspondances » ne doit pas être visuellement présenté comme un lien « gain de performance ».
+
+# Vérifier que le modèle produit de meilleurs résultats
+
+## Cas qui doivent discriminer les méthodes
+
+| Cas de validation | Résultat attendu |
+|---|---|
+| Deux cartes similaires sans interaction entre capacités | Ressemblance détectée, aucune preuve de synergie inventée |
+| Création de jeton et récompense de lancement de sort | Pas de déclenchement attribué à la création |
+| Création de jeton et récompense d'arrivée correspondante | Relation candidate, puis témoin si les conditions sont satisfaites |
+| Coût demandant deux ressources, une seule disponible | Action non admissible |
+| Même objet utilisé pour deux consommations incompatibles | Séquence rejetée |
+| Créature-artefact produite et bonus aux créatures-artefacts | Modification reconnue sans sacrifice ni consommation |
+| Groupe dont seule la combinaison complète atteint le but | Groupe conservé malgré des pièces faibles séparément |
+| Pièce de liaison éloignée en similarité | Candidate accessible par l'index fonctionnel |
+| Restriction de fréquence rompant une boucle | Aucune répétabilité illimitée annoncée |
+| Texte non interprété | Statut inconnu explicite |
+| Deck de 99 cartes de bibliothèque avec terrains de base répétés | Quantités gérées selon le format et les exceptions |
+| Gain mesuré uniquement sans adversaires | Présentation comme régularité interne, sans taux de victoire extrapolé |
+
+## Mesures de qualité du système
+
+Sur un jeu de référence annoté et versionné :
+
+$$
+\mathrm{Précision}=\frac{VP}{VP+FP},\qquad
+\mathrm{Rappel}=\frac{VP}{VP+FN}.
+$$
+
+Si un dénominateur vaut zéro, la métrique est indisponible. Les abstentions et inconnus sont rapportés séparément ; on publie également le rappel global sur les interactions attendues, pour éviter qu'un système abstentionniste paraisse performant en ne traitant que les cas faciles.
+
+On mesure séparément :
+
+- Exactitude des champs extraits et couverture des capacités.
+- Précision des correspondances et des témoins de faisabilité.
+- Rappel des cartes candidates, notamment les cartes de liaison.
+- Validité des contraintes des decks produits.
+- Résultats des decks sur les objectifs fixés, avec incertitude.
+- Coût de calcul, taille du catalogue et limites de recherche.
+
+Un pourcentage de texte auquel l'extracteur a attribué au moins une étiquette n'est pas une mesure de compréhension correcte du texte.
+
+## Comparaison à des méthodes de référence
+
+Comparer au minimum : sélection par ressemblance seule, sélection par rôles, sélection avec correspondances fonctionnelles, puis construction avec groupes et évaluation. Le catalogue, les contraintes et le protocole doivent être comparables ; le budget de calcul de chaque méthode est rapporté.
+
+Réserver des commandants ou familles d'interactions pour l'évaluation finale aide à détecter un ajustement excessif sur quelques exemples. Une revue humaine reste nécessaire pour les objectifs mal représentés par le simulateur.
+
+# Ordre de réalisation conseillé
+
+| Étape | Livrable | Critère de passage |
+|---|---|---|
+| 1. Contrat et référence | Schémas, statuts et cas annotés | Faux positifs connus reproductibles et attentes explicites |
+| 2. Capacités typées | Entrées, sorties, événements, coûts, provenance | Extraction évaluée sur des cas réservés |
+| 3. Correspondances | Index orienté et explications | Faux rapprochements arrivée/lancement et types corrigés |
+| 4. Vérification | États, gardes, objets et témoins bornés | Coûts conjoints et double consommation correctement traités |
+| 5. Groupes et moteurs | Compléments, interfaces communes et options de déploiement | Cas à plusieurs pièces et finalités différentes trouvés dans les limites déclarées |
+| 6. Construction | Quantités, légalité, rôles, groupes et variantes | Chaque proposition respecte les contraintes prises en charge |
+| 7. Évaluation | Scénarios, politique et incertitude | Comparaisons reproductibles et résultats réservés disponibles |
+| 8. Exploration visuelle | Carte descriptive et liens expliqués | Distinction visible entre candidat, témoin et gain mesuré |
+
+Les seuils chiffrés de qualité doivent être fixés à partir du jeu de référence et du coût acceptable des erreurs. Ce document n'en invente pas et ne promet pas une couverture exhaustive de Magic dès la première version.
+
+# Lire et rendre ce document
+
+Le fichier est un document Quarto autonome : les schémas sont écrits en Mermaid et les formules en LaTeX. Il ne nécessite pas de lancer l'API, de charger la collection ou d'exécuter des cellules R/Python.
+
+Depuis la racine du dépôt, avec Quarto installé :
+
+```powershell
+quarto preview docs/formalisation-calculateur-synergies.qmd
+```
+
+Pour générer un HTML :
+
+```powershell
+quarto render docs/formalisation-calculateur-synergies.qmd --to html
+```
+
+Conserver les ressources générées à côté du HTML lors de son partage. Le chargement de MathJax peut nécessiter un accès réseau selon la configuration Quarto. Les schémas utilisent le [support natif de Mermaid dans Quarto](https://quarto.org/docs/authoring/diagrams.html).
+
+::: {.callout-note}
+## Principe directeur
+
+L'espace multidimensionnel organise les cartes. Les interfaces typées découvrent les complémentarités. Les trajectoires vérifient les conditions. Les expériences mesurent l'utilité. L'optimisation assemble des decks selon des contraintes et des objectifs déclarés.
+:::

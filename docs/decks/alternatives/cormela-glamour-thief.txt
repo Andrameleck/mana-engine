@@ -1,0 +1,106 @@
+Commander
+1 Cormela, Glamour Thief
+
+Deck
+
+# lands
+1 Bloodfell Caves
+1 Bojuka Bog
+1 Branch of Vitu-Ghazi
+1 Captivating Cave
+1 Cavernous Maw
+1 Crumbling Vestige
+1 Dismal Backwater
+1 Evolving Wilds
+1 Forgotten Monument
+1 Foundry of the Consuls
+1 Hidden Grotto
+1 Hidden Necropolis
+1 Holdout Settlement
+1 Krosan Verge
+1 Mage-Ring Network
+1 Mana Confluence
+1 Mortuary Mire
+1 Polluted Delta
+1 Radiant Fountain
+1 Rivendell
+1 Roadside Reliquary
+1 Shire Terrace
+1 Shivan Reef
+1 Underground River
+4 Island
+4 Mountain
+4 Swamp
+
+# card_draw
+1 Aang's Journey
+1 Brainstorm
+1 Buried Alive
+1 Chakra Meditation
+1 Dreams of Laguna
+1 Entomb
+1 Opt
+1 Radical Idea
+1 The One Ring
+1 Tormenting Voice
+
+# core
+1 Bloodghast
+1 Bloodwater Entity
+1 Buried Treasure
+1 Deep Analysis
+1 Dig Up the Body
+1 Evil Reawakened
+1 Fact or Fiction
+1 Fleshbag Marauder
+1 Flood of Recollection
+1 Forbidden Alchemy
+1 Gollum, Patient Plotter
+1 Graveshifter
+1 Kindle the Inner Flame
+1 Maximize Altitude
+1 Maximize Velocity
+1 Mnemonic Wall
+1 Reanimate
+1 Retrieve the Esper
+1 Self-Reflection
+1 Sign in Blood
+1 Sonic Assault
+1 Treason of Isengard
+1 Underworld Breach
+1 Wild Ride
+1 Workshop Assistant
+
+# ramp
+1 Burnished Hart
+1 Dark Ritual
+1 Enthusiastic Mechanaut
+1 Gran-Gran
+1 Impulsive Pilferer
+1 Mind Stone
+1 Skirk Prospector
+1 Sticky Fingers
+1 Ultimate Green Goblin
+1 Vodalian Arcanist
+
+# removal
+1 Cancel
+1 Dazzling Denial
+1 Disdainful Stroke
+1 Feed the Swarm
+1 Flusterstorm
+1 Negate
+1 Soul-Guide Lantern
+1 Spell Stutter
+1 Tormod's Crypt
+1 Turn Aside
+
+# threat
+1 Brass Knuckles
+1 Heavyweight Demolisher
+1 Heiko Yamazaki, the General
+1 Kitesail Skirmisher
+1 Platinum Angel
+1 Prescient Chimera
+1 Uchbenbak, the Great Mistake
+1 Walking Skyscraper

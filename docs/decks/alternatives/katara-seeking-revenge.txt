@@ -1,0 +1,105 @@
+Commander
+1 Katara, Seeking Revenge
+
+Deck
+
+# lands
+1 Bojuka Bog
+1 Branch of Vitu-Ghazi
+1 Captivating Cave
+1 Cavernous Maw
+1 Crumbling Vestige
+1 Evolving Wilds
+1 Forgotten Monument
+1 Foundry of the Consuls
+1 Hidden Grotto
+1 Holdout Settlement
+1 Krosan Verge
+1 Mage-Ring Network
+1 Mana Confluence
+1 Mortuary Mire
+1 Polluted Delta
+1 Radiant Fountain
+1 Rivendell
+1 Roadside Reliquary
+1 Shire Terrace
+1 Underground River
+6 Island
+6 Swamp
+
+# card_draw
+1 Brainstorm
+1 Buried Alive
+1 Combat Courier
+1 Costly Plunder
+1 Dreams of Laguna
+1 Enter the Enigma
+1 Entomb
+1 Fountainport Bell
+1 Nasty End
+1 Opt
+1 Radical Idea
+1 Read the Bones
+1 The One Ring
+1 Traveler's Amulet
+
+# core
+1 Bloodghast
+1 Buried Treasure
+1 Deep Analysis
+1 Dig Up the Body
+1 Emergency Weld
+1 Fact or Fiction
+1 Fleshbag Marauder
+1 Forbidden Alchemy
+1 Gollum, Patient Plotter
+1 Graveshifter
+1 Gurgling Anointer
+1 Kami of the Crescent Moon
+1 Marvin, Murderous Mimic
+1 Mnemonic Wall
+1 Nighthowler
+1 Nowhere to Run
+1 Ornithopter
+1 Perilous Vault
+1 Reanimate
+1 Retrieve the Esper
+1 Self-Reflection
+1 Sign in Blood
+1 Springleaf Drum
+1 Treason of Isengard
+1 Workshop Assistant
+
+# ramp
+1 Automated Artificer
+1 Burnished Hart
+1 Dark Ritual
+1 Dimir Locket
+1 Gran-Gran
+1 Halo Scarab
+1 Hedron Crawler
+1 Mind Stone
+1 Splitting the Powerstone
+1 Urza, Powerstone Prodigy
+
+# removal
+1 Cancel
+1 Disdainful Stroke
+1 Feed the Swarm
+1 Flusterstorm
+1 Ice Out
+1 Negate
+1 Soul-Guide Lantern
+1 Spell Stutter
+1 Tormod's Crypt
+1 Turn Aside
+
+# threat
+1 Brass Knuckles
+1 Illusion Spinners
+1 Kitesail Skirmisher
+1 Platinum Angel
+1 Prognostic Sphinx
+1 Shield of Kaldra
+1 Uchbenbak, the Great Mistake
+1 Walking Skyscraper

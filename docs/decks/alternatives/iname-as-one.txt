@@ -1,0 +1,105 @@
+Commander
+1 Iname as One
+
+Deck
+
+# lands
+1 Bojuka Bog
+1 Branch of Vitu-Ghazi
+1 Captivating Cave
+1 Cavernous Maw
+1 Crumbling Vestige
+1 Evolving Wilds
+1 Forgotten Monument
+1 Foundry of the Consuls
+1 Hashep Oasis
+1 Hidden Grotto
+1 Holdout Settlement
+1 Jungle Hollow
+1 Krosan Verge
+1 Llanowar Wastes
+1 Mage-Ring Network
+1 Mana Confluence
+1 Mortuary Mire
+1 Polluted Delta
+1 Radiant Fountain
+1 Roadside Reliquary
+1 Shire Terrace
+1 Twists and Turns // Mycoid Maze
+6 Forest
+6 Swamp
+
+# card_draw
+1 Aang's Journey
+1 Brave the Wilds
+1 Buried Alive
+1 Celestial Reunion
+1 Chord of Calling
+1 Entomb
+1 Fountainport Bell
+1 Many Partings
+1 Read the Bones
+1 Satyr Wayfinder
+1 The One Ring
+1 Traveler's Amulet
+
+# core
+1 Bloodghast
+1 Buried Treasure
+1 Death Denied
+1 Dig Up the Body
+1 Emergency Weld
+1 Evil Reawakened
+1 Fleshbag Marauder
+1 Gaea's Gift
+1 Gloomshrieker
+1 Gollum, Patient Plotter
+1 Grapple with the Past
+1 Graveshifter
+1 Marvin, Murderous Mimic
+1 Nighthowler
+1 Nowhere to Run
+1 Ornithopter
+1 Reanimate
+1 Sanitarium Skeleton
+1 Season of Renewal
+1 Shambling Cie'th
+1 Sign in Blood
+1 Snakeskin Veil
+1 Springleaf Drum
+1 Unmake the Graves
+1 Workshop Assistant
+
+# ramp
+1 Burnished Hart
+1 Dark Ritual
+1 Elvish Mystic
+1 Grow from the Ashes
+1 Halo Scarab
+1 Llanowar Elves
+1 Mind Stone
+1 Natural Connection
+1 Primal Druid
+1 Roamer's Routine
+
+# removal
+1 Bone Splinters
+1 Broken Bond
+1 Doom Blade
+1 Feed the Swarm
+1 Lash of the Balrog
+1 Murder
+1 Murderous Compulsion
+1 Reclamation Sage
+1 Soul-Guide Lantern
+1 Tormod's Crypt
+
+# threat
+1 Brass Knuckles
+1 Harmonious Emergence
+1 Ob Nixilis, Unshackled
+1 Platinum Angel
+1 Rust Goliath
+1 Shield of Kaldra
+1 Venerable Kumo
+1 Walking Skyscraper
