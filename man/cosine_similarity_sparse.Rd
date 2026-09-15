@@ -12,7 +12,7 @@ cosine_similarity_sparse(a, b)
 \item{b}{Named numeric vector.}
 }
 \value{
-Numeric scalar in \link{0, 1}.
+Numeric scalar from zero to one.
 }
 \description{
 Compute cosine similarity for sparse named numeric vectors.

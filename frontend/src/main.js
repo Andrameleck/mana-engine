@@ -1116,12 +1116,16 @@ import {
 
     const coreAnchors = deckCore.slice(0, Math.min(6, deckCore.length)).map((entry) => entry.card);
     const deckKeySet = new Set(deckPool.map((card) => card.key));
+    const allowedColorIdentity = new Set(deckPool.flatMap((card) => card.colors || []));
     const topMechanicSet = new Set(mechanics.slice(0, 3).map((entry) => entry.id));
     const profileKeys = new Set(Object.keys(featureProfile));
 
     const scored = [];
     collectionPool.forEach((candidate) => {
       if (deckKeySet.has(candidate.key)) {
+        return;
+      }
+      if ((candidate.colors || []).some((color) => !allowedColorIdentity.has(color))) {
         return;
       }
 
@@ -2197,6 +2201,20 @@ import {
     return canonical || printed;
   }
 
+  function scryfallAnalysisText(card) {
+    const rootText = String(card?.oracle_text || "").trim();
+    if (rootText) {
+      return rootText;
+    }
+    if (!Array.isArray(card?.card_faces)) {
+      return "";
+    }
+    return card.card_faces
+      .map((face) => String(face?.oracle_text || "").trim())
+      .filter(Boolean)
+      .join("\n");
+  }
+
   function scryfallManaCost(card) {
     const base = String(card?.mana_cost || "").trim();
     if (base) {
@@ -2218,6 +2236,7 @@ import {
       name_en: String(card?.name || "").trim(),
       mana_cost: scryfallManaCost(card),
       oracle_text: scryfallDisplayOracleText(card, strategyLanguage),
+      analysis_text: scryfallAnalysisText(card),
       keywords: Array.isArray(card?.keywords) ? card.keywords.join(", ") : "",
       type_line: scryfallDisplayTypeLine(card, strategyLanguage),
       colors: Array.isArray(card?.colors) ? card.colors.join("") : "",
@@ -2432,7 +2451,7 @@ import {
 
       const textBlob = [
         rowValue(row, ["type_line", "type"]),
-        rowValue(row, ["oracle_text", "printed_text", "card_text", "rules_text", "description"]),
+        rowValue(row, ["analysis_text", "oracle_text", "printed_text", "card_text", "rules_text", "description"]),
         rowValue(row, ["keywords", "abilities", "keyword"])
       ].join(" ");
       const features = extractStrategyFeatureMap(textBlob);
@@ -2489,7 +2508,7 @@ import {
   function extractStrategySemantics(row) {
     const oracleText = rowValue(
       row,
-      ["oracle_text", "printed_text", "card_text", "rules_text", "description"]
+      ["analysis_text", "oracle_text", "printed_text", "card_text", "rules_text", "description"]
     );
     const keywordText = rowValue(row, ["keywords", "abilities", "keyword"]);
     const typeText = rowValue(row, ["type_line", "type"]);
@@ -2519,19 +2538,19 @@ import {
       discardPayoff: countPatternHits(source, /whenever .* discard|if .* discarded/i),
       worldgorgerLine: countPatternHits(source, /worldgorger dragon|exile all other permanents you control/i),
       libraryMillOut: countPatternHits(source, /puts? the top .* cards? of .* library into .* graveyard|\bmill\b|target player mills/i),
-      chooseColorGlobal: countPatternHits(source, /choose a color|all cards that aren't on the battlefield.*chosen color|are the chosen color/i),
+      chooseColorGlobal: countPatternHits(source, /all cards that aren't on the battlefield.*chosen color|are the chosen color/i),
       untapArtifactOut: countPatternHits(source, /untap target artifact|untap all artifacts/i),
       activatedArtifactRef: countPatternHits(source, /activated abilities of artifacts|\{[^}]+\}:\s|activate only/i),
       artifactTutor: countPatternHits(source, /search your library .* artifact/i),
       grindstoneClause: countPatternHits(source, /three cards .* share a color/i),
-      painterClause: countPatternHits(source, /as .* enters.* choose a color|cards? that aren't on the battlefield/i)
+      painterClause: countPatternHits(source, /cards? that aren't on the battlefield.*chosen color/i)
     };
   }
 
   function mergeStrategySemantics(leftMap, rightMap) {
     const out = { ...(leftMap || {}) };
     Object.keys(rightMap || {}).forEach((key) => {
-      out[key] = (out[key] || 0) + (rightMap[key] || 0);
+      out[key] = Math.max(out[key] || 0, rightMap[key] || 0);
     });
     return out;
   }
@@ -2550,7 +2569,7 @@ import {
   function mergeFeatureMaps(leftMap, rightMap) {
     const out = { ...(leftMap || {}) };
     Object.keys(rightMap || {}).forEach((key) => {
-      out[key] = (out[key] || 0) + (rightMap[key] || 0);
+      out[key] = Math.max(out[key] || 0, rightMap[key] || 0);
     });
     return out;
   }
@@ -2667,9 +2686,10 @@ import {
         if (support && support.score > 0.18) {
           packageCards.push(support.card);
         }
+        const retainedSupport = support && support.score > 0.18 ? support : null;
         const split = splitGroupCoreAndSide(seedCard, packageCards);
 
-        const groupScore = left.score + right.score + pairLink.score * 0.7 + (support ? support.score * 0.35 : 0);
+        const groupScore = left.score + right.score + pairLink.score * 0.7 + (retainedSupport ? retainedSupport.score * 0.35 : 0);
         groups.push({
           cards: packageCards,
           coreCards: split.coreCards,
@@ -2677,7 +2697,7 @@ import {
           bridgeName: left.score >= right.score ? left.card.name : right.card.name,
           score: groupScore,
           lineA: `${seedCard.name} -> ${left.card.name} -> ${right.card.name}`,
-          lineB: support ? `${seedCard.name} -> ${support.card.name} -> ${left.card.name}` : `${seedCard.name} -> ${right.card.name}`
+          lineB: retainedSupport ? `${seedCard.name} -> ${retainedSupport.card.name} -> ${left.card.name}` : `${seedCard.name} -> ${right.card.name}`
         });
       }
     }
@@ -2717,7 +2737,6 @@ import {
 
     const cardsByKey = new Map((Array.isArray(allCards) ? allCards : []).map((card) => [card.key, card]));
     const directByKey = new Map((Array.isArray(directEntries) ? directEntries : []).map((entry) => [entry.card.key, entry]));
-    const directKeys = new Set(directByKey.keys());
     const seedKey = seedCard.key;
 
     const groups = [];
@@ -2728,15 +2747,17 @@ import {
       if (!rawKeys.includes(seedKey)) {
         return;
       }
+      if (rawKeys.some((key) => !key || !cardsByKey.has(key))) {
+        return;
+      }
 
       const partnerKeys = rawKeys
-        .filter((key) => key && key !== seedKey && cardsByKey.has(key) && directKeys.has(key))
+        .filter((key) => key !== seedKey)
         .map((key) => ({
           key,
           score: Number(directByKey.get(key)?.score || 0)
         }))
-        .sort((left, right) => right.score - left.score)
-        .slice(0, 4);
+        .sort((left, right) => right.score - left.score);
 
       if (partnerKeys.length === 0) {
         return;
@@ -3953,6 +3974,10 @@ import {
         value += Number.parseInt(token, 10);
         return;
       }
+      if (/^2\/[WUBRG]$/.test(token)) {
+        value += 2;
+        return;
+      }
       value += 1;
     });
 
@@ -4202,24 +4227,16 @@ import {
     }
 
     const found = new Set();
-    if (source.includes("WHITE")) {
-      found.add("W");
-    }
-    if (source.includes("BLUE")) {
-      found.add("U");
-    }
-    if (source.includes("BLACK")) {
-      found.add("B");
-    }
-    if (source.includes("RED")) {
-      found.add("R");
-    }
-    if (source.includes("GREEN")) {
-      found.add("G");
-    }
+    const names = { WHITE: "W", BLUE: "U", BLACK: "B", RED: "R", GREEN: "G" };
+    const words = source.match(/[A-Z]+/g) || [];
+    words.forEach((word) => {
+      if (names[word]) {
+        found.add(names[word]);
+      }
+    });
 
-    const compact = source.replace(/[^WUBRG]/g, "");
-    if (compact.length > 0 && compact.length <= 8) {
+    const compact = source.replace(/[\s,;/|{}\[\]()_-]/g, "");
+    if (/^[WUBRG]+$/.test(compact) && compact.length <= 5) {
       compact.split("").forEach((code) => found.add(code));
     }
 

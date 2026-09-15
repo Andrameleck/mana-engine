@@ -3,6 +3,9 @@ query_collection_upload <- function(req, type, table = "", filename = "") {
   if (!isTRUE(file_info$ok)) {
     return(file_info)
   }
+  if (isTRUE(file_info$cleanup)) {
+    on.exit(unlink(file_info$path), add = TRUE)
+  }
 
   source_type <- tolower(trimws(as.character(type)))
   if (!source_type %in% c("db", "csv", "text")) {
@@ -19,7 +22,8 @@ query_collection_upload <- function(req, type, table = "", filename = "") {
   payload <- query_collection_load(
     type = source_type,
     path = file_info$path,
-    table = table
+    table = table,
+    trusted_path = TRUE
   )
 
   if (!isTRUE(payload$ok)) {
@@ -87,7 +91,8 @@ query_collection_extract_from_req_files <- function(req) {
   list(
     ok = TRUE,
     path = uploaded_path,
-    name = uploaded_name
+    name = uploaded_name,
+    cleanup = FALSE
   )
 }
 
@@ -144,7 +149,8 @@ query_collection_extract_from_multipart_body <- function(req) {
   list(
     ok = TRUE,
     path = temp_path,
-    name = uploaded_name
+    name = uploaded_name,
+    cleanup = TRUE
   )
 }
 
@@ -180,7 +186,8 @@ query_collection_extract_from_octet_body <- function(req, filename = "") {
   list(
     ok = TRUE,
     path = temp_path,
-    name = uploaded_name
+    name = uploaded_name,
+    cleanup = TRUE
   )
 }
 

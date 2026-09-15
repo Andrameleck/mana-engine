@@ -18,6 +18,9 @@ query_collection_db_import <- function(req,
   if (!isTRUE(extracted$ok)) {
     return(extracted)
   }
+  if (isTRUE(extracted$cleanup)) {
+    on.exit(unlink(extracted$path), add = TRUE)
+  }
 
   load_out <- query_collection_db_read_source_rows(
     source_path = extracted$path,
@@ -161,7 +164,8 @@ query_collection_db_add_card <- function(db_path = "",
       insert_out <- query_collection_db_insert_collection_rows(
         con = con,
         rows = rows,
-        dedupe_enabled = dedupe_enabled
+        dedupe_enabled = dedupe_enabled,
+        on_duplicate = "increment"
       )
 
       cards_from_collection <- query_collection_db_prepare_cards_rows_from_collection(rows)
@@ -173,6 +177,7 @@ query_collection_db_add_card <- function(db_path = "",
         ok = TRUE,
         db_path = resolved$path,
         inserted_collection = insert_out$inserted,
+        updated_collection = insert_out$updated,
         skipped_collection = insert_out$skipped,
         inserted_cards = inserted_cards,
         inserted_ids = insert_out$inserted_ids,
@@ -346,16 +351,11 @@ query_collection_db_resolve_target_path <- function(db_path = "") {
     ))
   }
 
-  normalized <- normalizePath(raw_path, winslash = "/", mustWork = FALSE)
-  if (!file.exists(normalized)) {
-    return(list(
-      ok = FALSE,
-      error = "database file not found",
-      db_path = normalized
-    ))
+  resolved <- query_api_resolve_source_path(raw_path)
+  if (!isTRUE(resolved$ok)) {
+    resolved$error <- sub("file", "database file", resolved$error, fixed = TRUE)
   }
-
-  list(ok = TRUE, path = normalized)
+  resolved
 }
 
 query_collection_db_parse_bool <- function(x, default = FALSE) {
@@ -749,9 +749,13 @@ query_collection_db_ensure_indexes <- function(con) {
   invisible(TRUE)
 }
 
-query_collection_db_insert_collection_rows <- function(con, rows, dedupe_enabled = TRUE) {
+query_collection_db_insert_collection_rows <- function(con,
+                                                       rows,
+                                                       dedupe_enabled = TRUE,
+                                                       on_duplicate = c("skip", "increment")) {
+  on_duplicate <- match.arg(on_duplicate)
   if (!is.data.frame(rows) || nrow(rows) == 0L) {
-    return(list(inserted = 0L, skipped = 0L, inserted_ids = integer(0)))
+    return(list(inserted = 0L, updated = 0L, skipped = 0L, inserted_ids = integer(0)))
   }
 
   insert_sql <- paste(
@@ -763,6 +767,7 @@ query_collection_db_insert_collection_rows <- function(con, rows, dedupe_enabled
   )
 
   inserted <- 0L
+  updated <- 0L
   skipped <- 0L
   inserted_ids <- integer(0)
 
@@ -823,6 +828,17 @@ query_collection_db_insert_collection_rows <- function(con, rows, dedupe_enabled
       }
     }
 
+    if (exists && identical(on_duplicate, "increment")) {
+      existing_id <- as.integer(existing$id[[1]])
+      DBI::dbExecute(
+        con,
+        "UPDATE collection SET quantity = COALESCE(quantity, 0) + ? WHERE id = ?",
+        params = list(as.integer(row$quantity[[1]]), existing_id)
+      )
+      updated <- updated + 1L
+      inserted_ids <- c(inserted_ids, existing_id)
+      next
+    }
     if (exists) {
       skipped <- skipped + 1L
       next
@@ -855,6 +871,7 @@ query_collection_db_insert_collection_rows <- function(con, rows, dedupe_enabled
 
   list(
     inserted = as.integer(inserted),
+    updated = as.integer(updated),
     skipped = as.integer(skipped),
     inserted_ids = as.integer(inserted_ids)
   )
@@ -1040,12 +1057,28 @@ query_collection_db_insert_cards_rows <- function(con, rows) {
   }
 
   insert_sql <- paste(
-    "INSERT OR IGNORE INTO cards (",
+    "INSERT INTO cards (",
     "scryfall_id, name, oracle_text, type_line, mana_cost, cmc,",
     "colors, color_identity, keywords, produced_mana, power, toughness,",
     "loyalty, rarity, set_code, set_name, collector_number, lang,",
     "legalities, layout, card_faces, image_uris, prices, edhrec_rank, released_at",
-    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "ON CONFLICT(scryfall_id) DO UPDATE SET",
+    "name = CASE WHEN COALESCE(cards.name, '') = '' THEN excluded.name ELSE cards.name END,",
+    "oracle_text = CASE WHEN COALESCE(cards.oracle_text, '') = '' THEN excluded.oracle_text ELSE cards.oracle_text END,",
+    "type_line = CASE WHEN COALESCE(cards.type_line, '') = '' THEN excluded.type_line ELSE cards.type_line END,",
+    "mana_cost = CASE WHEN COALESCE(cards.mana_cost, '') = '' THEN excluded.mana_cost ELSE cards.mana_cost END,",
+    "cmc = COALESCE(cards.cmc, excluded.cmc),",
+    "colors = CASE WHEN COALESCE(cards.colors, '') = '' THEN excluded.colors ELSE cards.colors END,",
+    "color_identity = CASE WHEN COALESCE(cards.color_identity, '') = '' THEN excluded.color_identity ELSE cards.color_identity END,",
+    "keywords = CASE WHEN COALESCE(cards.keywords, '') = '' THEN excluded.keywords ELSE cards.keywords END,",
+    "produced_mana = CASE WHEN COALESCE(cards.produced_mana, '') = '' THEN excluded.produced_mana ELSE cards.produced_mana END,",
+    "legalities = CASE WHEN COALESCE(cards.legalities, '') = '' THEN excluded.legalities ELSE cards.legalities END,",
+    "card_faces = CASE WHEN COALESCE(cards.card_faces, '') = '' THEN excluded.card_faces ELSE cards.card_faces END,",
+    "image_uris = CASE WHEN COALESCE(cards.image_uris, '') = '' THEN excluded.image_uris ELSE cards.image_uris END,",
+    "prices = CASE WHEN COALESCE(cards.prices, '') = '' THEN excluded.prices ELSE cards.prices END,",
+    "edhrec_rank = COALESCE(cards.edhrec_rank, excluded.edhrec_rank),",
+    "released_at = CASE WHEN COALESCE(cards.released_at, '') = '' THEN excluded.released_at ELSE cards.released_at END"
   )
 
   inserted <- 0L

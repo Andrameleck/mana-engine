@@ -1,10 +1,10 @@
-#' Clamp Numeric Values to [0, 1]
+#' Clamp Numeric Values from Zero to One
 #'
 #' Clamp numeric values to the inclusive range [0, 1].
 #'
 #' @param x Numeric vector.
 #'
-#' @return Numeric vector with all values clamped to [0, 1].
+#' @return Numeric vector with all values clamped from zero to one.
 #'
 #' @examples
 #' stopifnot(identical(clamp01(c(-1, 0.4, 3)), c(0, 0.4, 1)))
@@ -45,9 +45,16 @@ cosine_similarity_sparse <- function(a, b) {
     return(0)
   }
 
-  dot <- sum(a_vec[common] * b_vec[common])
-  norm_a <- sqrt(sum(a_vec * a_vec))
-  norm_b <- sqrt(sum(b_vec * b_vec))
+  scale_a <- max(abs(a_vec))
+  scale_b <- max(abs(b_vec))
+  if (scale_a <= 0 || scale_b <= 0) {
+    return(0)
+  }
+  a_scaled <- a_vec / scale_a
+  b_scaled <- b_vec / scale_b
+  dot <- sum(a_scaled[common] * b_scaled[common])
+  norm_a <- sqrt(sum(a_scaled * a_scaled))
+  norm_b <- sqrt(sum(b_scaled * b_scaled))
 
   if (norm_a <= 0 || norm_b <= 0) {
     return(0)
@@ -203,13 +210,17 @@ top_k_neighbors <- function(
   candidates <- candidate_set(
     u_features = .card_features(cards[[u_idx]]),
     feature_index = feature_index,
-    max_candidates = opts$max_candidates
+    max_candidates = .Machine$integer.max
   )
   if (length(candidates) == 0L) {
     return(list(indices = integer(0), weights = numeric(0), candidates_considered = 0L))
   }
 
   candidates <- candidates[candidates != u_idx]
+  excluded <- opts$exclude_indices
+  if (length(excluded) > 0L) {
+    candidates <- setdiff(candidates, as.integer(excluded))
+  }
   candidates <- as.integer(candidates)
   candidate_count <- length(candidates)
   if (candidate_count == 0L) {
@@ -240,6 +251,11 @@ top_k_neighbors <- function(
   ord <- order(-weights, candidates)
   candidates <- candidates[ord]
   weights <- weights[ord]
+
+  if (length(candidates) > opts$max_candidates) {
+    candidates <- candidates[seq_len(opts$max_candidates)]
+    weights <- weights[seq_len(opts$max_candidates)]
+  }
 
   if (length(candidates) > top_k) {
     candidates <- candidates[seq_len(top_k)]
@@ -304,13 +320,17 @@ propagate_scores <- function(
     stop("`gamma` must be a numeric scalar in [0, 1].")
   }
 
+  if (isTRUE(opts$enforce_color_identity)) {
+    opts$allowed_colors <- .card_colors(cards[[seed_idx]])
+  }
+
   feature_index <- opts$feature_index
   if (is.null(feature_index)) {
     feature_index <- build_feature_index(cards)
   }
 
   n_cards <- length(cards)
-  score_total <- setNames(numeric(n_cards), ids)
+  score_total <- stats::setNames(numeric(n_cards), ids)
   score_current <- numeric(n_cards)
   score_current[seed_idx] <- 1
 
@@ -337,6 +357,7 @@ propagate_scores <- function(
 
     score_level <- numeric(n_cards)
     best_contrib <- rep(-Inf, n_cards)
+    level_parent <- rep(NA_integer_, n_cards)
 
     expanded_this <- 0L
     candidates_this <- 0L
@@ -344,12 +365,16 @@ propagate_scores <- function(
     for (p_idx in frontier) {
       expanded_this <- expanded_this + 1L
 
+      level_opts <- opts
+      if (isTRUE(opts$unique_nodes)) {
+        level_opts$exclude_indices <- which(visited)
+      }
       neigh <- top_k_neighbors(
         u_idx = p_idx,
         cards = cards,
         feature_index = feature_index,
         top_k = top_k,
-        options = opts
+        options = level_opts
       )
       candidates_this <- candidates_this + neigh$candidates_considered
       child_idx <- neigh$indices
@@ -357,7 +382,7 @@ propagate_scores <- function(
         next
       }
 
-      contrib <- score_current[p_idx] * neigh$weights * (gamma^depth)
+      contrib <- score_current[p_idx] * neigh$weights * gamma
 
       if (isTRUE(opts$unique_nodes)) {
         keep <- !visited[child_idx]
@@ -375,12 +400,17 @@ propagate_scores <- function(
 
         if (c_val > best_contrib[c_idx] ||
           (.num_equal(c_val, best_contrib[c_idx]) &&
-            (is.na(parents_idx[c_idx]) || p_idx < parents_idx[c_idx]))) {
+            (is.na(level_parent[c_idx]) || p_idx < level_parent[c_idx]))) {
           best_contrib[c_idx] <- c_val
-          parents_idx[c_idx] <- p_idx
+          level_parent[c_idx] <- p_idx
         }
       }
     }
+
+    # The root never has a parent. Allowing a later edge back to the seed would
+    # create a cycle in the provenance graph when revisits are enabled.
+    new_parents <- which(is.na(parents_idx) & !is.na(level_parent) & seq_len(n_cards) != seed_idx)
+    parents_idx[new_parents] <- level_parent[new_parents]
 
     non_zero <- which(score_level > 0)
     emitted_children[depth] <- length(non_zero)
@@ -420,7 +450,7 @@ propagate_scores <- function(
   scores <- score_total[keep]
   names(scores) <- ids[keep]
 
-  parents <- setNames(rep(NA_character_, n_cards), ids)
+  parents <- stats::setNames(rep(NA_character_, n_cards), ids)
   known_parent <- which(!is.na(parents_idx))
   if (length(known_parent) > 0L) {
     parents[known_parent] <- ids[parents_idx[known_parent]]
@@ -518,8 +548,8 @@ compute_bridge <- function(
     return(list(bridges = bridges, propA = propA, propB = propB))
   }
 
-  alignedA <- setNames(numeric(length(all_ids)), all_ids)
-  alignedB <- setNames(numeric(length(all_ids)), all_ids)
+  alignedA <- stats::setNames(numeric(length(all_ids)), all_ids)
+  alignedB <- stats::setNames(numeric(length(all_ids)), all_ids)
   alignedA[names(scoreA)] <- scoreA
   alignedB[names(scoreB)] <- scoreB
 
@@ -635,6 +665,7 @@ reconstruct_chain <- function(parents_map, seed_id, target_id, max_len = 6L) {
 #' @param K Number of packages to return.
 #' @param support_k Number of support cards to append.
 #' @param exclude_ids Card ids that cannot be added as support cards.
+#' @param required_ids Card ids that must be included in every package.
 #'
 #' @return List of package objects.
 #'
@@ -652,7 +683,8 @@ build_packages <- function(
     scoreB,
     K = 5L,
     support_k = 2L,
-    exclude_ids = character()) {
+    exclude_ids = character(),
+    required_ids = character()) {
   if (!is.data.frame(bridges) || !"id" %in% colnames(bridges)) {
     stop("`bridges` must be a data.frame with column `id`.")
   }
@@ -675,7 +707,7 @@ build_packages <- function(
   }
 
   score_ids <- sort(unique(c(names(scoreA), names(scoreB))))
-  support_score <- setNames(numeric(length(score_ids)), score_ids)
+  support_score <- stats::setNames(numeric(length(score_ids)), score_ids)
   if (length(scoreA) > 0L) {
     support_score[names(scoreA)] <- support_score[names(scoreA)] + scoreA
   }
@@ -699,7 +731,7 @@ build_packages <- function(
       chainB <- as.character(chain_obj$chainB)
     }
 
-    base_cards <- unique(c(chainA, chainB))
+    base_cards <- unique(c(required_ids, chainA, chainB, bridge_id))
     support_cards <- character(0)
 
     if (support_k > 0L && length(score_ids) > 0L) {
@@ -786,7 +818,7 @@ compute_bridge_recommendations <- function(
     options = opts
   )
 
-  id_to_name <- setNames(vapply(cards, .card_name, character(1)), ids)
+  id_to_name <- stats::setNames(vapply(cards, .card_name, character(1)), ids)
   bridges <- bridge_payload$bridges
   if (nrow(bridges) > 0L) {
     bridge_names <- id_to_name[bridges$id]
@@ -837,7 +869,8 @@ compute_bridge_recommendations <- function(
     scoreB = bridge_payload$propB$scores,
     K = topPackages,
     support_k = opts$support_k,
-    exclude_ids = c(A_id, B_id)
+    exclude_ids = c(A_id, B_id),
+    required_ids = c(A_id, B_id)
   )
 
   list(
@@ -1038,7 +1071,7 @@ run_bridge_synergy_selftest <- function() {
       support_k = 2L
     )
   )
-  stopifnot("card_glue" %in% head(rec$bridges$id, 5L))
+  stopifnot("card_glue" %in% utils::head(rec$bridges$id, 5L))
 
   rec2 <- compute_bridge_recommendations(
     cards = cards,
@@ -1144,7 +1177,10 @@ run_bridge_synergy_selftest <- function() {
   }
 
   if (isTRUE(options$enforce_color_identity)) {
-    u_colors <- .card_colors(card_u)
+    u_colors <- options$allowed_colors
+    if (is.null(u_colors)) {
+      u_colors <- .card_colors(card_u)
+    }
     v_colors <- .card_colors(card_v)
     if (length(v_colors) > 0L && !all(v_colors %in% u_colors)) {
       return(Inf)
@@ -1166,7 +1202,7 @@ run_bridge_synergy_selftest <- function() {
 
 .as_sparse_named_numeric <- function(x) {
   if (is.null(x) || length(x) == 0L) {
-    return(setNames(numeric(0), character(0)))
+    return(stats::setNames(numeric(0), character(0)))
   }
 
   vals <- as.numeric(x)
@@ -1175,11 +1211,14 @@ run_bridge_synergy_selftest <- function() {
     stop("Sparse feature vectors must be named numeric vectors.")
   }
 
+  if (any(!is.finite(vals) & !is.na(vals))) {
+    stop("Sparse feature vectors must contain only finite numeric values.")
+  }
   keep <- !is.na(vals) & nzchar(nms)
   vals <- vals[keep]
   nms <- nms[keep]
   if (length(vals) == 0L) {
-    return(setNames(numeric(0), character(0)))
+    return(stats::setNames(numeric(0), character(0)))
   }
 
   grouped <- tapply(vals, nms, sum)
@@ -1209,7 +1248,9 @@ run_bridge_synergy_selftest <- function() {
     max_candidates = 2000L,
     max_chain_len = 6L,
     support_k = 2L,
-    feature_index = NULL
+    feature_index = NULL,
+    exclude_indices = integer(0),
+    allowed_colors = NULL
   )
   if (is.null(options)) {
     options <- list()
@@ -1228,6 +1269,11 @@ run_bridge_synergy_selftest <- function() {
   merged$max_candidates <- .as_count(merged$max_candidates, default = 2000L)
   merged$max_chain_len <- .as_count(merged$max_chain_len, default = 6L)
   merged$support_k <- .as_count(merged$support_k, default = 2L)
+  merged$exclude_indices <- as.integer(merged$exclude_indices)
+  merged$exclude_indices <- merged$exclude_indices[!is.na(merged$exclude_indices)]
+  if (!is.null(merged$allowed_colors)) {
+    merged$allowed_colors <- unique(toupper(trimws(as.character(merged$allowed_colors))))
+  }
 
   merged
 }

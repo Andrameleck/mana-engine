@@ -292,6 +292,72 @@ function(q = "", set_code = "", collector_number = "", uuid = "", limit = "40") 
   )
 }
 
+#* Analyze explainable functional synergies
+#* @param body JSON object containing seed, candidates, context, and limit.
+#* @parser json
+#* @serializer unboxedJSON
+#* @post /analysis/v1/synergies
+function(req, res) {
+  payload <- NULL
+  if (!is.null(req$postBody) && nzchar(req$postBody)) {
+    payload <- tryCatch(
+      jsonlite::fromJSON(req$postBody, simplifyVector = FALSE),
+      error = function(e) NULL
+    )
+  }
+  if (is.null(payload)) payload <- req$body
+  out <- query_call("query_analysis_synergies", payload = payload)
+  query_call("query_api_apply_status", out = out, res = res)
+}
+
+#* Generate legal Commander deck variants
+#* @param body JSON object containing commander, collection_id and variant_count.
+#* @parser json
+#* @serializer unboxedJSON
+#* @post /synergy/deck/generate
+function(req, res) {
+  payload <- NULL
+  if (!is.null(req$postBody) && nzchar(req$postBody)) {
+    payload <- tryCatch(jsonlite::fromJSON(req$postBody, simplifyVector = FALSE), error = function(e) NULL)
+  }
+  if (is.null(payload)) payload <- req$body
+  out <- query_call("query_deck_generate", payload = payload)
+  query_call("query_api_apply_status", out = out, res = res)
+}
+
+#* Find explainable functional groups
+#* @param body JSON object containing cards, context, and search limits.
+#* @parser json
+#* @serializer unboxedJSON
+#* @post /analysis/v1/groups
+function(req, res) {
+  payload <- NULL
+  if (!is.null(req$postBody) && nzchar(req$postBody)) {
+    payload <- tryCatch(
+      jsonlite::fromJSON(req$postBody, simplifyVector = FALSE),
+      error = function(e) NULL
+    )
+  }
+  if (is.null(payload)) payload <- req$body
+  out <- query_call("query_analysis_groups", payload = payload)
+  query_call("query_api_apply_status", out = out, res = res)
+}
+
+#* Discover composable strategy engines and compatible payloads
+#* @param body JSON object containing cards, context, and search limits.
+#* @parser json
+#* @serializer unboxedJSON
+#* @post /analysis/v1/engines
+function(req, res) {
+  payload <- NULL
+  if (!is.null(req$postBody) && nzchar(req$postBody)) {
+    payload <- tryCatch(jsonlite::fromJSON(req$postBody, simplifyVector = FALSE), error = function(e) NULL)
+  }
+  if (is.null(payload)) payload <- req$body
+  out <- query_call("query_analysis_engines", payload = payload)
+  query_call("query_api_apply_status", out = out, res = res)
+}
+
 #* UI entrypoint
 #* @serializer contentType list(type="text/html; charset=utf-8")
 #* @get /ui

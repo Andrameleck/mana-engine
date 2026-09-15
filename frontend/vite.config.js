@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   base: "/ui/static/",
   build: {
-    outDir: "../inst/www",
+    outDir: "dist-check",
     emptyOutDir: true,
     cssCodeSplit: false,
     sourcemap: true,
@@ -11,7 +11,7 @@ export default defineConfig({
       output: {
         entryFileNames: "app.js",
         chunkFileNames: "chunk-[name].js",
-        inlineDynamicImports: true,
+        codeSplitting: false,
         assetFileNames: (assetInfo) => {
           const name = String(assetInfo.name || "").toLowerCase();
           if (name.endsWith(".css")) {

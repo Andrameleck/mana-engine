@@ -1,5 +1,10 @@
 ^LICENSE\.md$
 ^\.github$
+^\.git$
+^.*[\\/]\.git([\\/]|$)
+^\.local-data$
+^\.tools$
+^\.r-lib$
 ^\.vscode$
 ^gitlab-ci\.yml$
 ^mtgcodex.api_api\.Rproj$

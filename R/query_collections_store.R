@@ -8,6 +8,9 @@ query_collections_import_csv <- function(req, name = "", platform = "auto", file
   if (!isTRUE(file_info$ok)) {
     return(file_info)
   }
+  if (isTRUE(file_info$cleanup)) {
+    on.exit(unlink(file_info$path), add = TRUE)
+  }
 
   parsed <- tryCatch(
     query_collections_read_csv_file(file_info$path),
@@ -81,6 +84,7 @@ query_collections_import_csv <- function(req, name = "", platform = "auto", file
         "name",
         "set_code",
         "collector_number",
+        "type_line",
         "mana_cost",
         "oracle_text",
         "keywords",
@@ -224,6 +228,7 @@ query_collections_get <- function(collection_id = "") {
           "SELECT",
           "SUM(COALESCE(quantity, 1)) AS quantity,",
           "name, set_code, collector_number, language,",
+          "MAX(COALESCE(type_line, '')) AS type_line,",
           "MAX(COALESCE(mana_cost, '')) AS mana_cost,",
           "MAX(COALESCE(oracle_text, '')) AS oracle_text,",
           "MAX(COALESCE(keywords, '')) AS keywords,",
@@ -317,13 +322,21 @@ query_collections_delete <- function(collection_id = "") {
 }
 
 query_collections_store_path <- function() {
-  base_dir <- tryCatch(
-    tools::R_user_dir("mtgcodex.api", which = "data"),
-    error = function(e) {
-      file.path(tempdir(), "mtgcodex.api-data")
+  configured_dir <- trimws(Sys.getenv("MTGCODEX_API_DATA_DIR", unset = ""))
+  base_dir <- if (nzchar(configured_dir)) {
+    configured_dir
+  } else {
+    tryCatch(
+      tools::R_user_dir("mtgcodex.api", which = "data"),
+      error = function(e) file.path(tempdir(), "mtgcodex.api-data")
+    )
+  }
+  if (!dir.exists(base_dir)) {
+    created <- dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)
+    if (!isTRUE(created) && !dir.exists(base_dir)) {
+      stop(sprintf("Unable to create collections data directory: %s", base_dir), call. = FALSE)
     }
-  )
-  dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)
+  }
   file.path(base_dir, "collections.sqlite")
 }
 
@@ -359,6 +372,7 @@ query_collections_ensure_schema <- function(con) {
       "name TEXT NOT NULL,",
       "set_code TEXT,",
       "collector_number TEXT,",
+      "type_line TEXT,",
       "mana_cost TEXT,",
       "oracle_text TEXT,",
       "keywords TEXT,",
@@ -382,12 +396,13 @@ query_collections_ensure_schema <- function(con) {
   )
 
   query_collections_ensure_column(con, "collection_cards", "mana_cost", "TEXT")
+  query_collections_ensure_column(con, "collection_cards", "type_line", "TEXT")
   query_collections_ensure_column(con, "collection_cards", "oracle_text", "TEXT")
   query_collections_ensure_column(con, "collection_cards", "keywords", "TEXT")
 }
 
 query_collections_make_id <- function(collection_name) {
-  slug <- tolower(gsub("[^a-z0-9]+", "-", trimws(collection_name)))
+  slug <- gsub("[^a-z0-9]+", "-", tolower(trimws(collection_name)))
   slug <- gsub("(^-+|-+$)", "", slug)
   if (!nzchar(slug)) {
     slug <- "collection"
@@ -495,6 +510,7 @@ query_collections_normalize_rows <- function(df) {
   )
   c_set <- query_collections_find_column(df, c("set", "set_code", "edition", "extension", "setcode"))
   c_collector <- query_collections_find_column(df, c("collector_number", "number", "num", "collectorno", "cn"))
+  c_type <- query_collections_find_column(df, c("type_line", "typeline", "card_type", "type"))
   c_mana <- query_collections_find_column(df, c("mana_cost", "manacost", "mana"))
   c_text <- query_collections_find_column(df, c("oracle_text", "card_text", "text", "rules_text", "printed_text"))
   c_keywords <- query_collections_find_column(df, c("keywords", "keyword", "abilities", "ability", "skills", "competences", "competence"))
@@ -510,6 +526,7 @@ query_collections_normalize_rows <- function(df) {
   name <- query_collections_clean_vector(df[[c_name]])
   set_code <- if (nzchar(c_set)) query_collections_clean_vector(df[[c_set]]) else rep("", nrow(df))
   collector_number <- if (nzchar(c_collector)) query_collections_clean_vector(df[[c_collector]]) else rep("", nrow(df))
+  type_line <- if (nzchar(c_type)) query_collections_clean_vector(df[[c_type]]) else rep("", nrow(df))
   mana_cost <- if (nzchar(c_mana)) query_collections_clean_vector(df[[c_mana]]) else rep("", nrow(df))
   oracle_text <- if (nzchar(c_text)) query_collections_clean_vector(df[[c_text]]) else rep("", nrow(df))
   keywords <- if (nzchar(c_keywords)) query_collections_clean_vector(df[[c_keywords]]) else rep("", nrow(df))
@@ -530,6 +547,7 @@ query_collections_normalize_rows <- function(df) {
     name = name[keep],
     set_code = set_code[keep],
     collector_number = collector_number[keep],
+    type_line = type_line[keep],
     mana_cost = mana_cost[keep],
     oracle_text = oracle_text[keep],
     keywords = keywords[keep],
@@ -717,6 +735,10 @@ query_collections_enrich_rows <- function(rows) {
   if (!"mana_cost" %in% colnames(rows)) {
     rows$mana_cost <- rep("", nrow(rows))
   }
+  if (!"type_line" %in% colnames(rows)) {
+    rows$type_line <- rep("", nrow(rows))
+  }
+  rows$market_price_eur <- rep(NA_real_, nrow(rows))
   if (!"oracle_text" %in% colnames(rows)) {
     rows$oracle_text <- rep("", nrow(rows))
   }
@@ -737,6 +759,7 @@ query_collections_enrich_rows <- function(rows) {
   }
 
   rows$mana_cost <- query_collections_clean_vector(rows$mana_cost)
+  rows$type_line <- query_collections_clean_vector(rows$type_line)
   rows$oracle_text <- query_collections_clean_vector(rows$oracle_text)
   rows$keywords <- query_collections_clean_vector(rows$keywords)
   rows$scryfall_id <- query_collections_clean_vector(rows$scryfall_id)
@@ -754,15 +777,21 @@ query_collections_enrich_rows <- function(rows) {
   rows <- tryCatch(
     {
       ref_con <- query_db_connect(ref_path)
+      bulk_details <- query_collections_lookup_card_details_bulk(ref_con, rows)
       for (i in seq_len(nrow(rows))) {
         has_mana <- nzchar(rows$mana_cost[[i]])
+        has_type <- nzchar(rows$type_line[[i]])
+        has_price <- is.finite(rows$market_price_eur[[i]])
         has_text <- nzchar(rows$oracle_text[[i]])
         has_keywords <- nzchar(rows$keywords[[i]])
-        if (has_mana && has_text && has_keywords) {
+        if (has_mana && has_type && has_text && has_keywords && has_price) {
           next
         }
 
-        card_details <- query_collections_lookup_card_details(ref_con, rows[i, , drop = FALSE])
+        card_details <- bulk_details[[i]]
+        if (is.null(card_details)) {
+          card_details <- query_collections_lookup_card_details(ref_con, rows[i, , drop = FALSE])
+        }
         if (length(card_details) == 0L) {
           next
         }
@@ -770,6 +799,13 @@ query_collections_enrich_rows <- function(rows) {
         if (!has_mana && nzchar(card_details$mana_cost)) {
           rows$mana_cost[[i]] <- card_details$mana_cost
         }
+        if (!has_type && nzchar(card_details$type_line)) {
+          rows$type_line[[i]] <- card_details$type_line
+        }
+        rows$market_price_eur[[i]] <- query_collections_market_price_eur(
+          card_details$prices,
+          rows$finish[[i]]
+        )
         if (!has_text && nzchar(card_details$oracle_text)) {
           rows$oracle_text[[i]] <- card_details$oracle_text
         }
@@ -792,6 +828,64 @@ query_collections_enrich_rows <- function(rows) {
 
   rows$abilities <- rows$keywords
   rows
+}
+
+query_collections_lookup_card_details_bulk <- function(ref_con, rows, chunk_size = 500L) {
+  out <- vector("list", nrow(rows))
+  ids <- query_collections_clean_vector(rows$scryfall_id)
+  names_lower <- tolower(query_collections_clean_vector(rows$name))
+  by_id <- list()
+  by_name <- list()
+
+  fetch_chunks <- function(values, column_sql) {
+    values <- unique(values[nzchar(values)])
+    if (!length(values)) return(list())
+    chunks <- split(values, ceiling(seq_along(values) / chunk_size))
+    lapply(chunks, function(chunk) {
+      placeholders <- paste(rep("?", length(chunk)), collapse = ",")
+      DBI::dbGetQuery(
+        ref_con,
+        paste0(
+          "SELECT scryfall_id, name, type_line, mana_cost, oracle_text, keywords, prices, released_at ",
+          "FROM cards WHERE ", column_sql, " IN (", placeholders, ") ",
+          "ORDER BY COALESCE(released_at, '') DESC"
+        ),
+        params = as.list(chunk)
+      )
+    })
+  }
+
+  hits <- c(
+    fetch_chunks(ids, "scryfall_id"),
+    fetch_chunks(names_lower, "lower(COALESCE(name, ''))")
+  )
+  for (hit_df in hits) {
+    if (!is.data.frame(hit_df) || !nrow(hit_df)) next
+    for (j in seq_len(nrow(hit_df))) {
+      details <- query_collections_details_from_hit(hit_df[j, , drop = FALSE])
+      id_key <- query_collections_clean_text(hit_df$scryfall_id[[j]], fallback = "")
+      name_key <- tolower(query_collections_clean_text(hit_df$name[[j]], fallback = ""))
+      if (nzchar(id_key) && is.null(by_id[[id_key]])) by_id[[id_key]] <- details
+      if (nzchar(name_key) && is.null(by_name[[name_key]])) by_name[[name_key]] <- details
+    }
+  }
+  for (i in seq_len(nrow(rows))) {
+    details <- if (nzchar(ids[[i]])) by_id[[ids[[i]]]] else NULL
+    if (is.null(details) && nzchar(names_lower[[i]])) details <- by_name[[names_lower[[i]]]]
+    out[i] <- list(details)
+  }
+  out
+}
+
+query_collections_details_from_hit <- function(hit) {
+  list(
+    scryfall_id = query_collections_clean_text(hit$scryfall_id[[1]], fallback = ""),
+    type_line = query_collections_clean_text(hit$type_line[[1]], fallback = ""),
+    prices = query_collections_clean_text(hit$prices[[1]], fallback = ""),
+    mana_cost = query_collections_clean_text(hit$mana_cost[[1]], fallback = ""),
+    oracle_text = query_collections_clean_text(hit$oracle_text[[1]], fallback = ""),
+    keywords = query_collections_clean_text(hit$keywords[[1]], fallback = "")
+  )
 }
 
 query_collections_lookup_card_details <- function(ref_con, row_df) {
@@ -821,7 +915,7 @@ query_collections_lookup_card_details <- function(ref_con, row_df) {
   if (nzchar(scryfall_id)) {
     hit <- read_one(
       paste(
-        "SELECT scryfall_id, mana_cost, oracle_text, keywords",
+        "SELECT scryfall_id, type_line, mana_cost, oracle_text, keywords, prices",
         "FROM cards WHERE scryfall_id = ? LIMIT 1"
       ),
       params = list(scryfall_id)
@@ -831,7 +925,7 @@ query_collections_lookup_card_details <- function(ref_con, row_df) {
   if (is.null(hit) && nzchar(set_code) && nzchar(collector_number)) {
     hit <- read_one(
       paste(
-        "SELECT scryfall_id, mana_cost, oracle_text, keywords",
+        "SELECT scryfall_id, type_line, mana_cost, oracle_text, keywords, prices",
         "FROM cards",
         "WHERE lower(COALESCE(set_code, '')) = ?",
         "AND COALESCE(collector_number, '') = ?",
@@ -850,7 +944,7 @@ query_collections_lookup_card_details <- function(ref_con, row_df) {
   if (is.null(hit) && nzchar(name)) {
     hit <- read_one(
       paste(
-        "SELECT scryfall_id, mana_cost, oracle_text, keywords",
+        "SELECT scryfall_id, type_line, mana_cost, oracle_text, keywords, prices",
         "FROM cards",
         "WHERE lower(COALESCE(name, '')) = ?",
         "AND (? = '' OR lower(COALESCE(set_code, '')) = ?)",
@@ -870,7 +964,7 @@ query_collections_lookup_card_details <- function(ref_con, row_df) {
   if (is.null(hit) && nzchar(name)) {
     hit <- read_one(
       paste(
-        "SELECT scryfall_id, mana_cost, oracle_text, keywords",
+        "SELECT scryfall_id, type_line, mana_cost, oracle_text, keywords, prices",
         "FROM cards",
         "WHERE lower(COALESCE(name, '')) = ?",
         "ORDER BY",
@@ -890,10 +984,26 @@ query_collections_lookup_card_details <- function(ref_con, row_df) {
     return(list())
   }
 
-  list(
-    scryfall_id = query_collections_clean_text(hit$scryfall_id[[1]], fallback = ""),
-    mana_cost = query_collections_clean_text(hit$mana_cost[[1]], fallback = ""),
-    oracle_text = query_collections_clean_text(hit$oracle_text[[1]], fallback = ""),
-    keywords = query_collections_clean_text(hit$keywords[[1]], fallback = "")
-  )
+  query_collections_details_from_hit(hit)
+}
+
+query_collections_market_price_eur <- function(prices_json, finish = "") {
+  raw <- if (is.null(prices_json)) "" else trimws(as.character(prices_json))
+  if (!nzchar(raw)) return(NA_real_)
+  prices <- tryCatch(jsonlite::fromJSON(raw, simplifyVector = TRUE), error = function(e) NULL)
+  if (is.null(prices)) return(NA_real_)
+  finish_key <- if (is.null(finish)) "" else tolower(trimws(as.character(finish)))
+  keys <- if (grepl("etched", finish_key, fixed = TRUE)) {
+    c("eur_etched", "eur_foil", "eur")
+  } else if (grepl("foil", finish_key, fixed = TRUE)) {
+    c("eur_foil", "eur", "eur_etched")
+  } else {
+    c("eur", "eur_foil", "eur_etched")
+  }
+  for (key in keys) {
+    raw_value <- prices[[key]]
+    value <- suppressWarnings(as.numeric(if (is.null(raw_value)) NA_real_ else raw_value))
+    if (length(value) == 1L && is.finite(value) && value > 0) return(value)
+  }
+  NA_real_
 }

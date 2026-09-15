@@ -4,10 +4,11 @@ Title: MTG Codex Toolkit
 Version: 0.0.0.9000
 Authors@R: 
     person("Florian", "Ricquier", email = "florian.ricquier@example.com", role = c("aut", "cre"))
-Description: Lightweight API and web interface to load and display MTG
-    collections from SQLite, CSV, or text files. The package exposes a
-    Plumber service plus a simple browser UI focused on ingestion and
-    tabular preview.
+Description: API and web interface for loading MTG collections from SQLite,
+    CSV, or text files and analyzing explainable functional relationships
+    between cards. The package exposes a Plumber service, a browser UI, and an
+    rule-aware engine for directed synergies and small groups, including a
+    structured Oracle-text representation with measurable parser coverage.
 License: AGPL (>= 3)
 BugReports: https://gitlab.com/mtgcodex.api/mtgcodex.api_api/-/issues
 URL: https://gitlab.com/mtgcodex.api/mtgcodex.api_api
@@ -15,12 +16,15 @@ LazyData: true
 Depends:
     R (>= 4.1.0)
 Imports:
+    curl,
     DBI,
     RSQLite,
+    jsonlite,
     logger,
-    plumber,
-    knitr
+    plumber
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
 Encoding: UTF-8
-VignetteBuilder: knitr
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3

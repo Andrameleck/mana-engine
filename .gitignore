@@ -50,3 +50,8 @@ inst/extdata/*/*.rds
 .lintr
 *.rds
 .tmp*
+/.tools/
+/.r-lib/
+api-local.*.log
+/.local-data/
+/docs/quarto-preview-test/

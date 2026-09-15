@@ -11,7 +11,8 @@ build_packages(
   scoreB,
   K = 5L,
   support_k = 2L,
-  exclude_ids = character()
+  exclude_ids = character(),
+  required_ids = character()
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ build_packages(
 \item{support_k}{Number of support cards to append.}
 
 \item{exclude_ids}{Card ids that cannot be added as support cards.}
+
+\item{required_ids}{Card ids that must be included in every package.}
 }
 \value{
 List of package objects.

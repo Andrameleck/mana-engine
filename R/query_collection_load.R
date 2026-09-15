@@ -1,4 +1,4 @@
-query_collection_load <- function(type, path, table = "") {
+query_collection_load <- function(type, path, table = "", trusted_path = FALSE) {
   source_type <- tolower(trimws(as.character(type)))
   source_path <- trimws(as.character(path))
   table_name <- trimws(as.character(table))
@@ -21,14 +21,19 @@ query_collection_load <- function(type, path, table = "") {
     ))
   }
 
-  normalized_path <- normalizePath(source_path, winslash = "/", mustWork = FALSE)
-  if (!file.exists(normalized_path)) {
-    return(list(
-      ok = FALSE,
-      error = "file not found",
-      path = normalized_path
-    ))
+  resolved <- if (isTRUE(trusted_path)) {
+    if (file.exists(source_path)) {
+      list(ok = TRUE, path = normalizePath(source_path, winslash = "/", mustWork = TRUE))
+    } else {
+      query_api_error("file not found")
+    }
+  } else {
+    query_api_resolve_source_path(source_path)
   }
+  if (!isTRUE(resolved$ok)) {
+    return(resolved)
+  }
+  normalized_path <- resolved$path
 
   payload <- switch(
     source_type,
