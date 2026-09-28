@@ -224,12 +224,21 @@ parse_oracle_text <- function(card) {
     modifiers <- .analysis_oracle_modifiers(clause)
     semantic <- length(requires) + length(costs) + length(produces) > 0L
     recognized <- semantic || length(modifiers) > 0L
+    unknown <- c(
+      if (triggered && !length(.analysis_oracle_trigger_facts(trigger_text))) "trigger_not_understood",
+      if (activated && nzchar(cost_text) && !length(costs)) "cost_not_understood",
+      if (nzchar(effect_text) && !length(produces)) "effect_not_understood",
+      if (replacement) "replacement_order_not_evaluated",
+      if (grepl("\\b(if|unless|only|except|instead)\\b", low)) "restriction_not_evaluated",
+      if (length(.analysis_oracle_keywords(clause))) "keyword_execution_not_evaluated"
+    )
     list(
       id = paste0(card_id, ":oracle-", i),
       kind = if (activated) "activated" else if (triggered) "triggered" else if (replacement) "replacement" else "static_or_spell",
       text = clause, trigger = trigger_text, cost = cost_text, effect = effect_text,
       requires = requires, costs = costs, produces = produces,
       modifiers = modifiers,
+      unknown_conditions = unknown,
       semantic_status = if (semantic) "facts" else if (recognized) "syntax_only" else "unresolved",
       status = if (recognized) "parsed" else "unresolved"
     )

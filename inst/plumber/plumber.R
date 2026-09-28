@@ -50,6 +50,13 @@ NULL
 
 #* Healthcheck
 #* @serializer unboxedJSON
+#* @get /analysis/v1/capabilities
+function() {
+  query_call("query_analysis_capabilities")
+}
+
+#* Healthcheck
+#* @serializer unboxedJSON
 #* @get /health
 function() {
   query_call("query_health")

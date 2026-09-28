@@ -89,11 +89,9 @@ strategy_action <- function(id,
 
 .strategy_object <- function(text, default = "card") {
   low <- tolower(text)
-  if (grepl("creature", low)) "creature_card"
-  else if (grepl("artifact", low)) "artifact_card"
-  else if (grepl("land", low)) "land_card"
-  else if (grepl("permanent", low)) "permanent_card"
-  else default
+  types <- c("creature", "artifact", "enchantment", "planeswalker", "battle", "land", "instant", "sorcery", "permanent")
+  matched <- types[vapply(types, function(type) grepl(paste0("\\b", type, "\\b"), low), logical(1))]
+  if (length(matched)) paste0(matched[[1]], "_card") else default
 }
 
 .strategy_mana_symbols <- function(cost) {
@@ -142,23 +140,20 @@ extract_strategy_actions <- function(card) {
   }
   for (i in seq_along(clauses)) {
     clause <- clauses[[i]]; low <- tolower(clause)
-    if (grepl("search your library.*put (that card|them|those cards).*graveyard", low)) {
+    # Compose zone transfers by their interfaces, independently of archetype.
+    source_match <- regmatches(low, regexec("from (?:your |a |their |the |an opponent's )?(graveyard|hand|exile|library|battlefield)", low, perl = TRUE))[[1]]
+    target_match <- regmatches(low, regexec("(?:onto|into|to) (?:your |their |the |its owner's |its |a )?(battlefield|graveyard|hand|exile|library)", low, perl = TRUE))[[1]]
+    from <- if (grepl("search your library", low)) "library" else if (length(source_match) > 1L) source_match[[2]] else ""
+    to <- if (length(target_match) > 1L) target_match[[2]] else ""
+    if (nzchar(from) && nzchar(to) && from != to && grepl("\\b(put|puts|return|returns|search)\\b", low)) {
       selector <- .strategy_object(low)
-      add(i, "library-graveyard", "zone_transfer", from_zone = "library", to_zone = "graveyard",
-        selector = selector,
-        requires = list(strategy_port("object", selector, "library")),
-        produces = list(strategy_port("object", selector, "graveyard")))
-    }
-    if (grepl("(put|return).*creature card.*from (a|your|their) graveyard.*(onto|to) the battlefield", low) ||
-        grepl("each player puts a creature card from their graveyard onto the battlefield", low)) {
+      object <- if (to == "battlefield") sub("_card$", "", selector) else selector
       controller <- if (grepl("each player", low)) "each" else "you"
-      add(i, "graveyard-battlefield", "zone_transfer", from_zone = "graveyard", to_zone = "battlefield",
-        selector = "creature_card",
-        requires = list(strategy_port("object", "creature_card", "graveyard", controller)),
-        produces = list(
-          strategy_port("object", "creature", "battlefield", controller),
-          strategy_port("event", "creature_enters", "battlefield", controller)
-        ), unknown = if (controller == "each") "symmetric_effect" else character(0))
+      produced <- list(strategy_port("object", object, to, controller))
+      if (to == "battlefield") produced <- c(produced, list(strategy_port("event", paste0(object, "_enters"), to, controller)))
+      add(i, paste(from, to, sep = "-"), "zone_transfer", from_zone = from, to_zone = to,
+        selector = selector, requires = list(strategy_port("object", selector, from, controller)), produces = produced,
+        unknown = c(if (controller == "each") "symmetric_effect", if (grepl("\\b(if|unless|only|except)\\b", low)) "restriction_not_evaluated"))
     }
     if (grepl("^draw (one|two|three|[0-9]+|x|a) cards?", low)) {
       add(i, "draw", "card_selection", produces = list(strategy_port("resource", "card_in_hand", "hand", quantity = NA_real_)))
@@ -199,11 +194,9 @@ extract_strategy_actions <- function(card) {
 }
 
 .strategy_selector_compatible <- function(output, input) {
-  identical(output, input) ||
-    output == "card" && input %in% c("creature_card", "artifact_card", "land_card", "permanent_card") ||
-    output == "permanent_card" && input %in% c("creature_card", "artifact_card", "land_card") ||
-    output == "creature_card" && input %in% c("card", "permanent_card") ||
-    output %in% c("artifact_card", "land_card", "permanent_card") && input == "card"
+  permanent <- paste0(c("creature", "artifact", "enchantment", "planeswalker", "battle", "land"), "_card")
+  identical(output, input) || output == "card" || input == "card" ||
+    output == "permanent_card" && input %in% permanent || input == "permanent_card" && output %in% permanent
 }
 
 .strategy_card_record <- function(card) {
@@ -246,7 +239,7 @@ discover_strategy_engines <- function(cards,
   records <- records[legal]
   record_names <- stats::setNames(vapply(records, `[[`, character(1), "name"), vapply(records, `[[`, character(1), "id"))
   transfers <- unlist(lapply(records, function(rec) Filter(function(a) a$action_type == "zone_transfer", rec$actions$actions)), recursive = FALSE)
-  payloads <- Filter(function(rec) grepl("creature", tolower(rec$type_line)), records)
+  payloads <- Filter(function(rec) nzchar(rec$type_line), records)
   support_types <- c("mana_production", "card_selection", "hand_disruption")
   support <- lapply(Filter(function(rec) any(vapply(rec$actions$actions, function(a) a$action_type %in% support_types, logical(1))), records), function(rec) {
     list(card_id = rec$id, card_name = rec$name,
@@ -261,7 +254,7 @@ discover_strategy_engines <- function(cards,
         !.strategy_selector_compatible(first$selector, second$selector)) next
     key <- .strategy_engine_key(first, second)
     compatible <- Filter(function(rec) {
-      .strategy_selector_compatible("creature_card", second$selector)
+      .strategy_selector_compatible(.strategy_object(rec$type_line), second$selector)
     }, payloads)
     payload_out <- lapply(compatible, function(rec) list(
       card_id = rec$id, card_name = rec$name, mana_value = rec$mana_value,

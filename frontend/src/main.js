@@ -1,3 +1,4 @@
+import { analyzeStrategy, analyzeDeck, mountAssistant, explainWithAssistant, buildDeckFromPage } from "./analysis.js";
 import {
   uploadCollection,
   importCollectionCsv,
@@ -890,7 +891,7 @@ import {
     );
 
     const sourceName = collectionMeta?.name || "collection active";
-    statusNode.textContent = `Analyse terminee. ${analysisResult.upgrades.length} ameliorations et ${analysisResult.variants.length} variations proposees depuis ${sourceName}.`;
+    statusNode.textContent = `Analyse terminee. ${analysisResult.upgrades.length} ameliorations et ${analysisResult.variants.length} variations proposees depuis ${sourceName}. ${analysisResult.note || ""}`;
   }
 
   function renderDeckRecommendationCards(target, entries, scoreField, emptyMessage) {
@@ -908,7 +909,7 @@ import {
       const scoreValue = Number.isFinite(entry?.[scoreField]) ? entry[scoreField] : 0;
       const reason = String(entry?.reason || "").trim();
       const metaLine = reason
-        ? `#${index + 1} | score ${formatDecimal(scoreValue)} | ${reason}`
+        ? `#${index + 1} | ${reason}`
         : `#${index + 1} | score ${formatDecimal(scoreValue)}`;
       fragment.appendChild(createStrategyCardElement(entry.card, metaLine));
     });
@@ -971,7 +972,7 @@ import {
       const deckModel = buildStrategyModelFromRows(deckRows);
       const collectionModel = getStrategyModelForCollection(collectionId, collectionPayload);
 
-      const analysis = computeDeckRecommendationAnalysis(deckModel.cards, collectionModel.cards);
+      const analysis = await analyzeDeck(deckModel.cards, collectionModel.cards, () => requestToken === DECK_ANALYSIS_STATE.requestToken);
       if (requestToken !== DECK_ANALYSIS_STATE.requestToken) {
         return;
       }
@@ -1756,6 +1757,15 @@ import {
       return;
     }
     const runToken = ++state.strategy.runToken;
+    if (document.getElementById('ai-task')?.value === 'deck') {
+      strategyNodes.directList?.replaceChildren();
+      strategyNodes.groupList?.replaceChildren();
+      void buildDeckFromPage({ commander: rawSeedFromUi(strategyNodes), collection_id: state.selectedCollectionId || '',
+        collection_only: !isStrategyIncludeKnownEnabled() }, () => runToken === state.strategy.runToken);
+      return;
+    }
+    document.getElementById('ai-deck-result')?.replaceChildren();
+
 
     const collectionId = state.selectedCollectionId;
     const payload = collectionId ? state.collectionPayloadById[collectionId] : null;
@@ -1862,17 +1872,18 @@ import {
       }
     }
 
-    const direct = computeDirectSynergies(
-      resolvedSeed,
-      activeModel.cards,
-      directLimit,
-      spellbookContext.boostByKey
-    );
+    const analysis = await analyzeStrategy(resolvedSeed, activeModel.cards, directLimit, groupLimit);
+    if (runToken !== state.strategy.runToken) return;
+    const direct = analysis.entries;
     const spellbookGroups = isStrategyIncludeSpellbookEnabled()
       ? computeSpellbookSynergyGroups(resolvedSeed, direct, activeModel.cards, groupLimit, spellbookContext)
       : [];
-    const fallbackGroups = computeSynergyGroups(resolvedSeed, direct, activeModel.cards, groupLimit);
-    const groups = mergeStrategyGroups(spellbookGroups, fallbackGroups, groupLimit);
+    const groups = [...analysis.groups, ...spellbookGroups].slice(0, groupLimit);
+    void explainWithAssistant(analysis, () => runToken === state.strategy.runToken, {
+      task: 'synergies', seed: resolvedSeed.name, collection_id: state.selectedCollectionId,
+      include_known_cards: includeKnown, mana_filter: manaFilterCodes,
+      include_spellbook: isStrategyIncludeSpellbookEnabled(), direct_limit: directLimit, group_limit: groupLimit
+    });
 
     renderDirectSynergyCards(direct, resolvedSeed.name);
     renderGroupCards(groups, resolvedSeed.name);
@@ -1888,7 +1899,7 @@ import {
           : (state.strategy.spellbookError ? " | Spellbook indisponible" : "")
       )
       : "";
-    strategyNodes.status.textContent = `${resolvedSeed.name}: ${direct.length} synergies directes, ${groups.length} groupes construits.${suffix}${manaSuffix}${spellbookSuffix}`;
+    strategyNodes.status.textContent = `${resolvedSeed.name}: ${direct.length} synergies directes, ${groups.length} groupes ? moteur serveur ; recherche limit?e aux candidats affich?s.${suffix}${manaSuffix}${spellbookSuffix}`;
   }
 
   function isStrategyIncludeKnownEnabled() {
@@ -2687,7 +2698,7 @@ import {
           packageCards.push(support.card);
         }
         const retainedSupport = support && support.score > 0.18 ? support : null;
-        const split = splitGroupCoreAndSide(seedCard, packageCards);
+        const split = { coreCards: packageCards, sideCards: [] };
 
         const groupScore = left.score + right.score + pairLink.score * 0.7 + (retainedSupport ? retainedSupport.score * 0.35 : 0);
         groups.push({
@@ -2774,7 +2785,7 @@ import {
       const popularity = Number(variant?.popularity) || 0;
       const popularityFactor = Math.min(1, Math.log10(popularity + 1) / 4);
       const avgDirectScore = partnerKeys.reduce((sum, item) => sum + item.score, 0) / partnerKeys.length;
-      const groupScore = clampScore(avgDirectScore * 0.8 + popularityFactor * 0.2);
+      const groupScore = popularity; // External catalogue ordering, not a synergy score.
 
       const orderedNames = partnerKeys
         .map((item) => cardsByKey.get(item.key)?.name)
@@ -3108,7 +3119,7 @@ import {
       fragment.appendChild(
         createStrategyCardElement(
           entry.card,
-          `#${index + 1} | score ${formatDecimal(entry.score)} | rules ${formatDecimal(entry.ruleScore || 0)}${comboPart}${spellbookPart}`
+          entry.evidence || `#${index + 1} | r?sultat externe`
         )
       );
     });
@@ -3134,7 +3145,7 @@ import {
 
       const title = document.createElement("p");
       title.className = "strategy-group-title";
-      title.textContent = `Groupe ${index + 1} | score ${formatDecimal(group.score)}`;
+      title.textContent = `Groupe ${index + 1} | ${group.evidence || "Commander Spellbook"}`;
       article.appendChild(title);
 
       const packageNames = group.cards.map((card) => card.name);
@@ -3367,7 +3378,7 @@ import {
     const landBalance = Math.max(0, 1 - Math.min(Math.abs(landRatio - 0.38) / 0.2, 1));
     const efficiencyScore = Math.round(((cheapRatio * 0.65) + (landBalance * 0.35)) * 100);
 
-    const synergy = computeSynergy(nonLandCards);
+    // Synergy is evaluated only by the versioned server engine.
 
     return {
       totalCards,
@@ -3377,7 +3388,7 @@ import {
       curveBuckets,
       efficiencyScore,
       cheapRatio,
-      synergyScore: synergy.score,
+      synergyScore: null,
       manaSourceSegments: computeManaSourceSegments(landCards),
       castingCostSegments: computeCastingCostSegments(nonLandCards),
       typeSegments: computeTypeSegments(safeCards),
@@ -3507,7 +3518,7 @@ import {
             ${renderSingleRingChart(stats.colorSegments, "colors", true)}
           </div>
           <p class="deck-stats-note">
-            CMC moyen ${formatDecimal(stats.avgCmc)} | Efficience ${stats.efficiencyScore}/100 | Synergie ${stats.synergyScore}/100
+            CMC moyen ${formatDecimal(stats.avgCmc)} | Efficience ${stats.efficiencyScore}/100 | Synergies : analyse via le moteur serveur
           </p>
         </section>
       </section>
@@ -4413,6 +4424,7 @@ import {
   }
 
   async function init() {
+    mountAssistant();
     const initialLanguage = getCollectionLanguage();
     applyLanguageButtonState(initialLanguage);
 

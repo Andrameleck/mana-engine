@@ -101,7 +101,8 @@ extract_functional_abilities <- function(card) {
     abilities[[length(abilities) + 1L]] <- analysis_ability(
       id = clause$id, card_id = card_id, family = .analysis_oracle_family(clause),
       produces = clause$produces, requires = clause$requires, costs = clause$costs,
-      evidence = clause$text, status = "inferred"
+      evidence = clause$text, status = "inferred",
+      unknown_conditions = clause$unknown_conditions %||% character(0)
     )
   }
 
@@ -130,4 +131,26 @@ extract_functional_abilities <- function(card) {
     oracle = oracle,
     extractor_version = "functional-rules-0.2.0"
   )
+}
+
+.analysis_prepare_card <- function(card) {
+  if (!is.null(card$abilities)) return(card)
+  extracted <- extract_functional_abilities(card)
+  card$abilities <- extracted$abilities
+  card$analysis_coverage <- extracted$oracle
+  card
+}
+
+.analysis_coverage_report <- function(cards) {
+  details <- lapply(cards, function(card) {
+    parsed <- card$analysis_coverage %||% parse_oracle_text(card)
+    list(card_id = .analysis_card_id(card), name = card$name %||% .analysis_card_id(card),
+      missing_oracle = !nzchar(paste(unlist(card$oracle_text %||% ""), collapse = "")),
+      coverage = parsed$coverage, unresolved_text = parsed$unresolved_text,
+      conditions = unique(unlist(lapply(parsed$clauses, function(x) x$unknown_conditions), use.names = FALSE)))
+  })
+  list(cards = length(cards),
+    incomplete_cards = sum(vapply(details, function(x) x$missing_oracle || x$coverage$unresolved > 0 || length(x$conditions) > 0, logical(1))),
+    details = details,
+    interpretation = "No detected relation is not proof of no interaction. Clause recognition is not rules execution.")
 }

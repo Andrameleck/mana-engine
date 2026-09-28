@@ -1,4 +1,8 @@
 query_ui_root_dir <- function() {
+  project_dir <- Sys.getenv("MTGCODEX_API_PROJECT_DIR", unset = "")
+  if (nzchar(project_dir) && dir.exists(file.path(project_dir, "inst", "www"))) {
+    return(file.path(project_dir, "inst", "www"))
+  }
   installed_path <- system.file("www", package = "mtgcodex.api")
   if (nzchar(installed_path)) {
     return(installed_path)

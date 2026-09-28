@@ -27,10 +27,8 @@ analysis_context <- function(format = "",
       length(objective) != 1L || is.na(objective)) {
     stop("format, rules_version, and objective must be scalar strings", call. = FALSE)
   }
-  supported_objectives <- c("", "tokens_sacrifice_death", "graveyard_reanimation", "cast_copy")
-  if (!objective %in% supported_objectives) {
-    stop("objective must be empty or one of the supported functional families", call. = FALSE)
-  }
+  # Objectives are optional identifiers, not a closed list of deck archetypes.
+  if (nchar(objective) > 200L) stop("objective must not exceed 200 characters", call. = FALSE)
   if (!is.null(allowed_colors)) {
     allowed_colors <- unique(toupper(trimws(as.character(allowed_colors))))
     allowed_colors <- allowed_colors[nzchar(allowed_colors)]
@@ -85,7 +83,7 @@ analysis_context <- function(format = "",
   candidates <- trimws(as.character(candidates))
   candidates <- candidates[nzchar(candidates)]
   if (length(candidates) == 0L) stop("each card needs an id or name", call. = FALSE)
-  tolower(gsub("[^a-z0-9]+", "-", candidates[[1]]))
+  gsub("[^a-z0-9]+", "-", tolower(candidates[[1]]))
 }
 
 .analysis_context_card_status <- function(card, context) {
@@ -99,15 +97,18 @@ analysis_context <- function(format = "",
     "false"
   }
   list(
-    status = color_status,
-    reasons = if (color_status == "false") "color_identity" else character(0),
-    unknown = if (color_status == "unknown") "color_identity" else character(0)
+    status = if (color_status == "false" || nzchar(context$format) && .deck_legality_status(card, context$format) %in% c("banned", "not_legal")) "false" else color_status,
+    reasons = c(if (color_status == "false") "color_identity", if (nzchar(context$format) && .deck_legality_status(card, context$format) %in% c("banned", "not_legal")) "format_legality"),
+    unknown = c(if (color_status == "unknown") "color_identity", if (nzchar(context$format) && .deck_legality_status(card, context$format) == "unknown") "format_legality")
   )
 }
 
 .analysis_filter_objective <- function(relations, context) {
   if (!nzchar(context$objective)) return(relations)
-  Filter(function(relation) identical(relation$family, context$objective), relations)
+  Filter(function(relation) {
+    ports <- c(relation$supplied_ports, relation$matched_requirements)
+    identical(relation$family, context$objective) || any(vapply(ports, function(port) identical(port$object, context$objective), logical(1)))
+  }, relations)
 }
 
 `%||%` <- function(x, y) if (is.null(x)) y else x

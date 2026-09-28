@@ -34,6 +34,8 @@ analyze_functional_synergies <- function(seed,
   limit <- as.integer(limit)
   if (length(limit) != 1L || is.na(limit) || limit < 1L) stop("limit must be a positive integer", call. = FALSE)
 
+  seed <- .analysis_prepare_card(seed)
+  candidates <- lapply(candidates, .analysis_prepare_card)
   seed_id <- .analysis_card_id(seed)
   seed_context <- .analysis_context_card_status(seed, context)
   if (identical(seed_context$status, "false")) {
@@ -90,6 +92,7 @@ analyze_functional_synergies <- function(seed,
     results = results,
     exclusions = exclusions,
     unknown_fields = context$unknown_fields,
+    coverage = .analysis_coverage_report(c(list(seed), candidates)),
     warnings = if (context$mode == "sequence") "sequence execution is not evaluated by this endpoint" else character(0),
     truncated = truncated
   )

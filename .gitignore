@@ -55,3 +55,10 @@ inst/extdata/*/*.rds
 api-local.*.log
 /.local-data/
 /docs/quarto-preview-test/
+
+# Local decks, collections and runtime logs
+decks/
+collection/
+collections/
+/dev/scritp/output/*collection*
+/mana-engine-web.*.log

@@ -128,3 +128,8 @@ The result is structural. `structural_witness_only` does not claim that mana,
 timing, draws, opponent responses, or deck utility have been simulated. The
 same engine records are also included in `/analysis/v1/groups` so existing
 clients can display them while migrating to the dedicated endpoint.
+# Calculateur et connexion ChatGPT
+
+Les parcours de calcul de l’interface utilisent le moteur serveur versionné.
+Le mode assisté facultatif utilise une connexion ChatGPT via Codex, sans clé API.
+Voir [le guide de lancement et les limites](docs/assistant-chatgpt.md).

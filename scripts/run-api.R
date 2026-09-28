@@ -60,14 +60,12 @@ swagger <- to_bool(swagger_raw, default = TRUE)
 
 setwd(project_dir)
 
-# Load the package namespace before Plumber evaluates its routing file. This
-# lets query_call resolve both exported analysis functions and internal query
-# adapters from one versioned namespace instead of mixing sourced adapters with
-# missing analysis objects in .GlobalEnv.
-if (!requireNamespace("mtgcodex.api", quietly = TRUE)) {
-  stop("Package 'mtgcodex.api' must be installed before starting the API")
+# Load the checkout as one coherent namespace (API, calculator and UI).
+if (!requireNamespace("pkgload", quietly = TRUE)) {
+  stop("Install pkgload to run from a source checkout, or install the package and use start_api().")
 }
-loadNamespace("mtgcodex.api")
+Sys.setenv(MTGCODEX_API_PROJECT_DIR = project_dir)
+pkgload::load_all(project_dir, quiet = TRUE, export_all = FALSE)
 
 start_api_file <- file.path(project_dir, "R", "start_api.R")
 if (!file.exists(start_api_file)) {

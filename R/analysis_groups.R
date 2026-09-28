@@ -5,7 +5,7 @@
 }
 
 .analysis_build_relation_graph <- function(cards, context, max_relations) {
-  by_id <- .analysis_cards_by_id(cards)
+  by_id <- .analysis_cards_by_id(lapply(cards, .analysis_prepare_card))
   ids <- names(by_id)
   outgoing <- stats::setNames(vector("list", length(ids)), ids)
   explored <- 0L
@@ -141,6 +141,7 @@ analyze_functional_groups <- function(cards,
     results = combined_results,
     strategic_engines = strategy$results,
     unknown_fields = context$unknown_fields,
+    coverage = .analysis_coverage_report(cards),
     warnings = character(0),
     search = list(pair_evaluations = graph$explored, budget = max_pair_evaluations),
     search_truncated = graph$truncated || strategy$search_truncated,

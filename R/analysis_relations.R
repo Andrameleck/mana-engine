@@ -69,7 +69,7 @@ functional_relations <- function(source_card, target_card, context = analysis_co
         source_context$unknown, target_context$unknown,
         if (length(missing_needs)) "additional_requirements_not_supplied_by_this_card" else character(0)
       ))
-      relation_types <- unique(ifelse(matched_needs >= cost_start && length(target_ability$costs), "supplies_cost", "supplies_requirement"))
+      relation_types <- unique(ifelse(matched_needs >= cost_start & length(target_ability$costs) > 0L, "supplies_cost", "supplies_requirement"))
       relations[[length(relations) + 1L]] <- list(
         source_card = source_id,
         source_name = as.character(source_card$name %||% source_id),

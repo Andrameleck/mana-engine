@@ -48,7 +48,12 @@ test_that("controller and nontoken restrictions prevent false matches", {
 
 test_that("returning a card to hand is not reanimation", {
   regrowth <- functional_card("regrowth", "Return target card from your graveyard to your hand.")
-  expect_length(extract_functional_abilities(regrowth)$abilities, 0L)
+  # The general Oracle parser now recognizes hand recovery; it must never
+  # turn that recovery into a battlefield entry or reanimation.
+  abilities <- extract_functional_abilities(regrowth)$abilities
+  outputs <- unlist(lapply(abilities, `[[`, "produces"), recursive = FALSE)
+  expect_true(any(vapply(outputs, function(x) identical(x$zone, "hand"), logical(1))))
+  expect_false(any(vapply(outputs, function(x) identical(x$zone, "battlefield"), logical(1))))
 })
 
 test_that("copying a spell does not satisfy a cast trigger", {
